@@ -67,11 +67,14 @@ export async function GET(req: NextRequest) {
       sig: scans.filter((s) => s.signature_required).length,
     };
 
+    const failed = stops.filter((s) => s.delivery_state === "failed" || s.delivery_succeeded === false).length;
+
     const pipeline = {
       allocated: stops.length,
       outForDelivery: stops.filter((s) => s.event_type === "stop.out_for_delivery").length,
       attempted,
       delivered,
+      failed,
     };
 
     const collectQueue = scans
@@ -84,6 +87,14 @@ export async function GET(req: NextRequest) {
       .filter((s) => s.type === "cold package")
       .map((s) => ({ name: s.full_name, route: s.route }))
       .slice(0, 8);
+
+    // Build recent activity from recent stops
+    const recentActivity = recentStops.slice(0, 10).map((s) => ({
+      type: "stop",
+      description: `Stop ${s.delivery_state === "delivered" ? "delivered" : "created"} for ${s.recipient_name || "Unknown"}${s.route_title ? ` on ${s.route_title}` : ""}`,
+      timestamp: s.updated_at || s.created_at,
+      icon: s.delivery_state === "delivered" ? "check" : "plus",
+    }));
 
     const trend = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
@@ -106,6 +117,7 @@ export async function GET(req: NextRequest) {
       pipeline,
       collectQueue,
       coldPackages,
+      recentActivity,
       trend,
       recentStops,
     });

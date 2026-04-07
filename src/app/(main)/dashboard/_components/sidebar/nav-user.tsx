@@ -1,7 +1,7 @@
 "use client";
 
 import { useClerk, useUser } from "@clerk/nextjs";
-import { CircleUser, CreditCard, EllipsisVertical, LogOut, MessageSquareDot } from "lucide-react";
+import { CircleUser, CreditCard, LogOut, MoreHorizontal, User } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -49,7 +49,7 @@ export function NavUser() {
                 <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-muted-foreground text-xs">{email}</span>
               </div>
-              <EllipsisVertical className="ml-auto size-4" />
+              <MoreHorizontal className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -73,22 +73,22 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
+                <User />
+                Profile Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem>
                 <CircleUser />
-                Account
+                Account Settings
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <MessageSquareDot />
-                Notifications
-              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/" })}>
               <LogOut />
-              Sign out
+              Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

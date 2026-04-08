@@ -19,7 +19,7 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
 
   if (loading && !stats) {
     return (
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+      <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-32 rounded-xl" />
         ))}
@@ -30,7 +30,7 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Overview</h2>
+        <h2 className="font-semibold text-lg">Overview</h2>
         <Tabs value={range} onValueChange={onRangeChange}>
           <TabsList>
             <TabsTrigger value="today">Today</TabsTrigger>
@@ -39,11 +39,11 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
           </TabsList>
         </Tabs>
       </div>
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 *:data-[slot=card]:shadow-xs">
+      <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs">
         <Card>
           <CardHeader>
             <CardDescription>Total Scans</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
               {(kpi.scans ?? 0).toLocaleString()}
             </CardTitle>
             <CardAction>
@@ -64,7 +64,7 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
         <Card>
           <CardHeader>
             <CardDescription>Matched</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
               {(kpi.matched ?? 0).toLocaleString()}
             </CardTitle>
             <CardAction>
@@ -88,7 +88,7 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
         <Card>
           <CardHeader>
             <CardDescription>Delivered</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
               {(kpi.delivered ?? 0).toLocaleString()}
             </CardTitle>
             <CardAction>
@@ -109,7 +109,7 @@ export function RoutelySectionCards({ stats, loading, range, onRangeChange }: Pr
         <Card>
           <CardHeader>
             <CardDescription>Unmatched</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
               {(kpi.unmatched ?? 0).toLocaleString()}
             </CardTitle>
             <CardAction>

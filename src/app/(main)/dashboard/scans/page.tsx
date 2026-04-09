@@ -200,6 +200,10 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         10,
       );
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
+      // Force tile redraw after flex layout settles
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+      }, 400);
     })();
   }, []);
 
@@ -279,7 +283,7 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
           </motion.div>
         )}
       </AnimatePresence>
-      <div ref={contRef} className="h-full w-full" />
+      <div ref={contRef} style={{ height: "100%", width: "100%", minHeight: "300px" }} />
       <div className="pointer-events-none absolute right-4 bottom-4 left-4 z-[1000]">
         <div className="rounded-2xl border bg-background/95 p-3.5 shadow-2xl backdrop-blur-md">
           <div className="flex items-center gap-3">

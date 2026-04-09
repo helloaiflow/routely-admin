@@ -59,7 +59,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SidebarSearch />
+        <div className="group-data-[collapsible=icon]:hidden">
+          <SidebarSearch />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={sidebarItems} quickActions={QUICK_ACTIONS} />

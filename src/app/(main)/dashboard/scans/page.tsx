@@ -246,30 +246,33 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
     })();
   }, [scan]);
 
-  if (!scan)
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-        <motion.div
-          className="relative"
-          animate={{ scale: [1, 1.08, 1] }}
-          transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
-        >
-          <MapPin className="h-16 w-16 opacity-10" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-4 w-4 animate-ping rounded-full bg-primary/20" />
-          </div>
-        </motion.div>
-        <div className="text-center">
-          <p className="font-semibold text-sm">Select a scan</p>
-          <p className="mt-1 text-xs opacity-50">Package will be pinned on the map</p>
-        </div>
-        <p className="text-[10px] opacity-30">OpenStreetMap · Nominatim</p>
-      </div>
-    );
-
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-xl border">
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <div style={{ position: "absolute", inset: 0 }} className="overflow-hidden rounded-xl border">
+      {/* Map div — ALWAYS in DOM so Leaflet can init and keep tiles */}
+      <div ref={contRef} style={{ position: "absolute", inset: 0 }} />
+
+      {/* Empty state overlay — sits on top of map when no scan selected */}
+      {!scan && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background/60 text-muted-foreground backdrop-blur-[2px]">
+          <motion.div
+            className="relative"
+            animate={{ scale: [1, 1.06, 1] }}
+            transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
+          >
+            <MapPin className="h-14 w-14 opacity-15" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-4 w-4 animate-ping rounded-full bg-primary/30" />
+            </div>
+          </motion.div>
+          <div className="rounded-2xl border bg-background/95 px-6 py-4 text-center shadow-lg backdrop-blur-md">
+            <p className="font-semibold text-sm">Select a scan</p>
+            <p className="mt-0.5 text-xs opacity-50">Pin will appear on the map</p>
+          </div>
+          <p className="text-[10px] opacity-30">OpenStreetMap · Nominatim</p>
+        </div>
+      )}
+
+      {/* Geocoding indicator */}
       <AnimatePresence>
         {geocoding && (
           <motion.div
@@ -283,28 +286,31 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
           </motion.div>
         )}
       </AnimatePresence>
-      <div ref={contRef} style={{ height: "100%", width: "100%", minHeight: "300px" }} />
-      <div className="pointer-events-none absolute right-4 bottom-4 left-4 z-[1000]">
-        <div className="rounded-2xl border bg-background/95 p-3.5 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl"
-              style={{ background: getRouteColor(scan.route || "").bg }}
-            >
-              {pkgEmoji(scan.type)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-bold text-sm">{scan.full_name}</p>
-              <p className="truncate text-muted-foreground text-xs">{scan.full_address || scan.address}</p>
-              {scan.route && (
-                <div className="mt-1">
-                  <RouteBadge route={scan.route} size="xs" />
-                </div>
-              )}
+
+      {/* Bottom overlay card when scan selected */}
+      {scan && (
+        <div className="pointer-events-none absolute right-4 bottom-4 left-4 z-[1000]">
+          <div className="rounded-2xl border bg-background/95 p-3.5 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
+                style={{ background: getRouteColor(scan.route || "").bg }}
+              >
+                {pkgEmoji(scan.type)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold text-sm">{scan.full_name}</p>
+                <p className="truncate text-muted-foreground text-xs">{scan.full_address || scan.address}</p>
+                {scan.route && (
+                  <div className="mt-1">
+                    <RouteBadge route={scan.route} size="xs" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -853,20 +859,20 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* CENTER: Map */}
-      <div
-        className={`flex-col transition-all duration-300 ${selected ? "hidden lg:flex lg:w-[380px] lg:shrink-0 lg:border-r" : "flex flex-1"}`}
-      >
+      {/* CENTER: Map — always visible, always flex-1 */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
           </div>
           <span className="flex-1 truncate font-medium text-xs">
-            {selected ? `${selected.full_name} · ${selected.full_address || selected.address}` : "Interactive Map"}
+            {selected
+              ? `${selected.full_name} · ${selected.full_address || selected.address}`
+              : "Interactive Map · OpenStreetMap"}
           </span>
           {selected?.route && <RouteBadge route={selected.route} size="xs" />}
         </div>
-        <div className="flex-1 p-2.5">
+        <div className="relative min-h-0 flex-1">
           <LeafletMap scan={selected} />
         </div>
       </div>

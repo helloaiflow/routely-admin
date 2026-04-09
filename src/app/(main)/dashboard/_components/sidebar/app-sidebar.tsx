@@ -2,35 +2,7 @@
 
 import Link from "next/link";
 
-import {
-  BookMarked,
-  BookOpen,
-  BookUser,
-  Bot,
-  Building,
-  Building2,
-  Car,
-  ClipboardList,
-  GitBranch,
-  Hash,
-  Home,
-  KeyRound,
-  LayoutDashboard,
-  MapPin,
-  MapPinned,
-  MessageSquare,
-  Navigation,
-  Package,
-  Phone,
-  Plug,
-  Radio,
-  Search,
-  Settings2,
-  TrendingUp,
-  UserPlus,
-  Users,
-  Wrench,
-} from "lucide-react";
+import { ClipboardList, MapPin, Package, Star, UserPlus } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -42,82 +14,19 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
 import { SidebarSearch } from "./sidebar-search";
 
-const sidebarItems = [
-  {
-    id: 1,
-    label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard },
-      { title: "Analytics", url: "/dashboard/analytics", icon: TrendingUp },
-    ],
-  },
-  {
-    id: 2,
-    label: "Operations",
-    items: [
-      { title: "Package Scans", url: "/dashboard/scans", icon: Package },
-      { title: "Package Search", url: "/dashboard/search", icon: Search },
-      { title: "Stops", url: "/dashboard/stops", icon: MapPin },
-      { title: "Routes", url: "/dashboard/routes", icon: Navigation },
-    ],
-  },
-  {
-    id: 3,
-    label: "CRM",
-    items: [
-      { title: "Recipients", url: "/dashboard/recipients", icon: Users },
-      { title: "Clients", url: "/dashboard/clients", icon: Building2 },
-      { title: "Drivers", url: "/dashboard/drivers", icon: Car },
-      { title: "Leads", url: "/dashboard/leads", icon: UserPlus },
-      { title: "Driver Applications", url: "/dashboard/applications", icon: ClipboardList },
-    ],
-  },
-  {
-    id: 4,
-    label: "Communication",
-    items: [
-      { title: "Calls", url: "/dashboard/calls", icon: Phone },
-      { title: "Numbers", url: "/dashboard/numbers", icon: Hash },
-      { title: "Chats", url: "/dashboard/chats", icon: MessageSquare },
-      { title: "Channels", url: "/dashboard/channels", icon: Radio },
-      { title: "Contacts", url: "/dashboard/contacts", icon: BookUser },
-    ],
-  },
-  {
-    id: 5,
-    label: "Management",
-    items: [
-      { title: "Gate Codes", url: "/dashboard/gate-codes", icon: KeyRound },
-      { title: "Drop-offs", url: "/dashboard/dropoffs", icon: Home },
-      { title: "Address Fixes", url: "/dashboard/addr-fixes", icon: Wrench },
-      { title: "Client Locations", url: "/dashboard/client-locations", icon: MapPinned },
-      { title: "Tenants", url: "/dashboard/tenants", icon: Building },
-    ],
-  },
-  {
-    id: 6,
-    label: "AI Center",
-    items: [
-      { title: "Agents", url: "/dashboard/agents", icon: Bot },
-      { title: "Flows", url: "/dashboard/flows", icon: GitBranch },
-      { title: "Knowledge Base", url: "/dashboard/knowledge", icon: BookOpen },
-      { title: "Dictionary", url: "/dashboard/dictionary", icon: BookMarked },
-    ],
-  },
-  {
-    id: 7,
-    label: "System",
-    items: [
-      { title: "Integrations", url: "/dashboard/integrations", icon: Plug },
-      { title: "Settings", url: "/dashboard/settings", icon: Settings2 },
-    ],
-  },
+const QUICK_ACTIONS = [
+  { label: "Create Stop", icon: MapPin, href: "/dashboard/stops?action=create", color: "text-blue-600" },
+  { label: "Create Plan", icon: Star, href: "/dashboard/plans?action=create", color: "text-violet-600" },
+  { label: "Scan Package", icon: Package, href: "/dashboard/scans", color: "text-green-600" },
+  { label: "Add Lead", icon: UserPlus, href: "/dashboard/leads?action=create", color: "text-amber-600" },
+  { label: "Add Driver", icon: ClipboardList, href: "/dashboard/drivers?action=create", color: "text-teal-600" },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -153,7 +62,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} />
+        <NavMain items={sidebarItems} quickActions={QUICK_ACTIONS} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

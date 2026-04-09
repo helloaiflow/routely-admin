@@ -1,29 +1,34 @@
 import {
-  BarChart3,
+  BookMarked,
   BookOpen,
   Bot,
   Building2,
   Car,
-  FileText,
+  ClipboardList,
   Fingerprint,
-  Globe,
+  GitBranch,
   Hash,
   HeartPulse,
+  Home,
+  KeyRound,
   LayoutDashboard,
   type LucideIcon,
   MapPin,
+  MapPinned,
   MessageSquare,
+  Navigation,
   Package,
   Phone,
+  Plug,
+  Radio,
   Route,
   Search,
-  Settings,
-  Shield,
+  Settings2,
   Star,
+  TrendingUp,
+  UserPlus,
   Users,
-  Webhook,
   Wrench,
-  Zap,
 } from "lucide-react";
 
 export interface NavSubItem {
@@ -32,7 +37,6 @@ export interface NavSubItem {
   icon?: LucideIcon;
   comingSoon?: boolean;
   newTab?: boolean;
-  isNew?: boolean;
 }
 
 export interface NavMainItem {
@@ -57,7 +61,7 @@ export const sidebarItems: NavGroup[] = [
     label: "Overview",
     items: [
       { title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard },
-      { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
+      { title: "Analytics", url: "/dashboard/analytics", icon: TrendingUp },
     ],
   },
   {
@@ -67,7 +71,9 @@ export const sidebarItems: NavGroup[] = [
       { title: "Package Scans", url: "/dashboard/scans", icon: Package },
       { title: "Package Search", url: "/dashboard/search", icon: Search },
       { title: "Stops", url: "/dashboard/stops", icon: MapPin },
-      { title: "Routes", url: "/dashboard/routes", icon: Route, comingSoon: true },
+      { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },
+      { title: "Depots", url: "/dashboard/depots", icon: Route },
+      { title: "Plans", url: "/dashboard/plans", icon: Star },
     ],
   },
   {
@@ -77,50 +83,77 @@ export const sidebarItems: NavGroup[] = [
       { title: "Recipients", url: "/dashboard/recipients", icon: Users },
       { title: "Clients", url: "/dashboard/clients", icon: Building2 },
       { title: "Drivers", url: "/dashboard/drivers", icon: Car },
-      { title: "Leads", url: "/dashboard/leads", icon: Star },
-      { title: "Driver Applications", url: "/dashboard/applications", icon: FileText },
+      { title: "Leads", url: "/dashboard/leads", icon: UserPlus },
+      { title: "Driver Applications", url: "/dashboard/applications", icon: ClipboardList },
     ],
   },
   {
     id: 4,
     label: "Communication",
     items: [
-      { title: "Calls", url: "/dashboard/calls", icon: Phone },
-      { title: "Numbers", url: "/dashboard/numbers", icon: Hash },
-      { title: "Chats", url: "/dashboard/chats", icon: MessageSquare, comingSoon: true },
-      { title: "Channels", url: "/dashboard/channels", icon: Globe, comingSoon: true },
-      { title: "Contacts", url: "/dashboard/contacts", icon: HeartPulse, comingSoon: true },
+      {
+        title: "Messaging",
+        url: "/dashboard/calls",
+        icon: MessageSquare,
+        subItems: [
+          { title: "Calls", url: "/dashboard/calls", icon: Phone },
+          { title: "Numbers", url: "/dashboard/numbers", icon: Hash },
+          { title: "Chats", url: "/dashboard/chats", icon: MessageSquare, comingSoon: true },
+          { title: "Channels", url: "/dashboard/channels", icon: Radio, comingSoon: true },
+          { title: "Contacts", url: "/dashboard/contacts", icon: HeartPulse, comingSoon: true },
+        ],
+      },
     ],
   },
   {
     id: 5,
     label: "Management",
     items: [
-      { title: "Gate Codes", url: "/dashboard/gate-codes", icon: Shield },
-      { title: "Drop-offs", url: "/dashboard/dropoffs", icon: MapPin },
-      { title: "Address Fixes", url: "/dashboard/addr-fixes", icon: Wrench },
-      { title: "Client Locations", url: "/dashboard/client-locations", icon: Building2 },
-      { title: "Depots", url: "/dashboard/depots", icon: Route },
-      { title: "Tenants", url: "/dashboard/tenants", icon: Fingerprint },
-      { title: "Plans", url: "/dashboard/plans", icon: Star },
+      {
+        title: "Locations",
+        url: "/dashboard/gate-codes",
+        icon: MapPinned,
+        subItems: [
+          { title: "Gate Codes", url: "/dashboard/gate-codes", icon: KeyRound },
+          { title: "Drop-offs", url: "/dashboard/dropoffs", icon: Home },
+          { title: "Address Fixes", url: "/dashboard/addr-fixes", icon: Wrench },
+          { title: "Client Locations", url: "/dashboard/client-locations", icon: MapPinned },
+        ],
+      },
+      {
+        title: "Account",
+        url: "/dashboard/tenants",
+        icon: Fingerprint,
+        subItems: [
+          { title: "Tenants", url: "/dashboard/tenants", icon: Fingerprint },
+          { title: "Billing & Plans", url: "/dashboard/plans", icon: Star },
+        ],
+      },
     ],
   },
   {
     id: 6,
     label: "AI Center",
     items: [
-      { title: "Agents", url: "/dashboard/agents", icon: Bot },
-      { title: "Flows", url: "/dashboard/flows", icon: Zap },
-      { title: "Knowledge Base", url: "/dashboard/knowledge", icon: BookOpen },
-      { title: "Dictionary", url: "/dashboard/dictionary", icon: FileText },
+      {
+        title: "AI Tools",
+        url: "/dashboard/agents",
+        icon: Bot,
+        subItems: [
+          { title: "Agents", url: "/dashboard/agents", icon: Bot },
+          { title: "Flows", url: "/dashboard/flows", icon: GitBranch },
+          { title: "Knowledge Base", url: "/dashboard/knowledge", icon: BookOpen },
+          { title: "Dictionary", url: "/dashboard/dictionary", icon: BookMarked },
+        ],
+      },
     ],
   },
   {
     id: 7,
     label: "System",
     items: [
-      { title: "Integrations", url: "/dashboard/integrations", icon: Webhook },
-      { title: "Settings", url: "/dashboard/settings", icon: Settings, comingSoon: true },
+      { title: "Integrations", url: "/dashboard/integrations", icon: Plug },
+      { title: "Settings", url: "/dashboard/settings", icon: Settings2, comingSoon: true },
     ],
   },
 ];

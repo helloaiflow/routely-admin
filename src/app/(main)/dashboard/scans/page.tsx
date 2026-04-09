@@ -321,18 +321,8 @@ function ScanCard({ scan, selected, onClick }: { scan: Scan; selected: boolean; 
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
       whileTap={{ scale: 0.98 }}
-      className={`relative w-full rounded-xl border text-left transition-colors duration-150 ${selected ? "border-primary/40 bg-primary/5 shadow-md" : "border-border bg-card hover:border-primary/20"}`}
+      className={`relative w-full rounded-xl border text-left transition-all duration-200 ${selected ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20" : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"}`}
     >
-      {selected && (
-        <motion.div
-          layoutId="scanAccent"
-          className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary"
-        />
-      )}
-      <div
-        className="h-0.5 w-full rounded-t-xl"
-        style={{ background: `linear-gradient(90deg, ${rc.text}40, ${rc.text}10)` }}
-      />
       <div className="px-3.5 py-3">
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -601,37 +591,46 @@ export default function ScansPage() {
   const [flagFilter, setFlagFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("1");
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [scanResult, tenantResult] = await Promise.allSettled([
-        fetch(`/api/data/package-scans?limit=200&tenant_id=${tenantFilter}`),
-        fetch("/api/tenants"),
-      ]);
+  const fetchData = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const [scanResult, tenantResult] = await Promise.allSettled([
+          fetch(`/api/data/package-scans?limit=200&tenant_id=${tenantFilter}`),
+          fetch("/api/tenants"),
+        ]);
 
-      if (scanResult.status === "fulfilled" && scanResult.value.ok) {
-        const d = await scanResult.value.json();
-        setData(d.list || d || []);
+        if (scanResult.status === "fulfilled" && scanResult.value.ok) {
+          const d = await scanResult.value.json();
+          setData(d.list || d || []);
+        }
+
+        if (tenantResult.status === "fulfilled" && tenantResult.value.ok) {
+          const t = await tenantResult.value.json();
+          setTenants(
+            (t.list || []).map((x: Record<string, unknown>) => ({
+              tenant_id: x.tenant_id as number,
+              company_name: (x.company_name as string) || (x.contact_name as string) || `Tenant ${x.tenant_id}`,
+            })),
+          );
+        }
+      } catch (err) {
+        console.error("fetchData error:", err);
+      } finally {
+        setLoading(false);
       }
+    },
+    [tenantFilter],
+  );
 
-      if (tenantResult.status === "fulfilled" && tenantResult.value.ok) {
-        const t = await tenantResult.value.json();
-        setTenants(
-          (t.list || []).map((x: Record<string, unknown>) => ({
-            tenant_id: x.tenant_id as number,
-            company_name: (x.company_name as string) || (x.contact_name as string) || `Tenant ${x.tenant_id}`,
-          })),
-        );
-      }
-    } catch (err) {
-      console.error("fetchData error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantFilter]);
-
+  const isFirstLoad = useRef(true);
   useEffect(() => {
-    fetchData();
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      fetchData(false);
+    } else {
+      fetchData(true);
+    }
   }, [fetchData]);
 
   const routes = useMemo(() => [...new Set(data.map((s) => s.route).filter(Boolean))].sort() as string[], [data]);
@@ -721,7 +720,7 @@ export default function ScansPage() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] gap-0 overflow-hidden rounded-xl border bg-background shadow-sm">
+    <div className="relative flex h-[calc(100vh-5rem)] gap-0 overflow-hidden rounded-xl border bg-background shadow-sm">
       {/* LEFT: Scan List */}
       <div
         className={`flex shrink-0 flex-col border-r transition-all duration-300 ${selected ? "w-[290px]" : "w-[375px]"}`}
@@ -738,7 +737,7 @@ export default function ScansPage() {
               <motion.button
                 whileTap={{ rotate: 180 }}
                 type="button"
-                onClick={fetchData}
+                onClick={() => fetchData(true)}
                 className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -872,16 +871,16 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* RIGHT: Detail Panel */}
+      {/* RIGHT: detail panel — absolute overlay, never pushes map */}
       <AnimatePresence>
         {selected && (
           <motion.div
             key="detail"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 320, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="shrink-0 overflow-hidden border-l"
+            initial={{ x: 320, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 320, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="absolute bottom-0 right-0 top-0 z-20 w-[300px] overflow-hidden border-l bg-background shadow-2xl xl:w-[320px]"
           >
             <DetailPanel scan={selected} onClose={() => setSelected(null)} />
           </motion.div>

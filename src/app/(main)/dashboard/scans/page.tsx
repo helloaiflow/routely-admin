@@ -726,11 +726,16 @@ export default function ScansPage() {
   ];
 
   return (
-    <div className="relative flex h-[calc(100vh-5rem)] gap-0 overflow-hidden rounded-xl border bg-background shadow-sm">
-      {/* LEFT: Scan List */}
-      <div
-        className={`flex shrink-0 flex-col border-r transition-all duration-300 ${selected ? "w-[290px]" : "w-[375px]"}`}
-      >
+    <div
+      className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
+      style={{
+        display: "grid",
+        gridTemplateColumns: selected ? "300px 1fr 300px" : "300px 1fr",
+        gridTemplateRows: "1fr",
+      }}
+    >
+      {/* COL 1: Scan List */}
+      <div className="flex flex-col overflow-hidden border-r">
         <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>
@@ -859,9 +864,9 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* CENTER: Map — always visible, always flex-1 */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
+      {/* COL 2: Map — always visible, always in grid */}
+      <div className="flex flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
           </div>
@@ -877,21 +882,12 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* RIGHT: detail panel — absolute overlay, never pushes map */}
-      <AnimatePresence>
-        {selected && (
-          <motion.div
-            key="detail"
-            initial={{ x: 320, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 320, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="absolute bottom-0 right-0 top-0 z-20 w-[300px] overflow-hidden border-l bg-background shadow-2xl xl:w-[320px]"
-          >
-            <DetailPanel scan={selected} onClose={() => setSelected(null)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* COL 3: Detail panel — true grid column, no absolute */}
+      {selected && (
+        <div className="flex flex-col overflow-hidden border-l">
+          <DetailPanel scan={selected} onClose={() => setSelected(null)} />
+        </div>
+      )}
     </div>
   );
 }

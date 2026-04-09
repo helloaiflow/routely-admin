@@ -600,16 +600,18 @@ export default function ScansPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sr, tr] = await Promise.all([
+      const [scanResult, tenantResult] = await Promise.allSettled([
         fetch(`/api/data/package-scans?limit=200&clientId=${tenantFilter}`),
-        fetch("https://routelypro.com/api/tenants"),
+        fetch("/api/tenants"),
       ]);
-      if (sr.ok) {
-        const d = await sr.json();
+
+      if (scanResult.status === "fulfilled" && scanResult.value.ok) {
+        const d = await scanResult.value.json();
         setData(d.list || d || []);
       }
-      if (tr.ok) {
-        const t = await tr.json();
+
+      if (tenantResult.status === "fulfilled" && tenantResult.value.ok) {
+        const t = await tenantResult.value.json();
         setTenants(
           (t.list || []).map((x: Record<string, unknown>) => ({
             tenant_id: x.tenant_id as number,
@@ -617,6 +619,8 @@ export default function ScansPage() {
           })),
         );
       }
+    } catch (err) {
+      console.error("fetchData error:", err);
     } finally {
       setLoading(false);
     }
@@ -744,7 +748,7 @@ export default function ScansPage() {
               </button>
             </div>
           </div>
-          {tenants.length > 1 && (
+          {tenants.length >= 1 && (
             <Select value={tenantFilter} onValueChange={setTenantFilter}>
               <SelectTrigger className="h-7 gap-1 text-xs">
                 <Users className="h-3 w-3 shrink-0 text-muted-foreground" />

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSearchParams } from "next/navigation";
 
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Clock,
+  Camera,
   DollarSign,
   Download,
   MapPin,
@@ -15,6 +16,7 @@ import {
   Search,
   Snowflake,
   Star,
+  Truck,
   Users,
   X,
   ZoomIn,
@@ -55,74 +57,100 @@ interface Scan {
   preset_drop_off?: string;
 }
 
-const ROUTE_COLORS = [
-  "bg-blue-100 text-blue-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-orange-100 text-orange-700",
-  "bg-pink-100 text-pink-700",
-  "bg-indigo-100 text-indigo-700",
-  "bg-teal-100 text-teal-700",
-  "bg-rose-100 text-rose-700",
-  "bg-lime-100 text-lime-700",
+// ── Route color palette ──────────────────────────────────────────────────────
+const ROUTE_MAP: Record<string, { bg: string; text: string; border: string; glow: string; emoji: string }> = {
+  "CENTRAL FL": { bg: "#fff0f8", text: "#c0006a", border: "#f9a8d4", glow: "rgba(254,33,139,0.20)", emoji: "🌆" },
+  "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", glow: "rgba(253,255,43,0.25)", emoji: "🌴" },
+  "DEERFIELD FL": { bg: "#edfcff", text: "#0079a8", border: "#a5f3fc", glow: "rgba(10,239,255,0.20)", emoji: "🦌" },
+  "NORTH FL": { bg: "#edfff5", text: "#007a4a", border: "#6ee7b7", glow: "rgba(10,255,104,0.20)", emoji: "🌿" },
+};
+const FALLBACK_R = [
+  { bg: "#f4f0ff", text: "#5b21b6", border: "#c4b5fd", glow: "rgba(139,92,246,0.15)", emoji: "🔮" },
+  { bg: "#fff4ed", text: "#c2410c", border: "#fdba74", glow: "rgba(249,115,22,0.15)", emoji: "🔥" },
+  { bg: "#edfcfa", text: "#0f766e", border: "#99f6e4", glow: "rgba(20,184,166,0.15)", emoji: "💎" },
+  { bg: "#fdf4ff", text: "#7e22ce", border: "#e9d5ff", glow: "rgba(168,85,247,0.15)", emoji: "⚡" },
 ];
-const routeColorCache: Record<string, string> = {};
-let routeColorIdx = 0;
-function routeColor(route: string): string {
-  if (!route) return "bg-slate-100 text-slate-600";
-  if (!routeColorCache[route]) {
-    routeColorCache[route] = ROUTE_COLORS[routeColorIdx % ROUTE_COLORS.length];
-    routeColorIdx++;
+const _rc: Record<string, (typeof FALLBACK_R)[0]> = {};
+let _ri = 0;
+function getRouteColor(route: string) {
+  if (!route) return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0", glow: "transparent", emoji: "📍" };
+  const up = route.toUpperCase();
+  for (const [k, v] of Object.entries(ROUTE_MAP)) if (up.includes(k) || k.includes(up)) return v;
+  if (!_rc[route]) {
+    _rc[route] = FALLBACK_R[_ri % FALLBACK_R.length];
+    _ri++;
   }
-  return routeColorCache[route];
+  return _rc[route];
 }
 
+function RouteBadge({ route, size = "sm" }: { route: string; size?: "xs" | "sm" }) {
+  const c = getRouteColor(route);
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]";
+  return (
+    <span
+      style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, boxShadow: `0 0 8px ${c.glow}` }}
+      className={`inline-flex items-center gap-0.5 whitespace-nowrap rounded-full font-bold ${pad}`}
+    >
+      <span>{c.emoji}</span>
+      {route}
+    </span>
+  );
+}
+
+// ── Flag system ──────────────────────────────────────────────────────────────
 const FLAGS = [
   {
     key: "new_client",
-    label: "New",
+    emoji: "🆕",
     icon: Star,
     bg: "bg-violet-500",
-    pill: "border border-violet-200 bg-violet-100 text-violet-700",
+    ring: "ring-violet-300",
+    pill: "border border-violet-200 bg-violet-50 text-violet-700",
     full: "New Client",
   },
   {
     key: "collect_payment",
-    label: "$",
+    emoji: "💰",
     icon: DollarSign,
     bg: "bg-amber-500",
-    pill: "border border-amber-200 bg-amber-100 text-amber-700",
+    ring: "ring-amber-300",
+    pill: "border border-amber-200 bg-amber-50 text-amber-700",
     full: "Collect Payment",
   },
   {
     key: "cold",
-    label: "❄",
+    emoji: "❄️",
     icon: Snowflake,
     bg: "bg-cyan-500",
-    pill: "border border-cyan-200 bg-cyan-100 text-cyan-700",
+    ring: "ring-cyan-300",
+    pill: "border border-cyan-200 bg-cyan-50 text-cyan-700",
     full: "Cold Package",
   },
   {
     key: "signature_required",
-    label: "✍",
+    emoji: "✍️",
     icon: PenLine,
     bg: "bg-rose-500",
-    pill: "border border-rose-200 bg-rose-100 text-rose-700",
+    ring: "ring-rose-300",
+    pill: "border border-rose-200 bg-rose-50 text-rose-700",
     full: "Signature Required",
   },
   {
     key: "delivery_today",
-    label: "🚀",
-    icon: Clock,
+    emoji: "🚀",
+    icon: Truck,
     bg: "bg-green-500",
-    pill: "border border-green-200 bg-green-100 text-green-700",
+    ring: "ring-green-300",
+    pill: "border border-green-200 bg-green-50 text-green-700",
     full: "Deliver Today",
   },
   {
     key: "package_vip",
-    label: "VIP",
+    emoji: "👑",
     icon: Star,
     bg: "bg-yellow-500",
-    pill: "border border-yellow-200 bg-yellow-100 text-yellow-700",
+    ring: "ring-yellow-300",
+    pill: "border border-yellow-200 bg-yellow-50 text-yellow-700",
     full: "VIP Package",
   },
 ];
@@ -133,24 +161,31 @@ function getScanFlags(scan: Scan) {
   );
 }
 
-function formatTime(d?: string) {
-  if (!d) return "";
-  return new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+function pkgEmoji(type?: string): string {
+  if (!type) return "📦";
+  const t = type.toLowerCase();
+  if (t.includes("cold")) return "🧊";
+  if (t.includes("liquid") || t.includes("drop")) return "💧";
+  if (t.includes("vial") || t.includes("inject")) return "💉";
+  return "📦";
 }
-function formatDate(d?: string) {
+
+function fmt(d?: string, mode: "time" | "date" = "time") {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const dt = new Date(d);
+  if (mode === "date") return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
 // ── Leaflet Map ──────────────────────────────────────────────────────────────
 function LeafletMap({ scan }: { scan: Scan | null }) {
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const contRef = useRef<HTMLDivElement>(null);
   const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || mapRef.current || !containerRef.current) return;
+    if (typeof window === "undefined" || mapRef.current || !contRef.current) return;
     (async () => {
       const L = await import("leaflet");
       delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -159,8 +194,8 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
-      if (!containerRef.current) return;
-      mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: false }).setView(
+      if (!contRef.current) return;
+      mapRef.current = L.map(contRef.current, { zoomControl: true, attributionControl: false }).setView(
         [26.1, -80.2],
         10,
       );
@@ -184,72 +219,84 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         const results = await res.json();
         if (!results.length) return;
         const { lat, lon } = results[0];
-        const latLng: [number, number] = [Number.parseFloat(lat), Number.parseFloat(lon)];
+        const ll: [number, number] = [Number.parseFloat(lat), Number.parseFloat(lon)];
         if (markerRef.current) markerRef.current.remove();
+        const rc = getRouteColor(scan.route || "");
         const icon = L.divIcon({
-          html: `<div style="position:relative"><div style="width:20px;height:20px;border-radius:50%;background:#2563EB;border:3px solid white;box-shadow:0 2px 12px rgba(37,99,235,0.5);animation:mp 0.4s cubic-bezier(0.34,1.56,0.64,1)"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,30%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #2563EB"></div></div><style>@keyframes mp{from{transform:scale(0) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}</style>`,
+          html: `<div style="position:relative;width:28px;height:36px"><div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg) translateX(-30%);background:${rc.text};border:3px solid white;box-shadow:0 4px 16px ${rc.glow}"></div><div style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:12px;z-index:10">${pkgEmoji(scan.type)}</div></div>`,
           className: "",
-          iconSize: [20, 28],
-          iconAnchor: [10, 28],
+          iconSize: [28, 36],
+          iconAnchor: [14, 36],
         });
-        markerRef.current = L.marker(latLng, { icon })
+        markerRef.current = L.marker(ll, { icon })
           .addTo(mapRef.current)
           .bindPopup(
-            `<div style="font-size:12px;font-weight:700;color:#0f172a">${scan.full_name || ""}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${address}</div>${scan.route ? `<div style="font-size:11px;color:#2563eb;margin-top:4px;font-weight:600">${scan.route}</div>` : ""}`,
-            { maxWidth: 240 },
+            `<div style="font-size:13px;font-weight:700;color:#0f172a">${pkgEmoji(scan.type)} ${scan.full_name || ""}</div><div style="font-size:11px;color:#64748b;margin-top:3px">${address}</div>${scan.route ? `<div style="margin-top:5px;display:inline-flex;background:${rc.bg};color:${rc.text};border:1px solid ${rc.border};border-radius:99px;padding:2px 8px;font-size:10px;font-weight:700">${rc.emoji} ${scan.route}</div>` : ""}`,
+            { maxWidth: 260 },
           )
           .openPopup();
-        mapRef.current.flyTo(latLng, 16, { duration: 1.4, easeLinearity: 0.25 });
+        mapRef.current.flyTo(ll, 16, { duration: 1.4, easeLinearity: 0.25 });
       } finally {
         setGeocoding(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan?._id, scan.full_address, scan.state, scan.city, scan.address, scan.full_name, scan.route, scan]);
+  }, [scan?._id, scan.state, scan.full_address, scan.type, scan.city, scan.address, scan.full_name, scan.route, scan]);
 
-  if (!scan) {
+  if (!scan)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-        <div className="relative">
+        <motion.div
+          className="relative"
+          animate={{ scale: [1, 1.08, 1] }}
+          transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
+        >
           <MapPin className="h-16 w-16 opacity-10" />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-3 w-3 animate-ping rounded-full bg-primary/30" />
+            <div className="h-4 w-4 animate-ping rounded-full bg-primary/20" />
           </div>
-        </div>
+        </motion.div>
         <div className="text-center">
-          <p className="font-medium text-sm">No scan selected</p>
-          <p className="mt-1 text-xs opacity-60">Click a scan to pin it on the map</p>
+          <p className="font-semibold text-sm">Select a scan</p>
+          <p className="mt-1 text-xs opacity-50">Package will be pinned on the map</p>
         </div>
-        <p className="text-[10px] opacity-40">Powered by OpenStreetMap</p>
+        <p className="text-[10px] opacity-30">OpenStreetMap · Nominatim</p>
       </div>
     );
-  }
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border">
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      {geocoding && (
-        <div className="absolute top-3 left-1/2 z-[1001] flex -translate-x-1/2 items-center gap-2 rounded-full bg-background/90 px-3 py-1.5 font-medium text-xs shadow backdrop-blur">
-          <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-          Locating address...
-        </div>
-      )}
-      <div ref={containerRef} className="h-full w-full" />
+      <AnimatePresence>
+        {geocoding && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="absolute top-3 left-1/2 z-[1001] flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-4 py-2 font-semibold text-xs shadow-lg backdrop-blur-md"
+          >
+            <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+            Locating on map...
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div ref={contRef} className="h-full w-full" />
       <div className="pointer-events-none absolute right-4 bottom-4 left-4 z-[1000]">
-        <div className="rounded-xl border bg-background/95 p-3 shadow-xl backdrop-blur-md">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
-              <MapPin className="h-4 w-4 text-primary" />
+        <div className="rounded-2xl border bg-background/95 p-3.5 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl"
+              style={{ background: getRouteColor(scan.route || "").bg }}
+            >
+              {pkgEmoji(scan.type)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold text-sm">{scan.full_name}</p>
               <p className="truncate text-muted-foreground text-xs">{scan.full_address || scan.address}</p>
               {scan.route && (
-                <span
-                  className={`mt-1 inline-flex rounded-full px-2 py-0.5 font-semibold text-[10px] ${routeColor(scan.route)}`}
-                >
-                  {scan.route}
-                </span>
+                <div className="mt-1">
+                  <RouteBadge route={scan.route} size="xs" />
+                </div>
               )}
             </div>
           </div>
@@ -262,86 +309,170 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
 // ── Scan Card ──────────────────────────────────────────────────────────────────
 function ScanCard({ scan, selected, onClick }: { scan: Scan; selected: boolean; onClick: () => void }) {
   const flags = getScanFlags(scan);
+  const rc = getRouteColor(scan.route || "");
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
-      className={`group relative w-full cursor-pointer rounded-xl border text-left transition-all duration-200 ${selected ? "scale-[0.99] border-primary/50 bg-primary/5 shadow-md" : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm"}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+      whileTap={{ scale: 0.98 }}
+      className={`relative w-full rounded-xl border text-left transition-colors duration-150 ${selected ? "border-primary/40 bg-primary/5 shadow-md" : "border-border bg-card hover:border-primary/20"}`}
     >
-      {selected && <div className="absolute top-0 left-0 h-full w-1 rounded-l-xl bg-primary" />}
-      <div className="px-4 py-3">
+      {selected && (
+        <motion.div
+          layoutId="scanAccent"
+          className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary"
+        />
+      )}
+      <div
+        className="h-0.5 w-full rounded-t-xl"
+        style={{ background: `linear-gradient(90deg, ${rc.text}40, ${rc.text}10)` }}
+      />
+      <div className="px-3.5 py-3">
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
-            <p className="font-mono text-[11px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
+              <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
+            </div>
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="font-medium text-[10px] text-muted-foreground">{formatDate(scan.created_at)}</p>
-            <p className="text-[10px] text-muted-foreground/60">{formatTime(scan.created_at)}</p>
+            <p className="font-medium text-[10px] text-muted-foreground">{fmt(scan.created_at, "date")}</p>
+            <p className="text-[9px] text-muted-foreground/50">{fmt(scan.created_at, "time")}</p>
           </div>
         </div>
-        <p className="mb-2.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-          <MapPin className="h-2.5 w-2.5 shrink-0" />
+        <p className="mb-2 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+          <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
           {scan.full_address || scan.address || "—"}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           {flags.length > 0 && (
             <div className="flex gap-1">
               {flags.map((f) => (
-                <div
+                <motion.div
                   key={f.key}
-                  title={f.full}
-                  className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] text-white shadow-sm ${f.bg}`}
+                  title={`${f.emoji} ${f.full}`}
+                  whileHover={{ scale: 1.2 }}
+                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm ring-1 ${f.bg} ${f.ring}`}
                 >
                   <f.icon className="h-2.5 w-2.5" />
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
-          {scan.route && (
-            <span
-              className={`inline-flex rounded-full px-2 py-0.5 font-semibold text-[10px] ${routeColor(scan.route)}`}
-            >
-              {scan.route}
-            </span>
-          )}
+          {scan.route && <RouteBadge route={scan.route} size="xs" />}
           {scan.client_location && scan.client_location !== "OTHER" && (
-            <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 font-medium text-[10px] text-slate-600">
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
               {scan.client_location}
             </span>
           )}
           {scan.collect_payment && scan.collect_amount ? (
             <span className="ml-auto font-bold font-mono text-[10px] text-amber-600">
-              ${scan.collect_amount.toFixed(2)}
+              💰 ${scan.collect_amount.toFixed(2)}
             </span>
           ) : null}
         </div>
       </div>
-    </button>
+    </motion.button>
+  );
+}
+
+// ── Image Card ────────────────────────────────────────────────────────────────
+function ImageCard({ imageUrl, fullName, rxId }: { imageUrl: string; fullName?: string; rxId?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <motion.button
+        type="button"
+        onClick={() => setOpen(true)}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className="group relative w-full overflow-hidden rounded-xl border bg-muted/20 transition-all hover:border-primary/40 hover:shadow-md"
+      >
+        <div className="relative">
+          {/* biome-ignore lint/performance/noImgElement: label preview */}
+          <img
+            src={imageUrl}
+            alt="Label"
+            className="h-28 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+          <div className="absolute right-2 bottom-2 left-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <div className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 backdrop-blur">
+                <Camera className="h-3 w-3 text-white" />
+              </div>
+              <span className="font-semibold text-[10px] text-white/90">Label Image</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-md bg-white/20 px-2 py-0.5 backdrop-blur">
+              <ZoomIn className="h-2.5 w-2.5 text-white" />
+              <span className="font-medium text-[9px] text-white">Expand</span>
+            </div>
+          </div>
+        </div>
+      </motion.button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="overflow-hidden rounded-2xl bg-black/95 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-center justify-between border-white/10 border-b px-4 py-3">
+              <div>
+                <p className="font-semibold text-sm text-white">{fullName}</p>
+                <p className="font-mono text-[11px] text-white/50">{rxId}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+                className="h-7 w-7 text-white/50 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-3">
+              {/* biome-ignore lint/performance/noImgElement: fullscreen label */}
+              <img src={imageUrl} alt="Label" className="w-full rounded-xl" />
+            </div>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 // ── Detail Panel ──────────────────────────────────────────────────────────────
 function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
-  const [imgOpen, setImgOpen] = useState(false);
   const flags = getScanFlags(scan);
+  const rc = getRouteColor(scan.route || "");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-2 border-b bg-muted/20 px-5 py-4">
+    <motion.div
+      key={scan._id}
+      initial={{ opacity: 0, x: 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.25 }}
+      className="flex h-full flex-col overflow-hidden"
+    >
+      <div
+        className="flex items-start justify-between gap-2 border-b px-5 py-4"
+        style={{ background: `linear-gradient(135deg, ${rc.bg}, transparent)` }}
+      >
         <div>
-          <p className="font-bold text-base leading-tight">{scan.full_name}</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-2xl">{pkgEmoji(scan.type)}</span>
+            <p className="font-bold text-base leading-tight">{scan.full_name}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-muted/80 px-2 py-0.5 font-mono text-muted-foreground text-xs">
               #{scan.rtscan_id}
             </span>
-            {scan.route && (
-              <span
-                className={`inline-flex rounded-full px-2 py-0.5 font-semibold text-[10px] ${routeColor(scan.route)}`}
-              >
-                {scan.route}
-              </span>
-            )}
+            {scan.route && <RouteBadge route={scan.route} />}
           </div>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
@@ -350,45 +481,32 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {flags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-5 pt-4 pb-2">
-            {flags.map((f) => (
-              <span
-                key={f.key}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold text-[11px] ${f.pill}`}
-              >
-                <f.icon className="h-3 w-3" />
-                {f.full}
-                {f.key === "collect_payment" && scan.collect_amount ? ` — $${scan.collect_amount.toFixed(2)}` : ""}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {scan.image_url && (
-          <div className="px-5 pt-3 pb-0">
-            <button
-              type="button"
-              onClick={() => setImgOpen(true)}
-              className="group relative w-full overflow-hidden rounded-xl border bg-muted/30 transition-all hover:border-primary/40"
+        <AnimatePresence>
+          {flags.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-wrap gap-1.5 px-5 pt-4 pb-1"
             >
-              {/* biome-ignore lint/performance/noImgElement: label preview */}
-              <img
-                src={scan.image_url}
-                alt="Label"
-                className="max-h-32 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-                <ZoomIn className="h-7 w-7 text-white drop-shadow" />
-              </div>
-              <div className="absolute right-2 bottom-2 rounded-md bg-background/80 px-2 py-0.5 font-medium text-[10px] backdrop-blur">
-                Click to expand
-              </div>
-            </button>
-          </div>
-        )}
+              {flags.map((f, i) => (
+                <motion.span
+                  key={f.key}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-semibold text-[11px] ${f.pill}`}
+                >
+                  <span>{f.emoji}</span>
+                  {f.full}
+                  {f.key === "collect_payment" && scan.collect_amount ? ` · $${scan.collect_amount.toFixed(2)}` : ""}
+                </motion.span>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="space-y-4 px-5 py-4">
+          {scan.image_url && <ImageCard imageUrl={scan.image_url} fullName={scan.full_name} rxId={scan.rx_pharma_id} />}
           <Sec title="Patient">
             <Row label="Name" value={scan.full_name} />
             <Row label="DOB" value={scan.dob} />
@@ -403,10 +521,10 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
                 </p>
               )}
               {scan.gate_code && scan.gate_code !== "No" && (
-                <p className="font-semibold text-amber-600">Gate Code: {scan.gate_code}</p>
+                <p className="font-semibold text-amber-600">🔑 Gate: {scan.gate_code}</p>
               )}
               {scan.preset_drop_off && scan.preset_drop_off !== "No" && (
-                <p className="font-medium text-blue-600">Drop-off: {scan.preset_drop_off}</p>
+                <p className="font-medium text-blue-600">📦 Drop-off: {scan.preset_drop_off}</p>
               )}
             </div>
           </Sec>
@@ -432,43 +550,36 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
 
       <div className="flex gap-2 border-t bg-muted/10 px-5 py-3">
         <Button size="sm" variant="outline" className="h-8 flex-1 text-xs" asChild>
-          <a href={`/dashboard/stops?search=${encodeURIComponent(scan.full_name || "")}`}>View Stop</a>
+          <a href={`/dashboard/stops?search=${encodeURIComponent(scan.full_name || "")}`}>
+            <Truck className="mr-1.5 h-3 w-3" />
+            View Stop
+          </a>
         </Button>
         {scan.image_url && (
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setImgOpen(true)}>
-            View Label
+          <Button size="sm" variant="outline" className="h-8 text-xs">
+            <Camera className="mr-1.5 h-3 w-3" />
+            Label
           </Button>
         )}
       </div>
-
-      <Dialog open={imgOpen} onOpenChange={setImgOpen}>
-        <DialogContent className="max-w-2xl border-0 bg-black/90 p-2">
-          {/* biome-ignore lint/performance/noImgElement: fullscreen label */}
-          <img src={scan.image_url} alt="Label" className="w-full rounded-lg" />
-          <p className="pb-1 text-center text-white/50 text-xs">
-            {scan.full_name} — {scan.rx_pharma_id}
-          </p>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </motion.div>
   );
 }
 
 function Sec({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <p className="mb-1.5 font-bold text-[10px] text-muted-foreground/70 uppercase tracking-widest">{title}</p>
-      <div className="divide-y overflow-hidden rounded-xl border bg-muted/20 text-sm">{children}</div>
+      <p className="mb-1.5 font-bold text-[10px] text-muted-foreground/60 uppercase tracking-widest">{title}</p>
+      <div className="divide-y overflow-hidden rounded-xl border bg-muted/20">{children}</div>
     </section>
   );
 }
-
 function Row({ label, value, mono = false }: { label: string; value?: string | null; mono?: boolean }) {
   if (!value) return null;
   return (
     <div className="flex items-center justify-between px-3 py-2">
       <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <span className={`max-w-[180px] truncate text-right font-medium text-[11px] ${mono ? "font-mono" : ""}`}>
+      <span className={`max-w-[190px] truncate text-right font-medium text-[11px] ${mono ? "font-mono" : ""}`}>
         {value}
       </span>
     </div>
@@ -490,16 +601,16 @@ export default function ScansPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [scanRes, tenantRes] = await Promise.all([
+      const [sr, tr] = await Promise.all([
         fetch(`/api/data/package-scans?limit=200&clientId=${tenantFilter}`),
         fetch("https://routelypro.com/api/tenants"),
       ]);
-      if (scanRes.ok) {
-        const d = await scanRes.json();
+      if (sr.ok) {
+        const d = await sr.json();
         setData(d.list || d || []);
       }
-      if (tenantRes.ok) {
-        const t = await tenantRes.json();
+      if (tr.ok) {
+        const t = await tr.json();
         setTenants(
           (t.list || []).map((x: Record<string, unknown>) => ({
             tenant_id: x.tenant_id as number,
@@ -517,7 +628,6 @@ export default function ScansPage() {
   }, [fetchData]);
 
   const routes = useMemo(() => [...new Set(data.map((s) => s.route).filter(Boolean))].sort() as string[], [data]);
-
   const filtered = useMemo(() => {
     let r = data;
     if (search) {
@@ -540,7 +650,7 @@ export default function ScansPage() {
   }, [data, search, routeFilter, flagFilter]);
 
   const exportCsv = () => {
-    const h = ["Scan ID", "Patient", "Rx #", "Address", "Route", "Branch", "New", "Collect", "Cold", "Sig", "Date"];
+    const h = ["ID", "Patient", "Rx", "Address", "Route", "Branch", "New", "Collect", "Cold", "Sig", "Date"];
     const rows = filtered.map((s) => [
       s.rtscan_id,
       s.full_name,
@@ -563,44 +673,83 @@ export default function ScansPage() {
 
   if (loading)
     return (
-      <div className="flex h-[calc(100vh-8rem)] gap-3 p-0">
+      <div className="flex h-[calc(100vh-8rem)] gap-3">
         <div className="w-[360px] shrink-0 space-y-2 p-3">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <Skeleton key={`sk-${i}`} className="h-24 rounded-xl" style={{ opacity: 1 - i * 0.12 }} />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={`sk-${i}`} className="rounded-xl" style={{ height: 88, opacity: 1 - i * 0.11 }} />
           ))}
         </div>
         <Skeleton className="flex-1 rounded-xl" />
       </div>
     );
 
+  const summaryPills = [
+    {
+      key: "new",
+      emoji: "🆕",
+      label: `${data.filter((s) => s.new_client).length}`,
+      color: "bg-violet-100 text-violet-700 ring-violet-200",
+    },
+    {
+      key: "collect",
+      emoji: "💰",
+      label: `$${data
+        .filter((s) => s.collect_payment)
+        .reduce((a, s) => a + (s.collect_amount || 0), 0)
+        .toFixed(0)}`,
+      color: "bg-amber-100 text-amber-700 ring-amber-200",
+    },
+    {
+      key: "cold",
+      emoji: "❄️",
+      label: `${data.filter((s) => s.type?.includes("cold")).length}`,
+      color: "bg-cyan-100 text-cyan-700 ring-cyan-200",
+    },
+    {
+      key: "sig",
+      emoji: "✍️",
+      label: `${data.filter((s) => s.signature_required).length}`,
+      color: "bg-rose-100 text-rose-700 ring-rose-200",
+    },
+  ];
+
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 overflow-hidden rounded-xl border bg-background shadow-sm">
-      {/* LEFT — Scan List */}
+      {/* LEFT: Scan List */}
       <div
-        className={`flex shrink-0 flex-col border-r transition-all duration-300 ${selected ? "w-[300px]" : "w-[380px]"}`}
+        className={`flex shrink-0 flex-col border-r transition-all duration-300 ${selected ? "w-[290px]" : "w-[375px]"}`}
       >
-        <div className="space-y-2 border-b bg-muted/10 px-4 py-3">
+        <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-bold text-sm">Package Scans</h1>
+              <h1 className="font-bold text-sm">📦 Package Scans</h1>
               <p className="text-[10px] text-muted-foreground">
-                {filtered.length} of {data.length} scans
+                {filtered.length} of {data.length}
               </p>
             </div>
             <div className="flex gap-1">
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData}>
+              <motion.button
+                whileTap={{ rotate: 180 }}
+                type="button"
+                onClick={fetchData}
+                className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
                 <RefreshCw className="h-3 w-3" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={exportCsv}>
+              </motion.button>
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
                 <Download className="h-3 w-3" />
-              </Button>
+              </button>
             </div>
           </div>
           {tenants.length > 1 && (
             <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger className="h-7 text-xs">
-                <Users className="mr-1 h-3 w-3" />
-                <SelectValue placeholder="Tenant" />
+              <SelectTrigger className="h-7 gap-1 text-xs">
+                <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {tenants.map((t) => (
@@ -614,20 +763,25 @@ export default function ScansPage() {
           <div className="relative">
             <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search patient, Rx, address..."
+              placeholder="Patient, Rx #, address..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-7 pl-8 text-xs"
+              className="h-7 pr-7 pl-8 text-xs"
             />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
+            <AnimatePresence>
+              {search && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => setSearch("")}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
           <div className="flex gap-1.5">
             <Select value={routeFilter} onValueChange={setRouteFilter}>
@@ -638,67 +792,39 @@ export default function ScansPage() {
                 <SelectItem value="all">All Routes</SelectItem>
                 {routes.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {r}
+                    {getRouteColor(r).emoji} {r}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={flagFilter} onValueChange={setFlagFilter}>
               <SelectTrigger className="h-7 flex-1 text-xs">
-                <SelectValue placeholder="Flag" />
+                <SelectValue placeholder="Filter" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                <SelectItem value="new">New Client</SelectItem>
-                <SelectItem value="collect">Collect $</SelectItem>
-                <SelectItem value="cold">Cold</SelectItem>
-                <SelectItem value="sig">Signature</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="new">🆕 New Client</SelectItem>
+                <SelectItem value="collect">💰 Collect $</SelectItem>
+                <SelectItem value="cold">❄️ Cold</SelectItem>
+                <SelectItem value="sig">✍️ Signature</SelectItem>
+                <SelectItem value="today">🚀 Today</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         <div className="flex gap-1.5 overflow-x-auto border-b bg-muted/5 px-3 py-2">
-          {[
-            {
-              key: "new",
-              label: `${data.filter((s) => s.new_client).length} New`,
-              icon: Star,
-              color: "bg-violet-100 text-violet-700",
-            },
-            {
-              key: "collect",
-              label: `$${data
-                .filter((s) => s.collect_payment)
-                .reduce((a, s) => a + (s.collect_amount || 0), 0)
-                .toFixed(0)}`,
-              icon: DollarSign,
-              color: "bg-amber-100 text-amber-700",
-            },
-            {
-              key: "cold",
-              label: `${data.filter((s) => s.type?.includes("cold")).length} ❄`,
-              icon: Snowflake,
-              color: "bg-cyan-100 text-cyan-700",
-            },
-            {
-              key: "sig",
-              label: `${data.filter((s) => s.signature_required).length} ✍`,
-              icon: PenLine,
-              color: "bg-rose-100 text-rose-700",
-            },
-          ].map((p) => (
-            <button
+          {summaryPills.map((p) => (
+            <motion.button
               key={p.key}
               type="button"
-              title={p.key}
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setFlagFilter(flagFilter === p.key ? "all" : p.key)}
-              className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 font-semibold text-[10px] transition-all duration-150 ${p.color} ${flagFilter === p.key ? "scale-105 ring-2 ring-current ring-offset-1" : "opacity-75 hover:scale-105 hover:opacity-100"}`}
+              className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 font-bold text-[10px] ring-1 transition-all ${p.color} ${flagFilter === p.key ? "scale-105 shadow-sm ring-2" : "opacity-70 hover:opacity-100"}`}
             >
-              <p.icon className="h-2.5 w-2.5" />
-              {p.label}
-            </button>
+              {p.emoji} {p.label}
+            </motion.button>
           ))}
         </div>
 
@@ -714,43 +840,46 @@ export default function ScansPage() {
                 key={scan._id}
                 scan={scan}
                 selected={selected?._id === scan._id}
-                onClick={() => setSelected(scan)}
+                onClick={() => setSelected((prev) => (prev?._id === scan._id ? null : scan))}
               />
             ))
           )}
         </div>
       </div>
 
-      {/* CENTER — Map */}
+      {/* CENTER: Map */}
       <div
-        className={`flex-col transition-all duration-300 ${selected ? "hidden lg:flex lg:w-[400px] lg:shrink-0 lg:border-r" : "flex flex-1"}`}
+        className={`flex-col transition-all duration-300 ${selected ? "hidden lg:flex lg:w-[380px] lg:shrink-0 lg:border-r" : "flex flex-1"}`}
       >
         <div className="flex items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-            <MapPin className="h-3.5 w-3.5 text-primary" />
+            <MapPin className="h-3 w-3 text-primary" />
           </div>
           <span className="flex-1 truncate font-medium text-xs">
             {selected ? `${selected.full_name} · ${selected.full_address || selected.address}` : "Interactive Map"}
           </span>
-          {selected?.route && (
-            <span
-              className={`inline-flex shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px] ${routeColor(selected.route)}`}
-            >
-              {selected.route}
-            </span>
-          )}
+          {selected?.route && <RouteBadge route={selected.route} size="xs" />}
         </div>
         <div className="flex-1 p-2.5">
           <LeafletMap scan={selected} />
         </div>
       </div>
 
-      {/* RIGHT — Detail */}
-      {selected && (
-        <div className="w-[320px] shrink-0 border-l">
-          <DetailPanel scan={selected} onClose={() => setSelected(null)} />
-        </div>
-      )}
+      {/* RIGHT: Detail Panel */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            key="detail"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 320, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="shrink-0 overflow-hidden border-l"
+          >
+            <DetailPanel scan={selected} onClose={() => setSelected(null)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

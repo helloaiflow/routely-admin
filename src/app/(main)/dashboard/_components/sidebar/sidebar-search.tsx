@@ -61,7 +61,7 @@ export function SidebarSearch() {
     <>
       <Button
         variant="outline"
-        className="relative h-9 w-full justify-start rounded-md px-3 text-muted-foreground text-sm"
+        className="relative h-8 w-full justify-start rounded-lg border-sidebar-border bg-sidebar-accent/40 px-3 font-normal text-muted-foreground text-sm hover:bg-sidebar-accent"
         onClick={() => setOpen(true)}
       >
         <Search className="mr-2 h-4 w-4" />

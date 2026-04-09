@@ -46,20 +46,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton size="lg" asChild>
               <Link prefetch={false} href="/dashboard/default">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground text-xs">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground text-sm">
                   R
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="font-semibold text-base">Routely</span>
-                  <span className="truncate text-muted-foreground text-xs">Operations Portal</span>
+                <div className="grid flex-1 text-left leading-tight">
+                  <span className="font-bold text-sm">Routely</span>
+                  <span className="truncate text-muted-foreground text-[11px]">Operations Portal</span>
                 </div>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="group-data-[collapsible=icon]:hidden">
+        <div className="group-data-[collapsible=icon]:hidden px-1">
           <SidebarSearch />
         </div>
       </SidebarHeader>

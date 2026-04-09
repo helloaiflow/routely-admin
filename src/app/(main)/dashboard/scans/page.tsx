@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import "leaflet/dist/leaflet.css";
+
 interface Scan {
   _id: string;
   rtscan_id?: number;
@@ -200,10 +202,9 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         10,
       );
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
-      // Force tile redraw after flex layout settles
-      setTimeout(() => {
-        mapRef.current?.invalidateSize();
-      }, 400);
+      // Force tile redraw after flex/grid layout settles
+      setTimeout(() => mapRef.current?.invalidateSize(), 300);
+      setTimeout(() => mapRef.current?.invalidateSize(), 900);
     })();
   }, []);
 
@@ -218,10 +219,13 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-          { headers: { "Accept-Language": "en" } },
+          { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
         );
         const results = await res.json();
-        if (!results.length) return;
+        if (!results.length) {
+          mapRef.current.setView([26.1, -80.2], 11);
+          return;
+        }
         const { lat, lon } = results[0];
         const ll: [number, number] = [Number.parseFloat(lat), Number.parseFloat(lon)];
         if (markerRef.current) markerRef.current.remove();

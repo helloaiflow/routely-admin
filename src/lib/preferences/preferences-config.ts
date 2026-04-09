@@ -72,7 +72,7 @@ export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
   content_layout: "centered",
   navbar_style: "sticky",
   sidebar_variant: "inset",
-  sidebar_collapsible: "icon",
+  sidebar_collapsible: "offcanvas",
 };
 
 /**

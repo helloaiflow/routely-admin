@@ -240,8 +240,7 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         setGeocoding(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan?._id, scan.state, scan.full_address, scan.type, scan.city, scan.address, scan.full_name, scan.route, scan]);
+  }, [scan]);
 
   if (!scan)
     return (
@@ -675,8 +674,8 @@ export default function ScansPage() {
     return (
       <div className="flex h-[calc(100vh-8rem)] gap-3">
         <div className="w-[360px] shrink-0 space-y-2 p-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={`sk-${i}`} className="rounded-xl" style={{ height: 88, opacity: 1 - i * 0.11 }} />
+          {["a", "b", "c", "d", "e", "f", "g", "h"].map((k, i) => (
+            <Skeleton key={k} className="rounded-xl" style={{ height: 88, opacity: 1 - i * 0.11 }} />
           ))}
         </div>
         <Skeleton className="flex-1 rounded-xl" />

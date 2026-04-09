@@ -601,7 +601,7 @@ export default function ScansPage() {
     setLoading(true);
     try {
       const [scanResult, tenantResult] = await Promise.allSettled([
-        fetch(`/api/data/package-scans?limit=200&clientId=${tenantFilter}`),
+        fetch(`/api/data/package-scans?limit=200&tenant_id=${tenantFilter}`),
         fetch("/api/tenants"),
       ]);
 

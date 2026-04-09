@@ -6,10 +6,11 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Number.parseInt(searchParams.get("limit") || "200", 10);
+    const tenantId = Number.parseInt(searchParams.get("tenant_id") || "1", 10);
     const db = await getDb();
     const list = await db
       .collection("package_scans")
-      .find({ tenant_id: 1 })
+      .find({ tenant_id: tenantId })
       .sort({ created_at: -1 })
       .limit(limit)
       .toArray();

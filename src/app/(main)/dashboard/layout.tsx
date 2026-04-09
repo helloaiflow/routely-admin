@@ -14,7 +14,7 @@ import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const [variant, collapsible] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
-    getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "offcanvas"),
+    getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
   ]);
 
   return (

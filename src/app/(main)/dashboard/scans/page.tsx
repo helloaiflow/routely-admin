@@ -195,6 +195,14 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
   }
 }
 
+function normalizeAddressForGeocoding(scan: Scan): string {
+  const raw = scan.full_address || [scan.address, scan.city, scan.state, scan.zipcode].filter(Boolean).join(", ");
+  return raw.replace(/\b\w+/g, (word) => {
+    if (/^[A-Z]{2}$/.test(word) || /^\d+$/.test(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+}
+
 interface InfoCardState {
   scan: Scan;
   x: number;
@@ -249,7 +257,7 @@ function LeafletMap({
     (async () => {
       const L = await import("leaflet");
       if (!mapRef.current) return;
-      const address = scan.full_address || [scan.address, scan.city, scan.state].filter(Boolean).join(", ");
+      const address = normalizeAddressForGeocoding(scan);
       if (!address) return;
       setGeocoding(true);
       try {
@@ -310,7 +318,7 @@ function LeafletMap({
       }
       const settled = await Promise.allSettled(
         checkedScans.map(async (s) => {
-          const addr = s.full_address || [s.address, s.city, s.state].filter(Boolean).join(", ");
+          const addr = normalizeAddressForGeocoding(s);
           return { s, ll: await geocodeAddress(addr) };
         }),
       );
@@ -450,82 +458,93 @@ function ScanCard({
   scan: Scan;
   selected: boolean;
   checked: boolean;
-  onCheck: (id: string, c: boolean) => void;
+  onCheck: (id: string, checked: boolean) => void;
   onClick: () => void;
 }) {
-  const flags = getScanFlags(scan);
+  const flagList = getScanFlags(scan);
+  const isActive = selected || checked;
+
+  const handleClick = () => {
+    onCheck(scan._id, !checked);
+    onClick();
+  };
+
   return (
-    <div className="relative">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: checkbox wrapper */}
-      <div
-        className="absolute top-2.5 left-2.5 z-10"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onCheck(scan._id, e.target.checked)}
-          className="h-3.5 w-3.5 cursor-pointer rounded accent-primary"
-        />
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+      whileTap={{ scale: 0.98 }}
+      className={`relative w-full rounded-xl border text-left transition-all duration-200 ${isActive ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20" : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"}`}
+    >
+      <div className="absolute top-2.5 right-2.5 z-10">
+        <div
+          className={`flex h-4 w-4 items-center justify-center rounded border-2 transition-all ${checked ? "border-primary bg-primary" : "border-muted-foreground/30 bg-background"}`}
+        >
+          {checked && (
+            <svg
+              className="h-2.5 w-2.5 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
+              aria-label="Checked"
+            >
+              <title>Checked</title>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
       </div>
-      <motion.button
-        type="button"
-        onClick={onClick}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
-        whileTap={{ scale: 0.98 }}
-        className={`relative w-full rounded-xl border text-left transition-all duration-200 ${selected ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20" : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"}`}
-      >
-        <div className="px-3.5 py-3">
-          <div className="mb-1.5 flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
-                <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
-              </div>
-              <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
+      <div className="px-3.5 py-3 pr-8">
+        <div className="mb-1.5 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
+              <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="font-medium text-[10px] text-muted-foreground">{fmt(scan.created_at, "date")}</p>
-              <p className="text-[9px] text-muted-foreground/50">{fmt(scan.created_at, "time")}</p>
-            </div>
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
           </div>
-          <p className="mb-2 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-            <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
-            {scan.full_address || scan.address || "—"}
-          </p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {flags.length > 0 && (
-              <div className="flex gap-1">
-                {flags.map((f) => (
-                  <motion.div
-                    key={f.key}
-                    title={`${f.emoji} ${f.full}`}
-                    whileHover={{ scale: 1.2 }}
-                    className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm ring-1 ${f.bg} ${f.ring}`}
-                  >
-                    <f.icon className="h-2.5 w-2.5" />
-                  </motion.div>
-                ))}
-              </div>
-            )}
-            {scan.route && <RouteBadge route={scan.route} size="xs" />}
-            {scan.client_location && scan.client_location !== "OTHER" && (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
-                {scan.client_location}
-              </span>
-            )}
-            {scan.collect_payment && scan.collect_amount ? (
-              <span className="ml-auto font-bold font-mono text-[10px] text-amber-600">
-                💰 ${scan.collect_amount.toFixed(2)}
-              </span>
-            ) : null}
+          <div className="shrink-0 text-right">
+            <p className="font-medium text-[10px] text-muted-foreground">{fmt(scan.created_at, "date")}</p>
+            <p className="text-[9px] text-muted-foreground/50">{fmt(scan.created_at, "time")}</p>
           </div>
         </div>
-      </motion.button>
-    </div>
+        <p className="mb-2 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+          <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
+          {scan.full_address || scan.address || "—"}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {flagList.length > 0 && (
+            <div className="flex gap-1">
+              {flagList.map((f) => (
+                <motion.div
+                  key={f.key}
+                  title={`${f.emoji} ${f.full}`}
+                  whileHover={{ scale: 1.2 }}
+                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm ring-1 ${f.bg} ${f.ring}`}
+                >
+                  <f.icon className="h-2.5 w-2.5" />
+                </motion.div>
+              ))}
+            </div>
+          )}
+          {scan.route && <RouteBadge route={scan.route} size="xs" />}
+          {scan.client_location && scan.client_location !== "OTHER" && (
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
+              {scan.client_location}
+            </span>
+          )}
+          {scan.collect_payment && scan.collect_amount ? (
+            <span className="ml-auto font-bold font-mono text-[10px] text-amber-600">
+              💰 ${scan.collect_amount.toFixed(2)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </motion.button>
   );
 }
 
@@ -1035,7 +1054,7 @@ export default function ScansPage() {
                 selected={selected?._id === scan._id}
                 checked={checkedIds.has(scan._id)}
                 onCheck={handleCheck}
-                onClick={() => setSelected((prev) => (prev?._id === scan._id ? null : scan))}
+                onClick={() => setSelected(scan)}
               />
             ))
           )}

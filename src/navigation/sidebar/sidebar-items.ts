@@ -25,7 +25,6 @@ import {
   Search,
   Settings2,
   Star,
-  TrendingUp,
   UserPlus,
   Users,
   Wrench,
@@ -59,10 +58,7 @@ export const sidebarItems: NavGroup[] = [
   {
     id: 1,
     label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard },
-      { title: "Analytics", url: "/dashboard/analytics", icon: TrendingUp },
-    ],
+    items: [{ title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard }],
   },
   {
     id: 2,
@@ -80,11 +76,25 @@ export const sidebarItems: NavGroup[] = [
     id: 3,
     label: "CRM",
     items: [
-      { title: "Recipients", url: "/dashboard/recipients", icon: Users },
-      { title: "Clients", url: "/dashboard/clients", icon: Building2 },
-      { title: "Drivers", url: "/dashboard/drivers", icon: Car },
-      { title: "Leads", url: "/dashboard/leads", icon: UserPlus },
-      { title: "Driver Applications", url: "/dashboard/applications", icon: ClipboardList },
+      {
+        title: "People",
+        url: "/dashboard/recipients",
+        icon: Users,
+        subItems: [
+          { title: "Recipients", url: "/dashboard/recipients", icon: Users },
+          { title: "Clients", url: "/dashboard/clients", icon: Building2 },
+          { title: "Drivers", url: "/dashboard/drivers", icon: Car },
+        ],
+      },
+      {
+        title: "Acquisition",
+        url: "/dashboard/leads",
+        icon: UserPlus,
+        subItems: [
+          { title: "Leads", url: "/dashboard/leads", icon: UserPlus },
+          { title: "Driver Applications", url: "/dashboard/applications", icon: ClipboardList },
+        ],
+      },
     ],
   },
   {

@@ -9,7 +9,9 @@ import {
   Camera,
   DollarSign,
   Download,
+  ExternalLink,
   MapPin,
+  Navigation,
   Package,
   PenLine,
   RefreshCw,
@@ -179,9 +181,41 @@ function fmt(d?: string, mode: "time" | "date" = "time") {
   return dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
+async function geocodeAddress(address: string): Promise<[number, number] | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
+      { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
+    );
+    const results = await res.json();
+    if (!results.length) return null;
+    return [Number.parseFloat(results[0].lat), Number.parseFloat(results[0].lon)];
+  } catch {
+    return null;
+  }
+}
+
+interface InfoCardState {
+  scan: Scan;
+  x: number;
+  y: number;
+}
+
 // ── Leaflet Map ──────────────────────────────────────────────────────────────
-function LeafletMap({ scan }: { scan: Scan | null }) {
+function LeafletMap({
+  scan,
+  checkedScans,
+  onSelectScan,
+}: {
+  scan: Scan | null;
+  checkedScans: Scan[];
+  onSelectScan: (s: Scan) => void;
+}) {
   const mapRef = useRef<L.Map | null>(null);
+  const multiMarkersRef = useRef<L.Marker[]>([]);
+  const scanRef = useRef<Scan | null>(null);
+  const [infoCard, setInfoCard] = useState<InfoCardState | null>(null);
+  scanRef.current = scan;
   const markerRef = useRef<L.Marker | null>(null);
   const contRef = useRef<HTMLDivElement>(null);
   const [geocoding, setGeocoding] = useState(false);
@@ -208,8 +242,10 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
     })();
   }, []);
 
+  // Single scan → flyTo + custom marker with InfoCard on click
   useEffect(() => {
     if (!scan || typeof window === "undefined") return;
+    setInfoCard(null);
     (async () => {
       const L = await import("leaflet");
       if (!mapRef.current) return;
@@ -217,46 +253,91 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
       if (!address) return;
       setGeocoding(true);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-          { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
-        );
-        const results = await res.json();
-        if (!results.length) {
+        const ll = await geocodeAddress(address);
+        if (!ll) {
           mapRef.current.setView([26.1, -80.2], 11);
           return;
         }
-        const { lat, lon } = results[0];
-        const ll: [number, number] = [Number.parseFloat(lat), Number.parseFloat(lon)];
-        if (markerRef.current) markerRef.current.remove();
+        if (markerRef.current) {
+          markerRef.current.remove();
+          markerRef.current = null;
+        }
         const rc = getRouteColor(scan.route || "");
         const icon = L.divIcon({
-          html: `<div style="position:relative;width:28px;height:36px"><div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg) translateX(-30%);background:${rc.text};border:3px solid white;box-shadow:0 4px 16px ${rc.glow}"></div><div style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:12px;z-index:10">${pkgEmoji(scan.type)}</div></div>`,
+          html: `<div style="position:relative;width:32px;height:40px"><div style="position:absolute;top:0;left:2px;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:3px solid white;box-shadow:0 4px 16px ${rc.glow}"></div><div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:13px;z-index:10">${pkgEmoji(scan.type)}</div></div>`,
           className: "",
-          iconSize: [28, 36],
-          iconAnchor: [14, 36],
+          iconSize: [32, 40],
+          iconAnchor: [16, 40],
         });
-        markerRef.current = L.marker(ll, { icon })
-          .addTo(mapRef.current)
-          .bindPopup(
-            `<div style="font-size:13px;font-weight:700;color:#0f172a">${pkgEmoji(scan.type)} ${scan.full_name || ""}</div><div style="font-size:11px;color:#64748b;margin-top:3px">${address}</div>${scan.route ? `<div style="margin-top:5px;display:inline-flex;background:${rc.bg};color:${rc.text};border:1px solid ${rc.border};border-radius:99px;padding:2px 8px;font-size:10px;font-weight:700">${rc.emoji} ${scan.route}</div>` : ""}`,
-            { maxWidth: 260 },
-          )
-          .openPopup();
-        mapRef.current.flyTo(ll, 16, { duration: 1.4, easeLinearity: 0.25 });
+        const marker = L.marker(ll, { icon }).addTo(mapRef.current);
+        marker.on("click", () => {
+          const s = scanRef.current;
+          if (!s || !mapRef.current || !contRef.current) return;
+          const point = mapRef.current.latLngToContainerPoint(ll);
+          const cw = contRef.current.offsetWidth;
+          const cardW = 252;
+          setInfoCard({
+            scan: s,
+            x: Math.max(8, Math.min(point.x - cardW / 2, cw - cardW - 8)),
+            y: Math.max(8, point.y - 150),
+          });
+        });
+        markerRef.current = marker;
+        mapRef.current.flyTo(ll, 15, { duration: 1.2, easeLinearity: 0.25 });
       } finally {
         setGeocoding(false);
       }
     })();
   }, [scan]);
 
+  // Batch → geocode all checked + fitBounds
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (checkedScans.length < 2) {
+      for (const m of multiMarkersRef.current) m.remove();
+      multiMarkersRef.current = [];
+      return;
+    }
+    setInfoCard(null);
+    (async () => {
+      const L = await import("leaflet");
+      if (!mapRef.current) return;
+      for (const m of multiMarkersRef.current) m.remove();
+      multiMarkersRef.current = [];
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      const settled = await Promise.allSettled(
+        checkedScans.map(async (s) => {
+          const addr = s.full_address || [s.address, s.city, s.state].filter(Boolean).join(", ");
+          return { s, ll: await geocodeAddress(addr) };
+        }),
+      );
+      const latlngs: [number, number][] = [];
+      for (const r of settled) {
+        if (r.status !== "fulfilled" || !r.value.ll) continue;
+        const { s, ll } = r.value;
+        const rc = getRouteColor(s.route || "");
+        const icon = L.divIcon({
+          html: `<div style="position:relative;width:28px;height:36px"><div style="position:absolute;top:0;left:2px;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:2px solid white;box-shadow:0 3px 10px ${rc.glow}"></div><div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:11px;z-index:10">${pkgEmoji(s.type)}</div></div>`,
+          className: "",
+          iconSize: [28, 36],
+          iconAnchor: [14, 36],
+        });
+        if (mapRef.current) multiMarkersRef.current.push(L.marker(ll, { icon }).addTo(mapRef.current));
+        latlngs.push(ll);
+      }
+      if (latlngs.length > 0) mapRef.current.fitBounds(L.latLngBounds(latlngs), { padding: [48, 48], maxZoom: 14 });
+    })();
+  }, [checkedScans]);
+
   return (
     <div style={{ position: "absolute", inset: 0 }} className="overflow-hidden rounded-xl border">
-      {/* Map div — ALWAYS in DOM so Leaflet can init and keep tiles */}
       <div ref={contRef} style={{ position: "absolute", inset: 0 }} />
 
-      {/* Empty state overlay — sits on top of map when no scan selected */}
-      {!scan && (
+      {/* Empty state */}
+      {!scan && checkedScans.length === 0 && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background/60 text-muted-foreground backdrop-blur-[2px]">
           <motion.div
             className="relative"
@@ -291,95 +372,160 @@ function LeafletMap({ scan }: { scan: Scan | null }) {
         )}
       </AnimatePresence>
 
-      {/* Bottom overlay card when scan selected */}
-      {scan && (
-        <div className="pointer-events-none absolute right-4 bottom-4 left-4 z-[1000]">
-          <div className="rounded-2xl border bg-background/95 p-3.5 shadow-2xl backdrop-blur-md">
-            <div className="flex items-center gap-3">
+      {/* Batch badge */}
+      <AnimatePresence>
+        {checkedScans.length >= 2 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="absolute bottom-4 left-1/2 z-[1001] -translate-x-1/2 rounded-full border bg-background/95 px-4 py-2 font-semibold text-xs shadow-lg backdrop-blur-md"
+          >
+            📍 {checkedScans.length} stops on map
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* InfoCard popup on marker click */}
+      <AnimatePresence>
+        {infoCard && (
+          <motion.div
+            key="infocard"
+            initial={{ opacity: 0, scale: 0.9, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 6 }}
+            transition={{ duration: 0.18 }}
+            style={{ position: "absolute", left: infoCard.x, top: infoCard.y, width: 252, zIndex: 1002 }}
+            className="rounded-2xl border bg-background/96 p-3.5 shadow-2xl backdrop-blur-md"
+          >
+            <div className="flex items-start gap-2">
               <div
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
-                style={{ background: getRouteColor(scan.route || "").bg }}
+                style={{ background: getRouteColor(infoCard.scan.route || "").bg }}
               >
-                {pkgEmoji(scan.type)}
+                {pkgEmoji(infoCard.scan.type)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-bold text-sm">{scan.full_name}</p>
-                <p className="truncate text-muted-foreground text-xs">{scan.full_address || scan.address}</p>
-                {scan.route && (
-                  <div className="mt-1">
-                    <RouteBadge route={scan.route} size="xs" />
-                  </div>
-                )}
+                <p className="truncate font-bold text-sm leading-tight">{infoCard.scan.full_name}</p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {infoCard.scan.full_address || infoCard.scan.address}
+                </p>
+                <div className="mt-1.5">
+                  {infoCard.scan.route && <RouteBadge route={infoCard.scan.route} size="xs" />}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setInfoCard(null)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() => {
+                onSelectScan(infoCard.scan);
+                setInfoCard(null);
+              }}
+              className="mt-2.5 w-full rounded-xl bg-primary/10 py-1.5 text-center font-semibold text-[11px] text-primary transition-colors hover:bg-primary/20"
+            >
+              View details →
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ── Scan Card ──────────────────────────────────────────────────────────────────
-function ScanCard({ scan, selected, onClick }: { scan: Scan; selected: boolean; onClick: () => void }) {
+function ScanCard({
+  scan,
+  selected,
+  checked,
+  onCheck,
+  onClick,
+}: {
+  scan: Scan;
+  selected: boolean;
+  checked: boolean;
+  onCheck: (id: string, c: boolean) => void;
+  onClick: () => void;
+}) {
   const flags = getScanFlags(scan);
-  const rc = getRouteColor(scan.route || "");
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
-      whileTap={{ scale: 0.98 }}
-      className={`relative w-full rounded-xl border text-left transition-all duration-200 ${selected ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20" : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"}`}
-    >
-      <div className="px-3.5 py-3">
-        <div className="mb-1.5 flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
-              <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
-            </div>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="font-medium text-[10px] text-muted-foreground">{fmt(scan.created_at, "date")}</p>
-            <p className="text-[9px] text-muted-foreground/50">{fmt(scan.created_at, "time")}</p>
-          </div>
-        </div>
-        <p className="mb-2 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-          <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
-          {scan.full_address || scan.address || "—"}
-        </p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {flags.length > 0 && (
-            <div className="flex gap-1">
-              {flags.map((f) => (
-                <motion.div
-                  key={f.key}
-                  title={`${f.emoji} ${f.full}`}
-                  whileHover={{ scale: 1.2 }}
-                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm ring-1 ${f.bg} ${f.ring}`}
-                >
-                  <f.icon className="h-2.5 w-2.5" />
-                </motion.div>
-              ))}
-            </div>
-          )}
-          {scan.route && <RouteBadge route={scan.route} size="xs" />}
-          {scan.client_location && scan.client_location !== "OTHER" && (
-            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
-              {scan.client_location}
-            </span>
-          )}
-          {scan.collect_payment && scan.collect_amount ? (
-            <span className="ml-auto font-bold font-mono text-[10px] text-amber-600">
-              💰 ${scan.collect_amount.toFixed(2)}
-            </span>
-          ) : null}
-        </div>
+    <div className="relative">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: checkbox wrapper */}
+      <div
+        className="absolute top-2.5 left-2.5 z-10"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onCheck(scan._id, e.target.checked)}
+          className="h-3.5 w-3.5 cursor-pointer rounded accent-primary"
+        />
       </div>
-    </motion.button>
+      <motion.button
+        type="button"
+        onClick={onClick}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+        whileTap={{ scale: 0.98 }}
+        className={`relative w-full rounded-xl border text-left transition-all duration-200 ${selected ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20" : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"}`}
+      >
+        <div className="px-3.5 py-3">
+          <div className="mb-1.5 flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
+                <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
+              </div>
+              <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-medium text-[10px] text-muted-foreground">{fmt(scan.created_at, "date")}</p>
+              <p className="text-[9px] text-muted-foreground/50">{fmt(scan.created_at, "time")}</p>
+            </div>
+          </div>
+          <p className="mb-2 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+            <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
+            {scan.full_address || scan.address || "—"}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {flags.length > 0 && (
+              <div className="flex gap-1">
+                {flags.map((f) => (
+                  <motion.div
+                    key={f.key}
+                    title={`${f.emoji} ${f.full}`}
+                    whileHover={{ scale: 1.2 }}
+                    className={`flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm ring-1 ${f.bg} ${f.ring}`}
+                  >
+                    <f.icon className="h-2.5 w-2.5" />
+                  </motion.div>
+                ))}
+              </div>
+            )}
+            {scan.route && <RouteBadge route={scan.route} size="xs" />}
+            {scan.client_location && scan.client_location !== "OTHER" && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
+                {scan.client_location}
+              </span>
+            )}
+            {scan.collect_payment && scan.collect_amount ? (
+              <span className="ml-auto font-bold font-mono text-[10px] text-amber-600">
+                💰 ${scan.collect_amount.toFixed(2)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </motion.button>
+    </div>
   );
 }
 
@@ -551,13 +697,28 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
         </div>
       </div>
 
-      <div className="flex gap-2 border-t bg-muted/10 px-5 py-3">
-        <Button size="sm" variant="outline" className="h-8 flex-1 text-xs" asChild>
-          <a href={`/dashboard/stops?search=${encodeURIComponent(scan.full_name || "")}`}>
-            <Truck className="mr-1.5 h-3 w-3" />
-            View Stop
-          </a>
-        </Button>
+      <div className="flex flex-col gap-2 border-t bg-muted/10 px-5 py-3">
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scan.full_address || scan.address || "")}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-blue-200/80 bg-blue-50/60 font-semibold text-blue-700 text-xs backdrop-blur-sm transition-all hover:bg-blue-100 hover:shadow-md"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Open in Google Maps
+        </a>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="h-8 flex-1 text-xs" asChild>
+            <a href={`/dashboard/stops?search=${encodeURIComponent(scan.full_name || "")}`}>
+              <Truck className="mr-1.5 h-3 w-3" />
+              View Stop
+            </a>
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 flex-1 text-xs">
+            <Navigation className="mr-1.5 h-3 w-3" />
+            Optimize Route
+          </Button>
+        </div>
         {scan.image_url && (
           <Button size="sm" variant="outline" className="h-8 text-xs">
             <Camera className="mr-1.5 h-3 w-3" />
@@ -600,6 +761,17 @@ export default function ScansPage() {
   const [routeFilter, setRouteFilter] = useState("all");
   const [flagFilter, setFlagFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("1");
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+
+  const handleCheck = useCallback((id: string, c: boolean) => {
+    setCheckedIds((prev) => {
+      const n = new Set(prev);
+      c ? n.add(id) : n.delete(id);
+      return n;
+    });
+  }, []);
+
+  const checkedScans = useMemo(() => data.filter((s) => checkedIds.has(s._id)), [data, checkedIds]);
 
   const fetchData = useCallback(
     async (silent = false) => {
@@ -861,6 +1033,8 @@ export default function ScansPage() {
                 key={scan._id}
                 scan={scan}
                 selected={selected?._id === scan._id}
+                checked={checkedIds.has(scan._id)}
+                onCheck={handleCheck}
                 onClick={() => setSelected((prev) => (prev?._id === scan._id ? null : scan))}
               />
             ))
@@ -882,7 +1056,11 @@ export default function ScansPage() {
           {selected?.route && <RouteBadge route={selected.route} size="xs" />}
         </div>
         <div className="relative min-h-0 flex-1">
-          <LeafletMap scan={selected} />
+          <LeafletMap
+            scan={checkedIds.size >= 2 ? null : selected}
+            checkedScans={checkedScans}
+            onSelectScan={(s) => setSelected(s)}
+          />
         </div>
       </div>
 

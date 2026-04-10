@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Calendar,
   Camera,
   DollarSign,
   Download,
@@ -25,8 +26,10 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -821,6 +824,8 @@ export default function ScansPage() {
   const [flagFilter, setFlagFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("1");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [calOpen, setCalOpen] = useState(false);
 
   const handleCheck = useCallback((id: string, c: boolean) => {
     setCheckedIds((prev) => {
@@ -893,8 +898,12 @@ export default function ScansPage() {
     if (flagFilter === "cold") r = r.filter((s) => s.type?.includes("cold"));
     if (flagFilter === "sig") r = r.filter((s) => s.signature_required);
     if (flagFilter === "today") r = r.filter((s) => s.delivery_today);
+    if (dateFilter) {
+      const d = dateFilter.toDateString();
+      r = r.filter((s) => s.created_at && new Date(s.created_at).toDateString() === d);
+    }
     return r;
-  }, [data, search, routeFilter, flagFilter]);
+  }, [data, search, routeFilter, flagFilter, dateFilter]);
 
   const exportCsv = () => {
     const h = ["ID", "Patient", "Rx", "Address", "Route", "Branch", "New", "Collect", "Cold", "Sig", "Date"];
@@ -1013,6 +1022,63 @@ export default function ScansPage() {
                 </SelectContent>
               </Select>
             )}
+            <Popover open={calOpen} onOpenChange={setCalOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={`flex h-7 w-full items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {dateFilter
+                      ? dateFilter.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+                      : "Filter by date"}
+                  </div>
+                  {dateFilter && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDateFilter(undefined);
+                      }}
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-[11px] hover:bg-primary/20"
+                    >
+                      ×
+                    </button>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <div className="px-3 pt-3 pb-1">
+                  <p className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Filter by day
+                  </p>
+                </div>
+                <CalendarPicker
+                  mode="single"
+                  selected={dateFilter}
+                  onSelect={(d) => {
+                    setDateFilter(d);
+                    setCalOpen(false);
+                  }}
+                  initialFocus
+                />
+                {dateFilter && (
+                  <div className="border-t p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFilter(undefined);
+                        setCalOpen(false);
+                      }}
+                      className="w-full rounded-lg py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Clear · show all dates
+                    </button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="relative">
             <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />

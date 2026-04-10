@@ -997,7 +997,7 @@ export default function ScansPage() {
               </button>
             </div>
           </div>
-          <div>
+          <div className="space-y-1.5">
             {tenants.length >= 1 && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="h-7 w-full gap-1 text-xs">

@@ -1026,10 +1026,14 @@ export default function ScansPage() {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={`flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
+                  className={`flex h-7 flex-1 items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
                 >
-                  <Calendar className="h-3 w-3" />
-                  {dateFilter ? dateFilter.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Date"}
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {dateFilter
+                      ? dateFilter.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+                      : "Filter by date"}
+                  </div>
                   {dateFilter && (
                     <button
                       type="button"
@@ -1037,7 +1041,7 @@ export default function ScansPage() {
                         e.stopPropagation();
                         setDateFilter(undefined);
                       }}
-                      className="ml-0.5 rounded-full hover:text-foreground"
+                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[10px] hover:bg-primary/20"
                     >
                       ×
                     </button>
@@ -1045,6 +1049,11 @@ export default function ScansPage() {
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
+                <div className="p-3 pb-0">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
+                    Filter by day
+                  </p>
+                </div>
                 <CalendarPicker
                   mode="single"
                   selected={dateFilter}
@@ -1054,6 +1063,20 @@ export default function ScansPage() {
                   }}
                   initialFocus
                 />
+                {dateFilter && (
+                  <div className="border-t p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFilter(undefined);
+                        setCalOpen(false);
+                      }}
+                      className="w-full rounded-lg py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Clear filter · show all dates
+                    </button>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
           </div>

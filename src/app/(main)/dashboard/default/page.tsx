@@ -23,15 +23,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAx
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -208,93 +200,70 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-2 gap-4 @3xl/main:grid-cols-3 @5xl/main:grid-cols-6 *:data-[slot=card]:shadow-xs">
-        <Card>
-          <CardHeader>
-            <CardDescription>Total Stops</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">
-              {(pipeline.allocated ?? 0).toLocaleString()}
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-blue-600">
-                <Package className="mr-1 h-3 w-3" />
-                Active
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Stops today</CardFooter>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Delivered</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">
-              {(kpi.delivered ?? 0).toLocaleString()}
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-green-600">
-                <CheckCircle className="mr-1 h-3 w-3" />
-                Done
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Successful deliveries</CardFooter>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Unmatched</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">
-              {(kpi.unmatched ?? 0).toLocaleString()}
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-amber-600">
-                <AlertTriangle className="mr-1 h-3 w-3" />
-                Review
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Needs manual match</CardFooter>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Collections</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">
-              ${(kpi.collectTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-green-600">
-                <DollarSign className="mr-1 h-3 w-3" />
-                Total
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Collect payments</CardFooter>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Route Miles</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">{kpi.totalDistanceMi ?? 0} mi</CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-teal-600">
-                <Route className="mr-1 h-3 w-3" />
-                Est.
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Estimated total</CardFooter>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Active Drivers</CardDescription>
-            <CardTitle className="font-semibold text-2xl tabular-nums">{kpi.activeDrivers ?? 0}</CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="text-indigo-600">
-                <Car className="mr-1 h-3 w-3" />
-                On Route
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="text-muted-foreground text-xs">Drivers with stops</CardFooter>
-        </Card>
+      <div className="grid grid-cols-2 gap-4 @3xl/main:grid-cols-3 @5xl/main:grid-cols-6">
+        {[
+          {
+            label: "Total Stops",
+            value: (pipeline.allocated ?? 0).toLocaleString(),
+            icon: Package,
+            color: "text-blue-600",
+            bg: "bg-blue-50",
+            sub: "Active today",
+          },
+          {
+            label: "Delivered",
+            value: (kpi.delivered ?? 0).toLocaleString(),
+            icon: CheckCircle,
+            color: "text-green-600",
+            bg: "bg-green-50",
+            sub: "Successful",
+          },
+          {
+            label: "Unmatched",
+            value: (kpi.unmatched ?? 0).toLocaleString(),
+            icon: AlertTriangle,
+            color: "text-amber-600",
+            bg: "bg-amber-50",
+            sub: "Needs review",
+          },
+          {
+            label: "Collections",
+            value: `$${(kpi.collectTotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            icon: DollarSign,
+            color: "text-emerald-600",
+            bg: "bg-emerald-50",
+            sub: "Collect payments",
+          },
+          {
+            label: "Route Miles",
+            value: `${kpi.totalDistanceMi ?? 0} mi`,
+            icon: Route,
+            color: "text-teal-600",
+            bg: "bg-teal-50",
+            sub: "Estimated",
+          },
+          {
+            label: "Active Drivers",
+            value: String(kpi.activeDrivers ?? 0),
+            icon: Car,
+            color: "text-indigo-600",
+            bg: "bg-indigo-50",
+            sub: "On route",
+          },
+        ].map((card) => (
+          <Card key={card.label} className="shadow-xs">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between">
+                <CardDescription>{card.label}</CardDescription>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${card.bg}`}>
+                  <card.icon className={`h-4 w-4 ${card.color}`} />
+                </div>
+              </div>
+              <CardTitle className="font-semibold text-2xl tabular-nums">{card.value}</CardTitle>
+            </CardHeader>
+            <CardFooter className="text-muted-foreground text-xs">{card.sub}</CardFooter>
+          </Card>
+        ))}
       </div>
 
       {/* PIPELINE */}
@@ -328,11 +297,11 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Stops by Route</CardTitle>
             <CardDescription>Distribution for selected period</CardDescription>
-            <CardAction>
+            <div className="ml-auto">
               <Button variant="link" size="sm" asChild>
                 <Link href="/dashboard/stops">View All</Link>
               </Button>
-            </CardAction>
+            </div>
           </CardHeader>
           <CardContent>
             <ChartContainer config={cfgRoute} className="h-64 w-full">

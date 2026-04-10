@@ -51,7 +51,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <div className="flex size-9 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground text-sm">
                   R
                 </div>
-                <div className="grid flex-1 text-left leading-tight">
+                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="font-bold text-sm">Routely</span>
                   <span className="truncate text-muted-foreground text-[11px]">Operations Portal</span>
                 </div>

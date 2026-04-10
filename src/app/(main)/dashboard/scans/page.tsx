@@ -220,13 +220,58 @@ function LeafletMap({
   onSelectScan: (s: Scan) => void;
 }) {
   const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
   const multiMarkersRef = useRef<L.Marker[]>([]);
+  const contRef = useRef<HTMLDivElement>(null);
   const scanRef = useRef<Scan | null>(null);
+  const mapReadyRef = useRef(false);
+  const pendingScanRef = useRef<Scan | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
   const [infoCard, setInfoCard] = useState<InfoCardState | null>(null);
   scanRef.current = scan;
-  const markerRef = useRef<L.Marker | null>(null);
-  const contRef = useRef<HTMLDivElement>(null);
-  const [geocoding, setGeocoding] = useState(false);
+
+  const placeMarkerAndFly = useCallback(async (targetScan: Scan) => {
+    if (!mapRef.current) return;
+    const L = await import("leaflet");
+    const address = normalizeAddressForGeocoding(targetScan);
+    if (!address) return;
+    setGeocoding(true);
+    try {
+      const ll = await geocodeAddress(address);
+      if (!ll) {
+        mapRef.current.setView([26.1, -80.2], 11);
+        return;
+      }
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      const rc = getRouteColor(targetScan.route || "");
+      const icon = L.divIcon({
+        html: `<div style="position:relative;width:36px;height:44px"><div style="position:absolute;top:0;left:4px;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:3px solid white;box-shadow:0 4px 20px ${rc.glow},0 2px 8px rgba(0,0,0,0.3)"></div><div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:14px;z-index:10;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4))">${pkgEmoji(targetScan.type)}</div></div>`,
+        className: "",
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+      });
+      const marker = L.marker(ll, { icon }).addTo(mapRef.current);
+      marker.on("click", () => {
+        const s = scanRef.current;
+        if (!s || !mapRef.current || !contRef.current) return;
+        const point = mapRef.current.latLngToContainerPoint(ll);
+        const cw = contRef.current.offsetWidth;
+        const cardW = 260;
+        setInfoCard({
+          scan: s,
+          x: Math.max(8, Math.min(point.x - cardW / 2, cw - cardW - 8)),
+          y: Math.max(8, point.y - 160),
+        });
+      });
+      markerRef.current = marker;
+      mapRef.current.flyTo(ll, 15, { duration: 1.4, easeLinearity: 0.2 });
+    } finally {
+      setGeocoding(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || mapRef.current || !contRef.current) return;
@@ -244,59 +289,29 @@ function LeafletMap({
         10,
       );
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
-      // Force tile redraw after flex/grid layout settles
       setTimeout(() => mapRef.current?.invalidateSize(), 300);
-      setTimeout(() => mapRef.current?.invalidateSize(), 900);
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+        mapReadyRef.current = true;
+        if (pendingScanRef.current) {
+          placeMarkerAndFly(pendingScanRef.current);
+          pendingScanRef.current = null;
+        }
+      }, 900);
     })();
-  }, []);
+  }, [placeMarkerAndFly]);
 
-  // Single scan → flyTo + custom marker with InfoCard on click
+  // Single scan selected — use placeMarkerAndFly or queue if map not ready
   useEffect(() => {
-    if (!scan || typeof window === "undefined") return;
+    if (!scan) return;
     setInfoCard(null);
-    (async () => {
-      const L = await import("leaflet");
-      if (!mapRef.current) return;
-      const address = normalizeAddressForGeocoding(scan);
-      if (!address) return;
-      setGeocoding(true);
-      try {
-        const ll = await geocodeAddress(address);
-        if (!ll) {
-          mapRef.current.setView([26.1, -80.2], 11);
-          return;
-        }
-        if (markerRef.current) {
-          markerRef.current.remove();
-          markerRef.current = null;
-        }
-        const rc = getRouteColor(scan.route || "");
-        const icon = L.divIcon({
-          html: `<div style="position:relative;width:32px;height:40px"><div style="position:absolute;top:0;left:2px;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:3px solid white;box-shadow:0 4px 16px ${rc.glow}"></div><div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:13px;z-index:10">${pkgEmoji(scan.type)}</div></div>`,
-          className: "",
-          iconSize: [32, 40],
-          iconAnchor: [16, 40],
-        });
-        const marker = L.marker(ll, { icon }).addTo(mapRef.current);
-        marker.on("click", () => {
-          const s = scanRef.current;
-          if (!s || !mapRef.current || !contRef.current) return;
-          const point = mapRef.current.latLngToContainerPoint(ll);
-          const cw = contRef.current.offsetWidth;
-          const cardW = 252;
-          setInfoCard({
-            scan: s,
-            x: Math.max(8, Math.min(point.x - cardW / 2, cw - cardW - 8)),
-            y: Math.max(8, point.y - 150),
-          });
-        });
-        markerRef.current = marker;
-        mapRef.current.flyTo(ll, 15, { duration: 1.2, easeLinearity: 0.25 });
-      } finally {
-        setGeocoding(false);
-      }
-    })();
-  }, [scan]);
+    if (!mapReadyRef.current) {
+      pendingScanRef.current = scan;
+      return;
+    }
+    pendingScanRef.current = null;
+    placeMarkerAndFly(scan);
+  }, [scan, placeMarkerAndFly]);
 
   // Batch → geocode all checked + fitBounds
   useEffect(() => {
@@ -503,7 +518,7 @@ function ScanCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="text-base leading-none">{pkgEmoji(scan.type)}</span>
-              <p className="truncate font-semibold text-sm">{scan.full_name || "—"}</p>
+              <p className="truncate font-semibold text-xs capitalize">{scan.full_name?.toLowerCase() || "—"}</p>
             </div>
             <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
           </div>

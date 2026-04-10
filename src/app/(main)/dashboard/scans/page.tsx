@@ -1006,14 +1006,14 @@ export default function ScansPage() {
               </button>
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="space-y-1.5">
             {tenants.length >= 1 && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-7 flex-1 gap-1 text-xs">
+                <SelectTrigger className="h-7 w-full gap-1 text-xs">
                   <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent style={{ zIndex: 9999 }}>
                   {tenants.map((t) => (
                     <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
                       {t.company_name}
@@ -1026,7 +1026,7 @@ export default function ScansPage() {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={`flex h-7 flex-1 items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
+                  className={`flex h-7 w-full items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
                 >
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-3 w-3 shrink-0" />
@@ -1041,15 +1041,15 @@ export default function ScansPage() {
                         e.stopPropagation();
                         setDateFilter(undefined);
                       }}
-                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[10px] hover:bg-primary/20"
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-[11px] hover:bg-primary/20"
                     >
                       ×
                     </button>
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <div className="p-3 pb-0">
+              <PopoverContent className="w-auto p-0" align="start" style={{ zIndex: 9999 }}>
+                <div className="px-3 pt-3 pb-1">
                   <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
                     Filter by day
                   </p>
@@ -1073,7 +1073,7 @@ export default function ScansPage() {
                       }}
                       className="w-full rounded-lg py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      Clear filter · show all dates
+                      Clear · show all dates
                     </button>
                   </div>
                 )}
@@ -1108,7 +1108,7 @@ export default function ScansPage() {
               <SelectTrigger className="h-7 flex-1 text-xs">
                 <SelectValue placeholder="Route" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ zIndex: 9999 }}>
                 <SelectItem value="all">All Routes</SelectItem>
                 {routes.map((r) => (
                   <SelectItem key={r} value={r}>
@@ -1121,7 +1121,7 @@ export default function ScansPage() {
               <SelectTrigger className="h-7 flex-1 text-xs">
                 <SelectValue placeholder="Filter" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ zIndex: 9999 }}>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="new">🆕 New Client</SelectItem>
                 <SelectItem value="collect">💰 Collect $</SelectItem>

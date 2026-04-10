@@ -823,9 +823,9 @@ export default function ScansPage() {
   const [routeFilter, setRouteFilter] = useState("all");
   const [flagFilter, setFlagFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("1");
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [calOpen, setCalOpen] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
   const handleCheck = useCallback((id: string, c: boolean) => {
     setCheckedIds((prev) => {
@@ -1006,10 +1006,10 @@ export default function ScansPage() {
               </button>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="flex gap-1.5">
             {tenants.length >= 1 && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-7 w-full gap-1 text-xs">
+                <SelectTrigger className="h-7 flex-1 gap-1 text-xs">
                   <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
                   <SelectValue />
                 </SelectTrigger>
@@ -1026,7 +1026,7 @@ export default function ScansPage() {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={`flex h-7 w-full items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
+                  className={`flex h-7 flex-1 items-center justify-between gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
                 >
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-3 w-3 shrink-0" />
@@ -1041,7 +1041,7 @@ export default function ScansPage() {
                         e.stopPropagation();
                         setDateFilter(undefined);
                       }}
-                      className="flex h-4 w-4 items-center justify-center rounded-full text-[11px] hover:bg-primary/20"
+                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[10px] hover:bg-primary/20"
                     >
                       ×
                     </button>
@@ -1049,8 +1049,8 @@ export default function ScansPage() {
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <div className="px-3 pt-3 pb-1">
-                  <p className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
+                <div className="p-3 pb-0">
+                  <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
                     Filter by day
                   </p>
                 </div>
@@ -1073,7 +1073,7 @@ export default function ScansPage() {
                       }}
                       className="w-full rounded-lg py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      Clear · show all dates
+                      Clear filter · show all dates
                     </button>
                   </div>
                 )}

@@ -711,18 +711,48 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
           </Sec>
           <Sec title="Delivery Info">
             <Row label="Branch" value={scan.client_location} />
-            <Row label="Gate Code" value={scan.gate_code !== "No" ? scan.gate_code : null} />
-            {scan.new_client && <RowBadge label="New Client" color="violet" />}
-            {scan.delivery_today && <RowBadge label="Deliver Today" color="green" />}
-            {scan.signature_required && <RowBadge label="Signature Required" color="rose" />}
-            {scan.collect_payment && (
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="shrink-0 text-[11px] text-muted-foreground">Collect Payment</span>
+            <Row
+              label="Gate Code"
+              value={scan.gate_code && scan.gate_code !== "No" && scan.gate_code !== "No Code" ? scan.gate_code : null}
+            />
+            <Row label="Route" value={scan.route} />
+            <Row label="Type" value={scan.type} />
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="shrink-0 text-[11px] text-muted-foreground">New Client</span>
+              <span
+                className={`rounded-md border px-2 py-0.5 font-semibold text-[10px] ${scan.new_client ? "border-violet-200 bg-violet-50 text-violet-700" : "border-muted bg-muted/40 text-muted-foreground"}`}
+              >
+                {scan.new_client ? "✓ Yes" : "No"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="shrink-0 text-[11px] text-muted-foreground">Deliver Today</span>
+              <span
+                className={`rounded-md border px-2 py-0.5 font-semibold text-[10px] ${scan.delivery_today ? "border-green-200 bg-green-50 text-green-700" : "border-muted bg-muted/40 text-muted-foreground"}`}
+              >
+                {scan.delivery_today ? "✓ Yes" : "No"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="shrink-0 text-[11px] text-muted-foreground">Signature Required</span>
+              <span
+                className={`rounded-md border px-2 py-0.5 font-semibold text-[10px] ${scan.signature_required ? "border-rose-200 bg-rose-50 text-rose-700" : "border-muted bg-muted/40 text-muted-foreground"}`}
+              >
+                {scan.signature_required ? "✓ Yes" : "No"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="shrink-0 text-[11px] text-muted-foreground">Collect Payment</span>
+              {scan.collect_payment ? (
                 <span className="font-bold font-mono text-[11px] text-amber-600">
-                  💰 ${scan.collect_amount?.toFixed(2)}
+                  💰 ${scan.collect_amount?.toFixed(2) ?? "0.00"}
                 </span>
-              </div>
-            )}
+              ) : (
+                <span className="rounded-md border border-muted bg-muted/40 px-2 py-0.5 font-semibold text-[10px] text-muted-foreground">
+                  No
+                </span>
+              )}
+            </div>
           </Sec>
           <Sec title="Prescription">
             <Row label="Rx #" value={scan.rx_pharma_id} mono />

@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Calendar,
   Camera,
   DollarSign,
   Download,
@@ -26,10 +25,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -700,7 +697,12 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
           </Sec>
           <Sec title="Delivery Address">
             <div className="space-y-1 px-3 py-2.5 text-xs">
-              <p className="font-medium capitalize">{(scan.full_address || scan.address || "").toLowerCase()}</p>
+              <p className="font-medium">{scan.full_address || scan.address}</p>
+              {scan.city && (
+                <p className="text-muted-foreground">
+                  {scan.city}, {scan.state} {scan.zipcode}
+                </p>
+              )}
               {scan.gate_code && scan.gate_code !== "No" && (
                 <p className="font-semibold text-amber-600">🔑 Gate: {scan.gate_code}</p>
               )}
@@ -708,21 +710,6 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
                 <p className="font-medium text-blue-600">📦 Drop-off: {scan.preset_drop_off}</p>
               )}
             </div>
-          </Sec>
-          <Sec title="Delivery Info">
-            <Row label="Branch" value={scan.client_location} />
-            <Row label="Gate Code" value={scan.gate_code !== "No" ? scan.gate_code : null} />
-            {scan.new_client && <RowBadge label="New Client" color="violet" />}
-            {scan.delivery_today && <RowBadge label="Deliver Today" color="green" />}
-            {scan.signature_required && <RowBadge label="Signature Required" color="rose" />}
-            {scan.collect_payment && (
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="shrink-0 text-[11px] text-muted-foreground">Collect Payment</span>
-                <span className="font-bold font-mono text-[11px] text-amber-600">
-                  💰 ${scan.collect_amount?.toFixed(2)}
-                </span>
-              </div>
-            )}
           </Sec>
           <Sec title="Prescription">
             <Row label="Rx #" value={scan.rx_pharma_id} mono />
@@ -777,21 +764,6 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
   );
 }
 
-function RowBadge({ label, color }: { label: string; color: "violet" | "green" | "rose" | "amber" }) {
-  const styles = {
-    violet: "border-violet-200 bg-violet-50 text-violet-700",
-    green: "border-green-200 bg-green-50 text-green-700",
-    rose: "border-rose-200 bg-rose-50 text-rose-700",
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
-  };
-  return (
-    <div className="flex items-center justify-between px-3 py-2">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <span className={`rounded-md border px-2 py-0.5 font-semibold text-[10px] ${styles[color]}`}>✓ Yes</span>
-    </div>
-  );
-}
-
 function Sec({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -823,8 +795,6 @@ export default function ScansPage() {
   const [routeFilter, setRouteFilter] = useState("all");
   const [flagFilter, setFlagFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("1");
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
-  const [calOpen, setCalOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
   const handleCheck = useCallback((id: string, c: boolean) => {
@@ -898,12 +868,8 @@ export default function ScansPage() {
     if (flagFilter === "cold") r = r.filter((s) => s.type?.includes("cold"));
     if (flagFilter === "sig") r = r.filter((s) => s.signature_required);
     if (flagFilter === "today") r = r.filter((s) => s.delivery_today);
-    if (dateFilter) {
-      const d = dateFilter.toDateString();
-      r = r.filter((s) => s.created_at && new Date(s.created_at).toDateString() === d);
-    }
     return r;
-  }, [data, search, routeFilter, flagFilter, dateFilter]);
+  }, [data, search, routeFilter, flagFilter]);
 
   const exportCsv = () => {
     const h = ["ID", "Patient", "Rx", "Address", "Route", "Branch", "New", "Collect", "Cold", "Sig", "Date"];
@@ -1006,57 +972,21 @@ export default function ScansPage() {
               </button>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            {tenants.length >= 1 && (
-              <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-7 flex-1 gap-1 text-xs">
-                  <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {tenants.map((t) => (
-                    <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
-                      {t.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={`flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted ${dateFilter ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "text-muted-foreground"}`}
-                >
-                  <Calendar className="h-3 w-3" />
-                  {dateFilter ? dateFilter.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Date"}
-                  {dateFilter && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDateFilter(undefined);
-                      }}
-                      className="ml-0.5 rounded-full hover:text-foreground"
-                    >
-                      ×
-                    </button>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarPicker
-                  mode="single"
-                  selected={dateFilter}
-                  onSelect={(d) => {
-                    setDateFilter(d);
-                    setCalOpen(false);
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+          {tenants.length >= 1 && (
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger className="h-7 gap-1 text-xs">
+                <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {tenants.map((t) => (
+                  <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
+                    {t.company_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <div className="relative">
             <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
             <Input

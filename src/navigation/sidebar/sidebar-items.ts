@@ -24,6 +24,7 @@ import {
   Route,
   Search,
   Settings2,
+  Star,
   UserPlus,
   Users,
   Wrench,
@@ -68,7 +69,7 @@ export const sidebarItems: NavGroup[] = [
       { title: "Stops", url: "/dashboard/stops", icon: MapPin },
       { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },
       { title: "Depots", url: "/dashboard/depots", icon: Route },
-      { title: "Spoke Plans", url: "/dashboard/plans", icon: Route },
+      { title: "Plans", url: "/dashboard/plans", icon: Star },
     ],
   },
   {
@@ -133,7 +134,10 @@ export const sidebarItems: NavGroup[] = [
         title: "Account",
         url: "/dashboard/tenants",
         icon: Fingerprint,
-        subItems: [{ title: "Tenants", url: "/dashboard/tenants", icon: Fingerprint }],
+        subItems: [
+          { title: "Tenants", url: "/dashboard/tenants", icon: Fingerprint },
+          { title: "Billing & Plans", url: "/dashboard/plans", icon: Star },
+        ],
       },
     ],
   },

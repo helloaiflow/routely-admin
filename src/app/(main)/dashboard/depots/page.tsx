@@ -196,7 +196,13 @@ function StaticMap({ depot }: { depot: Depot | null }) {
 
   const placePin = useCallback((dep: Depot) => {
     if (!mapInstance.current || !window.google?.maps || !dep.address) return;
-    const full = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean).join(", ");
+    const street = dep.address || "";
+    const full =
+      street +
+      (dep.city ? `, ${dep.city}` : "") +
+      (dep.state ? `, ${dep.state}` : "") +
+      (dep.zipcode ? ` ${dep.zipcode}` : "");
+    if (!full.trim()) return;
     new window.google.maps.Geocoder().geocode({ address: full }, (results, status) => {
       if (status !== "OK" || !results?.[0] || !mapInstance.current) return;
       const loc = results[0].geometry.location;
@@ -550,83 +556,113 @@ function DetailPanel({
         </div>
 
         <Sec label="Tenant" />
-        <div className="space-y-1.5">
-          {tenants.map((t) => {
-            const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
-            const isSel = form.tenant_id === t.tenant_id;
-            const initials = avatar(tName);
-            const colorCls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
-            return (
-              <button
-                key={t.tenant_id}
-                type="button"
-                onClick={() => set("tenant_id", t.tenant_id)}
-                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all ${isSel ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
-              >
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-semibold text-xs ${colorCls}`}
-                >
-                  {initials}
-                </div>
-                <span className="flex-1 font-medium text-xs">{tName}</span>
-                {isSel && <Check className="h-3.5 w-3.5 text-primary" />}
-              </button>
-            );
-          })}
-        </div>
-
-        <Sec label="Drivers" />
-        <div className="flex flex-wrap gap-2">
-          {drivers.length === 0 && <p className="text-[11px] text-muted-foreground">No drivers found</p>}
-          {drivers.map((d, i) => {
-            const dName = d.full_name || d.name || "Driver";
-            const isAssigned = (form.assigned_drivers || []).includes(d._id);
-            const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
-            return (
-              <button
-                key={d._id}
-                type="button"
-                onClick={() => toggleDriver(d._id)}
-                title={dName}
-                className="flex flex-col items-center gap-1 transition-all"
-              >
-                <div
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-full font-semibold text-xs transition-all ${colorCls} ${isAssigned ? "ring-2 ring-primary ring-offset-1" : "opacity-50 hover:opacity-80"}`}
-                >
-                  {avatar(dName)}
-                  {isAssigned && (
-                    <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
-                      <Check className="h-2 w-2 text-white" />
-                    </span>
-                  )}
-                </div>
-                <span className="max-w-[36px] truncate text-[9px] text-muted-foreground">{dName.split(" ")[0]}</span>
-              </button>
-            );
-          })}
-        </div>
-        {(form.assigned_drivers || []).length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {(form.assigned_drivers || []).map((id) => {
-              const d = drivers.find((x) => x._id === id);
-              if (!d) return null;
-              const dName = d.full_name || d.name || "Driver";
+        <Select
+          value={form.tenant_id ? String(form.tenant_id) : ""}
+          onValueChange={(v) => set("tenant_id", parseInt(v, 10))}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Select tenant...">
+              {form.tenant_id &&
+                (() => {
+                  const t = tenants.find((x) => x.tenant_id === form.tenant_id);
+                  const tName = t?.company_name || t?.contact_name || `Tenant ${form.tenant_id}`;
+                  const colorCls = AVATAR_COLORS[form.tenant_id % AVATAR_COLORS.length];
+                  return (
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${colorCls}`}
+                      >
+                        {avatar(tName)}
+                      </div>
+                      <span>{tName}</span>
+                    </div>
+                  );
+                })()}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent style={{ zIndex: 9999 }}>
+            {tenants.map((t) => {
+              const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
+              const colorCls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
               return (
-                <span
-                  key={id}
-                  className="flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[10px]"
-                >
-                  {dName.split(" ").slice(0, 2).join(" ")}
-                  <button
-                    type="button"
-                    onClick={() => toggleDriver(id)}
-                    className="ml-0.5 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
+                <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${colorCls}`}
+                    >
+                      {avatar(tName)}
+                    </div>
+                    <span>{tName}</span>
+                  </div>
+                </SelectItem>
               );
             })}
+          </SelectContent>
+        </Select>
+
+        <Sec label="Drivers" />
+        {drivers.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">No drivers found</p>
+        ) : (
+          <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">Drivers ({drivers.length})</span>
+              <span className="font-medium text-[10px] text-primary">
+                {(form.assigned_drivers || []).length} assigned
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {drivers.map((d, i) => {
+                const dName = d.full_name || d.name || "Driver";
+                const isAssigned = (form.assigned_drivers || []).includes(d._id);
+                const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                return (
+                  <button
+                    key={d._id}
+                    type="button"
+                    onClick={() => toggleDriver(d._id)}
+                    title={dName}
+                    className="flex items-center transition-all"
+                  >
+                    <div
+                      className={`relative flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-[10px] transition-all ${colorCls} ${isAssigned ? "border-primary opacity-100 ring-1 ring-primary ring-offset-1" : "border-transparent opacity-50 hover:opacity-80"}`}
+                    >
+                      {avatar(dName)}
+                      {isAssigned && (
+                        <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-primary">
+                          <Check className="h-2 w-2 text-white" />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {(form.assigned_drivers || []).length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5 border-t pt-2.5">
+                {(form.assigned_drivers || []).map((id, i) => {
+                  const d = drivers.find((x) => x._id === id);
+                  if (!d) return null;
+                  const dName = d.full_name || d.name || "Driver";
+                  const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                  return (
+                    <span
+                      key={id}
+                      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium text-[10px] ${colorCls}`}
+                    >
+                      {avatar(dName)} {dName.split(" ").slice(0, 2).join(" ")}
+                      <button
+                        type="button"
+                        onClick={() => toggleDriver(id)}
+                        className="ml-0.5 opacity-60 hover:opacity-100"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -689,10 +725,7 @@ export default function DepotsPage() {
         const d = await dr.value.json();
         const list: Depot[] = d.list || [];
         setDepots(list);
-        if (!initDone.current && list.length > 0) {
-          setSelected(list[0]);
-          initDone.current = true;
-        }
+        initDone.current = true;
       }
       if (tr.status === "fulfilled" && tr.value.ok) {
         const t = await tr.value.json();

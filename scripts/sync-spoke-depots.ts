@@ -42,8 +42,22 @@ async function main() {
 
   // Upsert each depot into spoke_depots collection
   for (const depot of depots) {
+    const existing = await db.collection("spoke_depots").findOne({ spoke_depot_id: depot.id || depot.depotId });
+    let rt_depot_id = existing?.rt_depot_id;
+    if (!rt_depot_id) {
+      const counter = await db
+        .collection("counters")
+        .findOneAndUpdate(
+          { _id: "rtdepot" as unknown as import("mongodb").ObjectId },
+          { $inc: { seq: 1 } },
+          { returnDocument: "after" },
+        );
+      rt_depot_id = `RTD-${String(counter!.seq).padStart(4, "0")}`;
+    }
+
     const doc = {
       spoke_depot_id: depot.id || depot.depotId,
+      rt_depot_id,
       name: depot.name || depot.title || "Depot",
       address: depot.address || depot.location?.address || "",
       city: depot.city || depot.location?.city || "",

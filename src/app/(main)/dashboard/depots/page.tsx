@@ -15,9 +15,10 @@ import {
   RefreshCw,
   Save,
   Truck,
+  Users,
+  X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,19 @@ interface Depot {
   tenant_id?: number;
   active?: boolean;
   synced_at?: string;
+  assigned_drivers?: string[];
+}
+
+interface Driver {
+  _id: string;
+  full_name?: string;
+  name?: string;
+  email?: string;
+}
+interface Tenant {
+  tenant_id: number;
+  company_name?: string;
+  contact_name?: string;
 }
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -59,6 +73,23 @@ const VEHS = [
 ];
 
 let acTimer: ReturnType<typeof setTimeout>;
+
+function avatar(name: string) {
+  return (name || "?")
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+const AVATAR_COLORS = [
+  "bg-blue-100 text-blue-700",
+  "bg-green-100 text-green-700",
+  "bg-violet-100 text-violet-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-teal-100 text-teal-700",
+];
 
 function AddressAutocomplete({
   value,
@@ -157,64 +188,65 @@ function AddressAutocomplete({
 
 function StaticMap({ depot }: { depot: Depot | null }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const mapInstance = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
-  const mapReadyRef = useRef(false);
+  const mapReady = useRef(false);
+  const depotRef = useRef<Depot | null>(depot);
+  depotRef.current = depot;
 
-  const placePin = useCallback((address: string, name: string) => {
-    if (!mapInstanceRef.current || !window.google?.maps) return;
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ address }, (results, status) => {
-      if (status === "OK" && results?.[0]) {
-        const loc = results[0].geometry.location;
-        mapInstanceRef.current?.panTo(loc);
-        mapInstanceRef.current?.setZoom(14);
-        if (markerRef.current) markerRef.current.setMap(null);
-        markerRef.current = new window.google.maps.Marker({
-          position: loc,
-          map: mapInstanceRef.current ?? undefined,
-          title: name,
-          icon: {
-            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
-            scale: 1.8,
-            fillColor: "#2563EB",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2.5,
-            anchor: new window.google.maps.Point(12, 22),
-          },
-        });
-      }
+  const placePin = useCallback((dep: Depot) => {
+    if (!mapInstance.current || !window.google?.maps || !dep.address) return;
+    const full = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean).join(", ");
+    new window.google.maps.Geocoder().geocode({ address: full }, (results, status) => {
+      if (status !== "OK" || !results?.[0] || !mapInstance.current) return;
+      const loc = results[0].geometry.location;
+      mapInstance.current.panTo(loc);
+      mapInstance.current.setZoom(14);
+      if (markerRef.current) markerRef.current.setMap(null);
+      markerRef.current = new window.google.maps.Marker({
+        position: loc,
+        map: mapInstance.current ?? undefined,
+        title: dep.name,
+        icon: {
+          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+          scale: 1.8,
+          fillColor: "#2563EB",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2.5,
+          anchor: new window.google.maps.Point(12, 22),
+        },
+      });
     });
   }, []);
 
+  const initMap = useCallback(() => {
+    if (!mapRef.current || mapReady.current) return;
+    mapInstance.current = new window.google.maps.Map(mapRef.current, {
+      zoom: 10,
+      center: { lat: 26.2, lng: -80.25 },
+      disableDefaultUI: true,
+      zoomControl: true,
+      clickableIcons: false,
+      zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
+      styles: [
+        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+        { featureType: "road", elementType: "geometry", stylers: [{ color: "#f4f4f4" }] },
+        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e2e2e2" }] },
+        { featureType: "water", elementType: "geometry", stylers: [{ color: "#c8e6f5" }] },
+        { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
+      ],
+    });
+    mapReady.current = true;
+    if (depotRef.current) placePin(depotRef.current);
+  }, [placePin]);
+
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || !mapRef.current || mapReadyRef.current) return;
-
-    const init = () => {
-      if (!mapRef.current || mapReadyRef.current) return;
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-        zoom: 10,
-        center: { lat: 26.2, lng: -80.25 },
-        disableDefaultUI: true,
-        zoomControl: true,
-        zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
-        clickableIcons: false,
-        styles: [
-          { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-          { featureType: "transit", stylers: [{ visibility: "off" }] },
-          { featureType: "road", elementType: "geometry", stylers: [{ color: "#f4f4f4" }] },
-          { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e2e2e2" }] },
-          { featureType: "water", elementType: "geometry", stylers: [{ color: "#c8e6f5" }] },
-          { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
-        ],
-      });
-      mapReadyRef.current = true;
-    };
-
+    if (!apiKey) return;
     if (window.google?.maps) {
-      init();
+      initMap();
       return;
     }
     if (!document.getElementById("gmap-script")) {
@@ -223,38 +255,47 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
       s.async = true;
       s.defer = true;
-      s.onload = init;
+      s.onload = initMap;
       document.head.appendChild(s);
     } else {
       const iv = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(iv);
-          init();
+          initMap();
         }
       }, 100);
       return () => clearInterval(iv);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initMap]);
 
   useEffect(() => {
-    if (!mapReadyRef.current || !depot) return;
-    if (depot.address) {
-      const full = [depot.address, depot.city, depot.state, depot.zipcode].filter(Boolean).join(", ");
-      placePin(full, depot.name);
+    if (!mapReady.current) return;
+    if (depot?.address) {
+      placePin(depot);
     } else {
       if (markerRef.current) {
         markerRef.current.setMap(null);
         markerRef.current = null;
       }
-      mapInstanceRef.current?.setCenter({ lat: 26.2, lng: -80.25 });
-      mapInstanceRef.current?.setZoom(10);
+      mapInstance.current?.setCenter({ lat: 26.2, lng: -80.25 });
+      mapInstance.current?.setZoom(10);
     }
   }, [depot, placePin]);
 
   return <div ref={mapRef} className="absolute inset-0" />;
 }
 
-function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, data: Partial<Depot>) => Promise<void> }) {
+function DetailPanel({
+  depot,
+  onSave,
+  drivers,
+  tenants,
+}: {
+  depot: Depot;
+  onSave: (id: string, data: Partial<Depot>) => Promise<void>;
+  drivers: Driver[];
+  tenants: Tenant[];
+}) {
   const [form, setForm] = useState<Partial<Depot>>({ ...depot });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -262,6 +303,10 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
   const toggleDay = (d: string) => {
     const days = form.working_days || [];
     set("working_days", days.includes(d) ? days.filter((x) => x !== d) : [...days, d]);
+  };
+  const toggleDriver = (id: string) => {
+    const arr = form.assigned_drivers || [];
+    set("assigned_drivers", arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
   };
 
   useEffect(() => {
@@ -277,33 +322,32 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
   };
 
   const Sec = ({ label }: { label: string }) => (
-    <p className="mt-4 mb-2 font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-widest first:mt-0">
+    <p className="mt-5 mb-2 font-bold text-[10px] text-muted-foreground/50 uppercase tracking-widest first:mt-0">
       {label}
     </p>
   );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate font-semibold text-sm">{depot.name}</p>
+      <div className="flex items-start gap-2 border-b px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-semibold text-sm leading-tight">{depot.name}</p>
             {depot.active !== false ? (
-              <Badge variant="outline" className="h-4 border-green-200 bg-green-50 text-[9px] text-green-700">
+              <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-[9px] text-green-700">
                 Active
-              </Badge>
+              </span>
             ) : (
-              <Badge variant="outline" className="h-4 text-[9px] text-muted-foreground">
+              <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-[9px] text-muted-foreground">
                 Inactive
-              </Badge>
+              </span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             {depot.rt_depot_id && (
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 {depot.rt_depot_id}
-              </span>
+              </code>
             )}
             {depot.synced_at && (
               <span className="text-[10px] text-muted-foreground">
@@ -314,7 +358,6 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
         </div>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <Sec label="Location" />
         <div className="space-y-2">
@@ -329,33 +372,22 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
             />
           </div>
           <div className="grid grid-cols-3 gap-1.5">
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">City</Label>
-              <Input
-                value={form.city || ""}
-                onChange={(e) => set("city", e.target.value)}
-                className="h-8 text-xs"
-                placeholder="Coral Springs"
-              />
-            </div>
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">State</Label>
-              <Input
-                value={form.state || ""}
-                onChange={(e) => set("state", e.target.value)}
-                className="h-8 text-xs"
-                maxLength={2}
-                placeholder="FL"
-              />
-            </div>
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">ZIP</Label>
-              <Input
-                value={form.zipcode || ""}
-                onChange={(e) => set("zipcode", e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
+            {[
+              { k: "city", p: "City" },
+              { k: "state", p: "ST", max: 2 },
+              { k: "zipcode", p: "ZIP" },
+            ].map((f) => (
+              <div key={f.k}>
+                <Label className="mb-1 block text-[10px] text-muted-foreground">{f.p}</Label>
+                <Input
+                  value={((form as Record<string, unknown>)[f.k] as string) || ""}
+                  onChange={(e) => set(f.k as keyof Depot, e.target.value)}
+                  className="h-8 text-xs"
+                  maxLength={f.max}
+                  placeholder={f.p}
+                />
+              </div>
+            ))}
           </div>
           <div>
             <Label className="mb-1 block text-[10px] text-muted-foreground">End location</Label>
@@ -441,8 +473,7 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
           </div>
           <div>
             <Label className="mb-1 block text-[10px] text-muted-foreground">
-              Time per stop:{" "}
-              <span className="font-semibold text-foreground">{form.estimated_time_per_stop || 10} min</span>
+              Time per stop: <strong className="text-foreground">{form.estimated_time_per_stop || 10} min</strong>
             </Label>
             <input
               type="range"
@@ -460,16 +491,16 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
         <div className="space-y-2">
           <div>
             <Label className="mb-1 block text-[10px] text-muted-foreground">Vehicle type</Label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="flex gap-2">
               {VEHS.map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => set("vehicle_type", v.id)}
-                  className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 transition-all ${form.vehicle_type === v.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 font-medium text-xs transition-all ${form.vehicle_type === v.id ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
                 >
-                  <span className="text-lg">{v.emoji}</span>
-                  <span className="font-medium text-[10px] text-muted-foreground">{v.label}</span>
+                  <span>{v.emoji}</span>
+                  {v.label}
                 </button>
               ))}
             </div>
@@ -489,49 +520,131 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
               ))}
             </div>
           </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">
-              Avg speed: <span className="font-semibold text-foreground">{form.avg_speed_mph || 35} mph</span>
-            </Label>
-            <input
-              type="range"
-              min="15"
-              max="80"
-              step="5"
-              value={form.avg_speed_mph || 35}
-              onChange={(e) => set("avg_speed_mph", parseInt(e.target.value, 10))}
-              className="h-1.5 w-full accent-primary"
-            />
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Max stops / driver</Label>
-            <Input
-              type="number"
-              value={form.max_stops_per_driver ?? ""}
-              onChange={(e) => set("max_stops_per_driver", e.target.value ? parseInt(e.target.value, 10) : null)}
-              placeholder="Unlimited"
-              className="h-8 text-xs"
-              min={1}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground">
+                Avg speed: <strong className="text-foreground">{form.avg_speed_mph || 35} mph</strong>
+              </Label>
+              <input
+                type="range"
+                min="15"
+                max="80"
+                step="5"
+                value={form.avg_speed_mph || 35}
+                onChange={(e) => set("avg_speed_mph", parseInt(e.target.value, 10))}
+                className="h-1.5 w-full accent-primary"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-[10px] text-muted-foreground">Max stops / driver</Label>
+              <Input
+                type="number"
+                value={form.max_stops_per_driver ?? ""}
+                onChange={(e) => set("max_stops_per_driver", e.target.value ? parseInt(e.target.value, 10) : null)}
+                placeholder="Unlimited"
+                className="h-8 text-xs"
+                min={1}
+              />
+            </div>
           </div>
         </div>
 
+        <Sec label="Tenant" />
+        <div className="space-y-1.5">
+          {tenants.map((t) => {
+            const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
+            const isSel = form.tenant_id === t.tenant_id;
+            const initials = avatar(tName);
+            const colorCls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
+            return (
+              <button
+                key={t.tenant_id}
+                type="button"
+                onClick={() => set("tenant_id", t.tenant_id)}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all ${isSel ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+              >
+                <div
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-semibold text-xs ${colorCls}`}
+                >
+                  {initials}
+                </div>
+                <span className="flex-1 font-medium text-xs">{tName}</span>
+                {isSel && <Check className="h-3.5 w-3.5 text-primary" />}
+              </button>
+            );
+          })}
+        </div>
+
+        <Sec label="Drivers" />
+        <div className="flex flex-wrap gap-2">
+          {drivers.length === 0 && <p className="text-[11px] text-muted-foreground">No drivers found</p>}
+          {drivers.map((d, i) => {
+            const dName = d.full_name || d.name || "Driver";
+            const isAssigned = (form.assigned_drivers || []).includes(d._id);
+            const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+            return (
+              <button
+                key={d._id}
+                type="button"
+                onClick={() => toggleDriver(d._id)}
+                title={dName}
+                className="flex flex-col items-center gap-1 transition-all"
+              >
+                <div
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-full font-semibold text-xs transition-all ${colorCls} ${isAssigned ? "ring-2 ring-primary ring-offset-1" : "opacity-50 hover:opacity-80"}`}
+                >
+                  {avatar(dName)}
+                  {isAssigned && (
+                    <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                      <Check className="h-2 w-2 text-white" />
+                    </span>
+                  )}
+                </div>
+                <span className="max-w-[36px] truncate text-[9px] text-muted-foreground">{dName.split(" ")[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+        {(form.assigned_drivers || []).length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(form.assigned_drivers || []).map((id) => {
+              const d = drivers.find((x) => x._id === id);
+              if (!d) return null;
+              const dName = d.full_name || d.name || "Driver";
+              return (
+                <span
+                  key={id}
+                  className="flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[10px]"
+                >
+                  {dName.split(" ").slice(0, 2).join(" ")}
+                  <button
+                    type="button"
+                    onClick={() => toggleDriver(id)}
+                    className="ml-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         <Sec label="IDs" />
-        <div className="space-y-1.5 rounded-xl border bg-muted/40 px-3 py-2.5">
+        <div className="space-y-1.5 rounded-xl border bg-muted/30 px-3 py-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">RT Depot ID</span>
-            <span className="font-mono font-semibold text-xs">{depot.rt_depot_id || "—"}</span>
+            <code className="font-mono font-semibold text-xs">{depot.rt_depot_id || "\u2014"}</code>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">Spoke ID</span>
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <code className="font-mono text-[10px] text-muted-foreground">
               {depot.spoke_depot_id.replace("depots/", "")}
-            </span>
+            </code>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
       <div className="border-t px-4 py-3">
         <Button onClick={handleSave} disabled={saving} size="sm" className="w-full gap-2">
           {saving ? (
@@ -550,6 +663,8 @@ function DetailPanel({ depot, onSave }: { depot: Depot; onSave: (id: string, dat
 
 export default function DepotsPage() {
   const [depots, setDepots] = useState<Depot[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantDepotId, setTenantDepotId] = useState("");
   const [selected, setSelected] = useState<Depot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -560,28 +675,40 @@ export default function DepotsPage() {
   const [addName, setAddName] = useState("");
   const [addSpokeId, setAddSpokeId] = useState("");
   const [addSaving, setAddSaving] = useState(false);
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
+  const initDone = useRef(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dr, tr] = await Promise.allSettled([fetch("/api/data/spoke-depots"), fetch("/api/tenants")]);
+      const [dr, tr, dvr] = await Promise.allSettled([
+        fetch("/api/data/spoke-depots"),
+        fetch("/api/tenants"),
+        fetch("/api/data/drivers?limit=50"),
+      ]);
       if (dr.status === "fulfilled" && dr.value.ok) {
         const d = await dr.value.json();
         const list: Depot[] = d.list || [];
         setDepots(list);
-        if (!selectedRef.current && list.length > 0) setSelected(list[0]);
+        if (!initDone.current && list.length > 0) {
+          setSelected(list[0]);
+          initDone.current = true;
+        }
       }
       if (tr.status === "fulfilled" && tr.value.ok) {
         const t = await tr.value.json();
-        const tenant = (t.list || []).find((x: Record<string, unknown>) => x.tenant_id === 1);
+        const list = t.list || [];
+        setTenants(list);
+        const tenant = list.find((x: Record<string, unknown>) => x.tenant_id === 1);
         if (tenant?.spoke_depot_id) setTenantDepotId(tenant.spoke_depot_id);
+      }
+      if (dvr.status === "fulfilled" && dvr.value.ok) {
+        const d = await dvr.value.json();
+        setDrivers(d.list || d.drivers || []);
       }
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchAll();
@@ -609,17 +736,18 @@ export default function DepotsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    await fetchAll();
+    setDepots((prev) => prev.map((d) => (d.spoke_depot_id === spokeId ? { ...d, ...data } : d)));
     setSelected((prev) => (prev?.spoke_depot_id === spokeId ? ({ ...prev, ...data } as Depot) : prev));
   };
 
   const handleAddDepot = async () => {
     if (!addName) return;
     setAddSaving(true);
-    await fetch(`/api/data/spoke-depots?id=${encodeURIComponent(addSpokeId || `manual-${Date.now()}`)}`, {
+    const newId = addSpokeId || `manual-${Date.now()}`;
+    await fetch(`/api/data/spoke-depots?id=${encodeURIComponent(newId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: addName, spoke_depot_id: addSpokeId || `manual-${Date.now()}` }),
+      body: JSON.stringify({ name: addName, spoke_depot_id: newId }),
     });
     setAddSaving(false);
     setAddOpen(false);
@@ -639,16 +767,28 @@ export default function DepotsPage() {
   const noAddr = depots.filter((d) => !d.address).length;
   const activeCount = depots.filter((d) => d.active !== false).length;
 
+  const STATS = [
+    { emoji: "\u{1F3E2}", value: depots.length, label: "Total", color: "text-foreground" },
+    { emoji: "\u2705", value: activeCount, label: "Active", color: "text-green-600" },
+    { emoji: "\u23F8\uFE0F", value: depots.length - activeCount, label: "Inactive", color: "text-amber-600" },
+    {
+      emoji: "\u{1F4CD}",
+      value: noAddr,
+      label: "No addr",
+      color: noAddr > 0 ? "text-rose-600" : "text-muted-foreground",
+    },
+  ];
+
   if (loading)
     return (
       <div className="flex h-[calc(100vh-5rem)] gap-0">
-        <div className="w-[280px] shrink-0 space-y-2 border-r p-3">
+        <div className="w-[260px] shrink-0 space-y-2 border-r p-3">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-16 rounded-xl" />
           ))}
         </div>
         <Skeleton className="m-3 flex-1 rounded-xl" />
-        <div className="w-[300px] shrink-0 space-y-2 border-l p-3">
+        <div className="w-[380px] shrink-0 space-y-2 border-l p-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-10 rounded-xl" />
           ))}
@@ -661,13 +801,12 @@ export default function DepotsPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: selected ? "280px 1fr 300px" : "280px 1fr",
+        gridTemplateColumns: selected ? "260px 1fr 380px" : "260px 1fr",
         gridTemplateRows: "1fr",
       }}
     >
-      {/* COL 1 — Depot List */}
+      {/* COL 1 — List */}
       <div className="flex flex-col overflow-hidden border-r">
-        {/* Header */}
         <div className="flex items-center justify-between border-b px-3.5 py-3">
           <div>
             <h1 className="font-semibold text-sm">Depots</h1>
@@ -692,34 +831,26 @@ export default function DepotsPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-4 border-b">
-          {[
-            { label: "Total", value: depots.length, color: "text-foreground" },
-            { label: "Active", value: activeCount, color: "text-green-600" },
-            { label: "Inactive", value: depots.length - activeCount, color: "text-amber-600" },
-            { label: "No addr", value: noAddr, color: noAddr > 0 ? "text-rose-600" : "text-muted-foreground" },
-          ].map((s) => (
-            <div key={s.label} className="border-r px-2 py-2 text-center last:border-r-0">
-              <p className={`font-semibold text-base tabular-nums ${s.color}`}>{s.value}</p>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{s.label}</p>
+          {STATS.map((s) => (
+            <div key={s.label} className="border-r px-1.5 py-2 text-center last:border-r-0">
+              <div className="text-sm leading-none">{s.emoji}</div>
+              <p className={`mt-1 font-bold text-sm tabular-nums ${s.color}`}>{s.value}</p>
+              <p className="mt-0.5 text-[8px] text-muted-foreground uppercase tracking-wide">{s.label}</p>
             </div>
           ))}
         </div>
 
-        {/* Sync message */}
         {syncMsg && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
             className="border-b bg-green-50 px-3 py-1.5 font-medium text-[10px] text-green-700"
           >
-            Synced — {syncMsg}
+            {syncMsg}
           </motion.div>
         )}
 
-        {/* Search */}
         <div className="border-b px-3 py-2">
           <Input
             placeholder="Search depots..."
@@ -729,20 +860,18 @@ export default function DepotsPage() {
           />
         </div>
 
-        {/* Warning */}
         {noAddr > 0 && (
-          <div className="flex items-center gap-1.5 border-b bg-amber-50 px-3 py-2 text-[10px] text-amber-700">
+          <div className="flex items-center gap-1.5 border-b bg-amber-50 px-3 py-1.5 text-[10px] text-amber-700">
             <MapPin className="h-3 w-3 shrink-0" />
             <span>
-              <strong>{noAddr}</strong> depot{noAddr > 1 ? "s" : ""} missing address
+              <strong>{noAddr}</strong> missing address
             </span>
           </div>
         )}
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto py-1.5">
+        <div className="flex-1 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 pt-12 text-muted-foreground">
+            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
               <Building2 className="h-8 w-8 opacity-15" />
               <p className="text-xs">No depots — click sync</p>
             </div>
@@ -755,32 +884,32 @@ export default function DepotsPage() {
                   key={depot._id}
                   type="button"
                   onClick={() => setSelected(depot)}
-                  className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors ${isSel ? "border-primary border-r-2 bg-primary/5" : "hover:bg-muted/50"}`}
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors ${isSel ? "border-primary border-r-[3px] bg-primary/5" : "hover:bg-muted/50"}`}
                 >
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isPrimary ? "bg-primary/10" : "bg-muted"}`}
                   >
-                    <Building2 className={`h-4 w-4 ${isPrimary ? "text-primary" : "text-muted-foreground"}`} />
+                    <Building2 className={`h-3.5 w-3.5 ${isPrimary ? "text-primary" : "text-muted-foreground"}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="truncate font-medium text-xs">{depot.name}</span>
                       {isPrimary && (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-semibold text-[9px] text-primary">
-                          Primary
+                        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-bold text-[8px] text-primary">
+                          PRIMARY
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2">
+                    <div className="mt-0.5 flex items-center gap-1.5">
                       {depot.rt_depot_id && (
-                        <span className="font-mono text-[9px] text-muted-foreground">{depot.rt_depot_id}</span>
+                        <code className="text-[9px] text-muted-foreground">{depot.rt_depot_id}</code>
                       )}
                       {depot.address ? (
                         <span className="truncate text-[10px] text-muted-foreground">
                           {depot.city}, {depot.state}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-amber-600">No address</span>
+                        <span className="text-[10px] text-amber-500">No address</span>
                       )}
                     </div>
                   </div>
@@ -788,7 +917,7 @@ export default function DepotsPage() {
                     <div
                       className={`h-1.5 w-1.5 rounded-full ${depot.active !== false ? "bg-green-500" : "bg-gray-300"}`}
                     />
-                    <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+                    <ChevronRight className="h-3 w-3 text-muted-foreground/30" />
                   </div>
                 </button>
               );
@@ -807,11 +936,11 @@ export default function DepotsPage() {
             {selected?.address
               ? `${selected.address}, ${selected.city}, ${selected.state}`
               : selected
-                ? "No address set — add one in the detail panel"
+                ? "No address — add in detail panel"
                 : "Select a depot"}
           </span>
           {selected && (
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {selected.start_time || "07:00"}
@@ -824,6 +953,12 @@ export default function DepotsPage() {
                 <Navigation className="h-3 w-3" />
                 {selected.avg_speed_mph || 35} mph
               </span>
+              {(selected.assigned_drivers || []).length > 0 && (
+                <span className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {(selected.assigned_drivers || []).length} drivers
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -846,14 +981,13 @@ export default function DepotsPage() {
         </div>
       </div>
 
-      {/* COL 3 — Detail panel */}
+      {/* COL 3 — Detail */}
       {selected && (
         <div className="flex flex-col overflow-hidden border-l">
-          <DetailPanel key={selected._id} depot={selected} onSave={handleSave} />
+          <DetailPanel key={selected._id} depot={selected} onSave={handleSave} drivers={drivers} tenants={tenants} />
         </div>
       )}
 
-      {/* Add depot dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -872,7 +1006,7 @@ export default function DepotsPage() {
                 placeholder="depots/abc123"
                 className="font-mono text-sm"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">Leave empty for a manual depot (no Spoke sync)</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">Leave empty for a manual depot</p>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
@@ -880,8 +1014,7 @@ export default function DepotsPage() {
               Cancel
             </Button>
             <Button size="sm" onClick={handleAddDepot} disabled={!addName || addSaving}>
-              {addSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Add depot
+              {addSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Add depot
             </Button>
           </div>
         </DialogContent>

@@ -26,6 +26,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import "leaflet/dist/leaflet.css";
+
 interface Depot {
   _id: string;
   spoke_depot_id: string;
@@ -187,108 +189,85 @@ function AddressAutocomplete({
 }
 
 function StaticMap({ depot }: { depot: Depot | null }) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const mapReady = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<import("leaflet").Map | null>(null);
+  const markerRef = useRef<import("leaflet").Marker | null>(null);
+  const mapReadyRef = useRef(false);
   const depotRef = useRef<Depot | null>(depot);
   depotRef.current = depot;
 
-  const placePin = useCallback((dep: Depot) => {
-    if (!mapInstance.current || !window.google?.maps || !dep.address) return;
-    const street = dep.address || "";
-    const full =
-      street +
-      (dep.city ? `, ${dep.city}` : "") +
-      (dep.state ? `, ${dep.state}` : "") +
-      (dep.zipcode ? ` ${dep.zipcode}` : "");
-    if (!full.trim()) return;
-    new window.google.maps.Geocoder().geocode({ address: full }, (results, status) => {
-      if (status !== "OK" || !results?.[0] || !mapInstance.current) return;
-      const loc = results[0].geometry.location;
-      mapInstance.current.panTo(loc);
-      mapInstance.current.setZoom(14);
-      if (markerRef.current) markerRef.current.setMap(null);
-      markerRef.current = new window.google.maps.Marker({
-        position: loc,
-        map: mapInstance.current ?? undefined,
-        title: dep.name,
-        icon: {
-          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
-          scale: 1.8,
-          fillColor: "#2563EB",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2.5,
-          anchor: new window.google.maps.Point(12, 22),
-        },
-      });
-    });
-  }, []);
-
-  const initMap = useCallback(() => {
-    if (!mapRef.current || mapReady.current) return;
-    mapInstance.current = new window.google.maps.Map(mapRef.current, {
-      zoom: 10,
-      center: { lat: 26.2, lng: -80.25 },
-      disableDefaultUI: true,
-      zoomControl: true,
-      clickableIcons: false,
-      zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
-      styles: [
-        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-        { featureType: "transit", stylers: [{ visibility: "off" }] },
-        { featureType: "road", elementType: "geometry", stylers: [{ color: "#f4f4f4" }] },
-        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e2e2e2" }] },
-        { featureType: "water", elementType: "geometry", stylers: [{ color: "#c8e6f5" }] },
-        { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
-      ],
-    });
-    mapReady.current = true;
-    if (depotRef.current) placePin(depotRef.current);
-  }, [placePin]);
-
-  useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return;
-    if (window.google?.maps) {
-      initMap();
-      return;
-    }
-    if (!document.getElementById("gmap-script")) {
-      const s = document.createElement("script");
-      s.id = "gmap-script";
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
-      s.async = true;
-      s.defer = true;
-      s.onload = initMap;
-      document.head.appendChild(s);
-    } else {
-      const iv = setInterval(() => {
-        if (window.google?.maps) {
-          clearInterval(iv);
-          initMap();
-        }
-      }, 100);
-      return () => clearInterval(iv);
-    }
-  }, [initMap]);
-
-  useEffect(() => {
-    if (!mapReady.current) return;
-    if (depot?.address) {
-      placePin(depot);
-    } else {
+  const flyToAddress = useCallback(async (dep: Depot) => {
+    if (!mapRef.current) return;
+    const address = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean).join(", ");
+    if (!address.trim()) return;
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
+        { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
+      );
+      const results = await res.json();
+      if (!results.length || !mapRef.current) return;
+      const lat = parseFloat(results[0].lat);
+      const lng = parseFloat(results[0].lon);
+      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2, easeLinearity: 0.25 });
       if (markerRef.current) {
-        markerRef.current.setMap(null);
+        markerRef.current.remove();
         markerRef.current = null;
       }
-      mapInstance.current?.setCenter({ lat: 26.2, lng: -80.25 });
-      mapInstance.current?.setZoom(10);
+      const L = await import("leaflet");
+      const icon = L.divIcon({
+        html: `<div style="position:relative;width:32px;height:40px">
+          <div style="position:absolute;top:0;left:4px;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563EB;border:3px solid white;box-shadow:0 4px 12px rgba(37,99,235,0.4)"></div>
+          <div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:11px;z-index:10">\u{1F3E2}</div>
+        </div>`,
+        className: "",
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
+      });
+      markerRef.current = L.marker([lat, lng], { icon }).addTo(mapRef.current);
+    } catch {
+      /* geocoding failed silently */
     }
-  }, [depot, placePin]);
+  }, []);
 
-  return <div ref={mapRef} className="absolute inset-0" />;
+  useEffect(() => {
+    if (typeof window === "undefined" || mapReadyRef.current || !containerRef.current) return;
+    (async () => {
+      const L = await import("leaflet");
+      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+      if (!containerRef.current) return;
+      mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: false }).setView(
+        [26.2, -80.25],
+        10,
+      );
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+        mapReadyRef.current = true;
+        if (depotRef.current?.address) flyToAddress(depotRef.current);
+      }, 400);
+    })();
+  }, [flyToAddress]);
+
+  useEffect(() => {
+    if (!mapReadyRef.current) return;
+    if (depot?.address) {
+      flyToAddress(depot);
+    } else {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      mapRef.current?.setView([26.2, -80.25], 10);
+    }
+  }, [depot, flyToAddress]);
+
+  return <div ref={containerRef} className="absolute inset-0" />;
 }
 
 function DetailPanel({
@@ -864,13 +843,28 @@ export default function DepotsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 border-b">
+        <div className="flex items-center gap-1.5 overflow-x-auto border-b px-3 py-2">
           {STATS.map((s) => (
-            <div key={s.label} className="border-r px-1.5 py-2 text-center last:border-r-0">
-              <div className="text-sm leading-none">{s.emoji}</div>
-              <p className={`mt-1 font-bold text-sm tabular-nums ${s.color}`}>{s.value}</p>
-              <p className="mt-0.5 text-[8px] text-muted-foreground uppercase tracking-wide">{s.label}</p>
-            </div>
+            <span
+              key={s.label}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-semibold text-[10px] transition-colors ${
+                s.label === "Active"
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : s.label === "Inactive"
+                    ? (
+                        s.value > 0
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-border bg-muted/40 text-muted-foreground"
+                      )
+                    : s.label === "No addr"
+                      ? s.value > 0
+                        ? "border-rose-200 bg-rose-50 text-rose-600"
+                        : "border-border bg-muted/40 text-muted-foreground"
+                      : "border-border bg-muted/40 text-foreground"
+              }`}
+            >
+              {s.emoji} <span className="tabular-nums">{s.value}</span> {s.label}
+            </span>
           ))}
         </div>
 

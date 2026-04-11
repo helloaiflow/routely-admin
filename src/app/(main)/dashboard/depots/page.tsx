@@ -245,7 +245,10 @@ function StaticMap({ depot }: { depot: Depot | null }) {
         [26.2, -80.25],
         10,
       );
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
+        attribution: "\u00A9 OpenStreetMap \u00A9 CARTO",
+      }).addTo(mapRef.current);
       setTimeout(() => {
         mapRef.current?.invalidateSize();
         mapReadyRef.current = true;

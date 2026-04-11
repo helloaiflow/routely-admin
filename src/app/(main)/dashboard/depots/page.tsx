@@ -26,8 +26,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import "leaflet/dist/leaflet.css";
-
 interface Depot {
   _id: string;
   spoke_depot_id: string;
@@ -190,72 +188,98 @@ function AddressAutocomplete({
 
 function StaticMap({ depot }: { depot: Depot | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("leaflet").Map | null>(null);
-  const markerRef = useRef<import("leaflet").Marker | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
   const mapReadyRef = useRef(false);
   const depotRef = useRef<Depot | null>(depot);
   depotRef.current = depot;
 
-  const flyToAddress = useCallback(async (dep: Depot) => {
-    if (!mapRef.current) return;
-    const address = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean).join(", ");
-    if (!address.trim()) return;
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
-        { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
-      );
-      const results = await res.json();
-      if (!results.length || !mapRef.current) return;
-      const lat = parseFloat(results[0].lat);
-      const lng = parseFloat(results[0].lon);
-      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2, easeLinearity: 0.25 });
+  const flyToAddress = useCallback((dep: Depot) => {
+    if (!mapRef.current || !window.google?.maps) return;
+    const parts = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean);
+    if (!parts.length) return;
+    const full = parts.join(", ");
+    new window.google.maps.Geocoder().geocode({ address: full }, (results, status) => {
+      if (status !== "OK" || !results?.[0] || !mapRef.current) return;
+      const loc = results[0].geometry.location;
+      mapRef.current.panTo(loc);
+      mapRef.current.setZoom(17);
       if (markerRef.current) {
-        markerRef.current.remove();
+        markerRef.current.setMap(null);
         markerRef.current = null;
       }
-      const L = await import("leaflet");
-      const icon = L.divIcon({
-        html: `<div style="position:relative;width:32px;height:40px">
-          <div style="position:absolute;top:0;left:4px;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563EB;border:3px solid white;box-shadow:0 4px 12px rgba(37,99,235,0.4)"></div>
-          <div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:11px;z-index:10">\u{1F3E2}</div>
-        </div>`,
-        className: "",
-        iconSize: [32, 40],
-        iconAnchor: [16, 40],
+      markerRef.current = new window.google.maps.Marker({
+        position: loc,
+        map: mapRef.current,
+        title: dep.name,
+        animation: window.google.maps.Animation.DROP,
+        icon: {
+          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+          scale: 2,
+          fillColor: "#2563EB",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2.5,
+          anchor: new window.google.maps.Point(12, 22),
+        },
       });
-      markerRef.current = L.marker([lat, lng], { icon }).addTo(mapRef.current);
-    } catch {
-      /* geocoding failed silently */
-    }
+    });
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || mapReadyRef.current || !containerRef.current) return;
-    (async () => {
-      const L = await import("leaflet");
-      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
-      if (!containerRef.current) return;
-      mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: false }).setView(
-        [26.2, -80.25],
-        10,
-      );
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-        attribution: "\u00A9 OpenStreetMap \u00A9 CARTO",
-      }).addTo(mapRef.current);
-      setTimeout(() => {
-        mapRef.current?.invalidateSize();
-        mapReadyRef.current = true;
-        if (depotRef.current?.address) flyToAddress(depotRef.current);
-      }, 400);
-    })();
+  const initMap = useCallback(() => {
+    if (!containerRef.current || mapReadyRef.current) return;
+    mapRef.current = new window.google.maps.Map(containerRef.current, {
+      zoom: 11,
+      center: { lat: 26.2, lng: -80.25 },
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+        position: window.google.maps.ControlPosition.TOP_RIGHT,
+        mapTypeIds: ["roadmap", "satellite", "hybrid"],
+      },
+      streetViewControl: true,
+      streetViewControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
+      zoomControl: true,
+      zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
+      fullscreenControl: false,
+      styles: [
+        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+        { featureType: "road", elementType: "geometry", stylers: [{ color: "#f4f4f4" }] },
+        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e0e0e0" }] },
+        { featureType: "water", elementType: "geometry", stylers: [{ color: "#c8e6f5" }] },
+        { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
+      ],
+    });
+    mapReadyRef.current = true;
+    if (depotRef.current?.address) flyToAddress(depotRef.current);
   }, [flyToAddress]);
+
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return;
+    if (window.google?.maps) {
+      initMap();
+      return;
+    }
+    if (!document.getElementById("gmap-script")) {
+      const s = document.createElement("script");
+      s.id = "gmap-script";
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+      s.async = true;
+      s.defer = true;
+      s.onload = initMap;
+      document.head.appendChild(s);
+    } else {
+      const iv = setInterval(() => {
+        if (window.google?.maps) {
+          clearInterval(iv);
+          initMap();
+        }
+      }, 100);
+      return () => clearInterval(iv);
+    }
+  }, [initMap]);
 
   useEffect(() => {
     if (!mapReadyRef.current) return;
@@ -263,10 +287,11 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       flyToAddress(depot);
     } else {
       if (markerRef.current) {
-        markerRef.current.remove();
+        markerRef.current.setMap(null);
         markerRef.current = null;
       }
-      mapRef.current?.setView([26.2, -80.25], 10);
+      mapRef.current?.setCenter({ lat: 26.2, lng: -80.25 });
+      mapRef.current?.setZoom(11);
     }
   }, [depot, flyToAddress]);
 
@@ -782,16 +807,10 @@ export default function DepotsPage() {
   const noAddr = depots.filter((d) => !d.address).length;
   const activeCount = depots.filter((d) => d.active !== false).length;
 
-  const STATS = [
-    { emoji: "\u{1F3E2}", value: depots.length, label: "Total", color: "text-foreground" },
-    { emoji: "\u2705", value: activeCount, label: "Active", color: "text-green-600" },
-    { emoji: "\u23F8\uFE0F", value: depots.length - activeCount, label: "Inactive", color: "text-amber-600" },
-    {
-      emoji: "\u{1F4CD}",
-      value: noAddr,
-      label: "No addr",
-      color: noAddr > 0 ? "text-rose-600" : "text-muted-foreground",
-    },
+  const _STATS = [
+    { emoji: "\u{1F3E2}", value: depots.length, label: "Total", active: false },
+    { emoji: "\u2705", value: activeCount, label: "Active", active: true },
+    { emoji: "\u23F8\uFE0F", value: depots.length - activeCount, label: "Inactive", active: false },
   ];
 
   if (loading)
@@ -846,29 +865,18 @@ export default function DepotsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto border-b px-3 py-2">
-          {STATS.map((s) => (
-            <span
-              key={s.label}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-semibold text-[10px] transition-colors ${
-                s.label === "Active"
-                  ? "border-green-200 bg-green-50 text-green-700"
-                  : s.label === "Inactive"
-                    ? (
-                        s.value > 0
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-border bg-muted/40 text-muted-foreground"
-                      )
-                    : s.label === "No addr"
-                      ? s.value > 0
-                        ? "border-rose-200 bg-rose-50 text-rose-600"
-                        : "border-border bg-muted/40 text-muted-foreground"
-                      : "border-border bg-muted/40 text-foreground"
-              }`}
-            >
-              {s.emoji} <span className="tabular-nums">{s.value}</span> {s.label}
-            </span>
-          ))}
+        <div className="flex items-center gap-1.5 border-b px-3 py-2">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-semibold text-[10px] text-foreground">
+            {"\u{1F3E2}"} <span className="tabular-nums">{depots.length}</span> Total
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-semibold text-[10px] text-green-700">
+            {"\u2705"} <span className="tabular-nums">{activeCount}</span> Active
+          </span>
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-semibold text-[10px] ${depots.length - activeCount > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-border bg-muted/40 text-muted-foreground"}`}
+          >
+            {"\u23F8\uFE0F"} <span className="tabular-nums">{depots.length - activeCount}</span> Inactive
+          </span>
         </div>
 
         {syncMsg && (
@@ -934,13 +942,19 @@ export default function DepotsPage() {
                       {depot.rt_depot_id && (
                         <code className="text-[9px] text-muted-foreground">{depot.rt_depot_id}</code>
                       )}
-                      {depot.address ? (
+                      {depot.tenant_id &&
+                        (() => {
+                          const t = tenants.find((x) => x.tenant_id === depot.tenant_id);
+                          const tName = t?.company_name || t?.contact_name;
+                          if (!tName) return null;
+                          return <span className="truncate font-medium text-[9px] text-blue-600">{tName}</span>;
+                        })()}
+                      {!depot.tenant_id && depot.address && (
                         <span className="truncate text-[10px] text-muted-foreground">
                           {depot.city}, {depot.state}
                         </span>
-                      ) : (
-                        <span className="text-[10px] text-amber-500">No address</span>
                       )}
+                      {!depot.address && <span className="text-[10px] text-amber-500">No address</span>}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">

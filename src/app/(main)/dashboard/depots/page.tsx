@@ -91,6 +91,24 @@ const AVATAR_COLORS = [
   "bg-teal-100 text-teal-700",
 ];
 
+declare global {
+  interface Window {
+    google: typeof google;
+  }
+}
+
+interface AdvancedMarkerElementType {
+  new (opts: {
+    map: google.maps.Map;
+    position: google.maps.LatLng;
+    title?: string;
+    content?: HTMLElement;
+  }): {
+    map: google.maps.Map | null;
+    position: google.maps.LatLng | null;
+  };
+}
+
 function AddressAutocomplete({
   value,
   onChange,
@@ -186,43 +204,99 @@ function AddressAutocomplete({
   );
 }
 
+function buildMarkerEl(name: string) {
+  const el = document.createElement("div");
+  el.innerHTML = `
+      <div style="
+        background:#2563EB;
+        border:3px solid #fff;
+        border-radius:50% 50% 50% 0;
+        box-shadow:0 4px 16px rgba(37,99,235,0.45);
+        transform:rotate(-45deg);
+        width:36px;height:36px;
+        display:flex;align-items:center;justify-content:center;
+        cursor:pointer;
+        transition:transform .15s;
+      ">
+        <span style="transform:rotate(45deg);font-size:15px;line-height:1">\u{1F3E2}</span>
+      </div>
+      <div style="
+        margin-top:4px;
+        background:#fff;
+        border:1px solid #e2e8f0;
+        border-radius:6px;
+        padding:3px 8px;
+        font-size:11px;
+        font-weight:600;
+        color:#1e293b;
+        box-shadow:0 2px 8px rgba(0,0,0,.10);
+        white-space:nowrap;
+        text-align:center;
+        max-width:160px;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      ">${name}</div>`;
+  return el;
+}
+
 function StaticMap({ depot }: { depot: Depot | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const markerRef = useRef<{ map: google.maps.Map | null } | null>(null);
   const mapReadyRef = useRef(false);
   const depotRef = useRef<Depot | null>(depot);
   depotRef.current = depot;
 
-  const flyToAddress = useCallback((dep: Depot) => {
+  const flyToAddress = useCallback(async (dep: Depot) => {
     if (!mapRef.current || !window.google?.maps) return;
     const parts = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean);
     if (!parts.length) return;
-    const full = parts.join(", ");
-    new window.google.maps.Geocoder().geocode({ address: full }, (results, status) => {
+    new window.google.maps.Geocoder().geocode({ address: parts.join(", ") }, async (results, status) => {
       if (status !== "OK" || !results?.[0] || !mapRef.current) return;
       const loc = results[0].geometry.location;
-      mapRef.current.panTo(loc);
-      mapRef.current.setZoom(17);
+
+      // Remove old marker
       if (markerRef.current) {
-        markerRef.current.setMap(null);
+        markerRef.current.map = null;
         markerRef.current = null;
       }
-      markerRef.current = new window.google.maps.Marker({
-        position: loc,
-        map: mapRef.current,
-        title: dep.name,
-        animation: window.google.maps.Animation.DROP,
-        icon: {
-          path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
-          scale: 2,
-          fillColor: "#2563EB",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2.5,
-          anchor: new window.google.maps.Point(12, 22),
-        },
-      });
+
+      // Zoom in first, then pan smoothly
+      mapRef.current.setZoom(17);
+      mapRef.current.panTo(loc);
+
+      // Create AdvancedMarkerElement
+      try {
+        const { AdvancedMarkerElement } = await (
+          window.google.maps as unknown as {
+            importLibrary: (lib: string) => Promise<{ AdvancedMarkerElement: AdvancedMarkerElementType }>;
+          }
+        ).importLibrary("marker");
+        markerRef.current = new AdvancedMarkerElement({
+          map: mapRef.current,
+          position: loc,
+          title: dep.name,
+          content: buildMarkerEl(dep.name),
+        });
+      } catch {
+        // Fallback to classic marker if AdvancedMarker fails
+        const classic = new window.google.maps.Marker({
+          position: loc,
+          map: mapRef.current,
+          title: dep.name,
+          animation: window.google.maps.Animation.DROP,
+          icon: {
+            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
+            scale: 2.2,
+            fillColor: "#2563EB",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2.5,
+            anchor: new window.google.maps.Point(12, 22),
+          },
+        });
+        markerRef.current = classic as unknown as { map: google.maps.Map | null };
+      }
     });
   }, []);
 
@@ -231,6 +305,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
     mapRef.current = new window.google.maps.Map(containerRef.current, {
       zoom: 11,
       center: { lat: 26.2, lng: -80.25 },
+      mapId: "routely_depot_map",
       mapTypeControl: true,
       mapTypeControlOptions: {
         style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
@@ -242,6 +317,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       zoomControl: true,
       zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
       fullscreenControl: false,
+      clickableIcons: false,
       styles: [
         { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
         { featureType: "transit", stylers: [{ visibility: "off" }] },
@@ -258,27 +334,31 @@ function StaticMap({ depot }: { depot: Depot | null }) {
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) return;
-    if (window.google?.maps) {
-      initMap();
-      return;
-    }
-    if (!document.getElementById("gmap-script")) {
-      const s = document.createElement("script");
-      s.id = "gmap-script";
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
-      s.async = true;
-      s.defer = true;
-      s.onload = initMap;
-      document.head.appendChild(s);
-    } else {
-      const iv = setInterval(() => {
-        if (window.google?.maps) {
-          clearInterval(iv);
-          initMap();
-        }
-      }, 100);
-      return () => clearInterval(iv);
-    }
+    const scriptId = "gmap-script";
+    const load = () => {
+      if (window.google?.maps) {
+        initMap();
+        return;
+      }
+      if (!document.getElementById(scriptId)) {
+        const s = document.createElement("script");
+        s.id = scriptId;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=beta&libraries=marker`;
+        s.async = true;
+        s.defer = true;
+        s.onload = initMap;
+        document.head.appendChild(s);
+      } else {
+        const iv = setInterval(() => {
+          if (window.google?.maps) {
+            clearInterval(iv);
+            initMap();
+          }
+        }, 100);
+        return () => clearInterval(iv);
+      }
+    };
+    load();
   }, [initMap]);
 
   useEffect(() => {
@@ -287,7 +367,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       flyToAddress(depot);
     } else {
       if (markerRef.current) {
-        markerRef.current.setMap(null);
+        markerRef.current.map = null;
         markerRef.current = null;
       }
       mapRef.current?.setCenter({ lat: 26.2, lng: -80.25 });
@@ -865,18 +945,27 @@ export default function DepotsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 border-b px-3 py-2">
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-semibold text-[10px] text-foreground">
-            {"\u{1F3E2}"} <span className="tabular-nums">{depots.length}</span> Total
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-semibold text-[10px] text-green-700">
-            {"\u2705"} <span className="tabular-nums">{activeCount}</span> Active
-          </span>
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-semibold text-[10px] ${depots.length - activeCount > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-border bg-muted/40 text-muted-foreground"}`}
-          >
-            {"\u23F8\uFE0F"} <span className="tabular-nums">{depots.length - activeCount}</span> Inactive
-          </span>
+        <div className="grid grid-cols-3 divide-x border-b">
+          <div className="flex flex-col items-center py-2">
+            <span className="font-bold text-base text-foreground tabular-nums">{depots.length}</span>
+            <span className="font-medium text-[9px] text-muted-foreground uppercase tracking-wide">Total</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <span className="font-bold text-base text-green-600 tabular-nums">{activeCount}</span>
+            <span className="font-medium text-[9px] text-green-600 uppercase tracking-wide">Active</span>
+          </div>
+          <div className="flex flex-col items-center py-2">
+            <span
+              className={`font-bold text-base tabular-nums ${depots.length - activeCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
+            >
+              {depots.length - activeCount}
+            </span>
+            <span
+              className={`font-medium text-[9px] uppercase tracking-wide ${depots.length - activeCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
+            >
+              Inactive
+            </span>
+          </div>
         </div>
 
         {syncMsg && (

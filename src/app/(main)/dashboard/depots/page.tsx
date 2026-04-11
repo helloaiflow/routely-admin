@@ -26,6 +26,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import "leaflet/dist/leaflet.css";
+
 interface Depot {
   _id: string;
   spoke_depot_id: string;
@@ -90,24 +92,6 @@ const AVATAR_COLORS = [
   "bg-rose-100 text-rose-700",
   "bg-teal-100 text-teal-700",
 ];
-
-declare global {
-  interface Window {
-    google: typeof google;
-  }
-}
-
-interface AdvancedMarkerElementType {
-  new (opts: {
-    map: google.maps.Map;
-    position: google.maps.LatLng;
-    title?: string;
-    content?: HTMLElement;
-  }): {
-    map: google.maps.Map | null;
-    position: google.maps.LatLng | null;
-  };
-}
 
 function AddressAutocomplete({
   value,
@@ -204,176 +188,83 @@ function AddressAutocomplete({
   );
 }
 
-function buildMarkerEl(name: string) {
-  const el = document.createElement("div");
-  el.innerHTML = `
-      <div style="
-        background:#2563EB;
-        border:3px solid #fff;
-        border-radius:50% 50% 50% 0;
-        box-shadow:0 4px 16px rgba(37,99,235,0.45);
-        transform:rotate(-45deg);
-        width:36px;height:36px;
-        display:flex;align-items:center;justify-content:center;
-        cursor:pointer;
-        transition:transform .15s;
-      ">
-        <span style="transform:rotate(45deg);font-size:15px;line-height:1">\u{1F3E2}</span>
-      </div>
-      <div style="
-        margin-top:4px;
-        background:#fff;
-        border:1px solid #e2e8f0;
-        border-radius:6px;
-        padding:3px 8px;
-        font-size:11px;
-        font-weight:600;
-        color:#1e293b;
-        box-shadow:0 2px 8px rgba(0,0,0,.10);
-        white-space:nowrap;
-        text-align:center;
-        max-width:160px;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      ">${name}</div>`;
-  return el;
-}
-
 function StaticMap({ depot }: { depot: Depot | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<{ map: google.maps.Map | null } | null>(null);
+  const mapRef = useRef<import("leaflet").Map | null>(null);
+  const markerRef = useRef<import("leaflet").Marker | null>(null);
   const mapReadyRef = useRef(false);
   const depotRef = useRef<Depot | null>(depot);
   depotRef.current = depot;
 
-  const flyToAddress = useCallback(async (dep: Depot) => {
-    if (!mapRef.current || !window.google?.maps) return;
-    const parts = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean);
-    if (!parts.length) return;
-    new window.google.maps.Geocoder().geocode({ address: parts.join(", ") }, async (results, status) => {
-      if (status !== "OK" || !results?.[0] || !mapRef.current) return;
-      const loc = results[0].geometry.location;
-
-      // Remove old marker
+  const flyTo = useCallback(async (dep: Depot) => {
+    if (!mapRef.current) return;
+    const addr = [dep.address, dep.city, dep.state, dep.zipcode].filter(Boolean).join(", ");
+    if (!addr.trim()) return;
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1&countrycodes=us`,
+        { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0" } },
+      );
+      const data = await res.json();
+      if (!data.length || !mapRef.current) return;
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const L = await import("leaflet");
+      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2, easeLinearity: 0.25 });
       if (markerRef.current) {
-        markerRef.current.map = null;
+        markerRef.current.remove();
         markerRef.current = null;
       }
-
-      // Zoom in first, then pan smoothly
-      mapRef.current.setZoom(17);
-      mapRef.current.panTo(loc);
-
-      // Create AdvancedMarkerElement
-      try {
-        const { AdvancedMarkerElement } = await (
-          window.google.maps as unknown as {
-            importLibrary: (lib: string) => Promise<{ AdvancedMarkerElement: AdvancedMarkerElementType }>;
-          }
-        ).importLibrary("marker");
-        markerRef.current = new AdvancedMarkerElement({
-          map: mapRef.current,
-          position: loc,
-          title: dep.name,
-          content: buildMarkerEl(dep.name),
-        });
-      } catch {
-        // Fallback to classic marker if AdvancedMarker fails
-        const classic = new window.google.maps.Marker({
-          position: loc,
-          map: mapRef.current,
-          title: dep.name,
-          animation: window.google.maps.Animation.DROP,
-          icon: {
-            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
-            scale: 2.2,
-            fillColor: "#2563EB",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2.5,
-            anchor: new window.google.maps.Point(12, 22),
-          },
-        });
-        markerRef.current = classic as unknown as { map: google.maps.Map | null };
-      }
-    });
+      const icon = L.divIcon({
+        html: `<div style="display:flex;flex-direction:column;align-items:center">
+          <div style="width:36px;height:36px;background:#2563EB;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,99,235,.45)">
+            <span style="transform:rotate(45deg);font-size:16px">\u{1F3E2}</span>
+          </div>
+          <div style="margin-top:5px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;color:#1e293b;box-shadow:0 2px 8px rgba(0,0,0,.10);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">${dep.name}</div>
+        </div>`,
+        className: "",
+        iconSize: [36, 60],
+        iconAnchor: [18, 36],
+      });
+      markerRef.current = L.marker([lat, lng], { icon }).addTo(mapRef.current);
+    } catch {
+      /* silent */
+    }
   }, []);
 
-  const initMap = useCallback(() => {
-    if (!containerRef.current || mapReadyRef.current) return;
-    mapRef.current = new window.google.maps.Map(containerRef.current, {
-      zoom: 11,
-      center: { lat: 26.2, lng: -80.25 },
-      mapId: "routely_depot_map",
-      mapTypeControl: true,
-      mapTypeControlOptions: {
-        style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-        position: window.google.maps.ControlPosition.TOP_RIGHT,
-        mapTypeIds: ["roadmap", "satellite", "hybrid"],
-      },
-      streetViewControl: true,
-      streetViewControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
-      zoomControl: true,
-      zoomControlOptions: { position: window.google.maps.ControlPosition.RIGHT_BOTTOM },
-      fullscreenControl: false,
-      clickableIcons: false,
-      styles: [
-        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-        { featureType: "transit", stylers: [{ visibility: "off" }] },
-        { featureType: "road", elementType: "geometry", stylers: [{ color: "#f4f4f4" }] },
-        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#e0e0e0" }] },
-        { featureType: "water", elementType: "geometry", stylers: [{ color: "#c8e6f5" }] },
-        { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
-      ],
-    });
-    mapReadyRef.current = true;
-    if (depotRef.current?.address) flyToAddress(depotRef.current);
-  }, [flyToAddress]);
-
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return;
-    const scriptId = "gmap-script";
-    const load = () => {
-      if (window.google?.maps) {
-        initMap();
-        return;
-      }
-      if (!document.getElementById(scriptId)) {
-        const s = document.createElement("script");
-        s.id = scriptId;
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=beta&libraries=marker`;
-        s.async = true;
-        s.defer = true;
-        s.onload = initMap;
-        document.head.appendChild(s);
-      } else {
-        const iv = setInterval(() => {
-          if (window.google?.maps) {
-            clearInterval(iv);
-            initMap();
-          }
-        }, 100);
-        return () => clearInterval(iv);
-      }
-    };
-    load();
-  }, [initMap]);
+    if (typeof window === "undefined" || mapReadyRef.current || !containerRef.current) return;
+    (async () => {
+      const L = await import("leaflet");
+      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+      if (!containerRef.current) return;
+      mapRef.current = L.map(containerRef.current, { zoomControl: true, attributionControl: false }).setView(
+        [26.2, -80.25],
+        10,
+      );
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
+      }).addTo(mapRef.current);
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+        mapReadyRef.current = true;
+        if (depotRef.current?.address) flyTo(depotRef.current);
+      }, 400);
+    })();
+  }, [flyTo]);
 
   useEffect(() => {
     if (!mapReadyRef.current) return;
     if (depot?.address) {
-      flyToAddress(depot);
+      flyTo(depot);
     } else {
       if (markerRef.current) {
-        markerRef.current.map = null;
+        markerRef.current.remove();
         markerRef.current = null;
       }
-      mapRef.current?.setCenter({ lat: 26.2, lng: -80.25 });
-      mapRef.current?.setZoom(11);
+      mapRef.current?.setView([26.2, -80.25], 10);
     }
-  }, [depot, flyToAddress]);
+  }, [depot, flyTo]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }
@@ -414,360 +305,385 @@ function DetailPanel({
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const Sec = ({ label }: { label: string }) => (
-    <p className="mt-5 mb-2 font-bold text-[10px] text-muted-foreground/50 uppercase tracking-widest first:mt-0">
-      {label}
-    </p>
+  const SectionLabel = ({ children }: { children: string }) => (
+    <p className="mb-2 font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-widest">{children}</p>
+  );
+
+  const CardWrap = ({ children }: { children: React.ReactNode }) => (
+    <div className="divide-y overflow-hidden rounded-xl border bg-card">{children}</div>
+  );
+
+  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <div className="flex-1 text-right">{children}</div>
+    </div>
   );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-start gap-2 border-b px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="font-semibold text-sm leading-tight">{depot.name}</p>
-            {depot.active !== false ? (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-[9px] text-green-700">
-                Active
-              </span>
-            ) : (
-              <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-[9px] text-muted-foreground">
-                Inactive
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {depot.rt_depot_id && (
-              <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {depot.rt_depot_id}
-              </code>
-            )}
-            {depot.synced_at && (
-              <span className="text-[10px] text-muted-foreground">
-                Synced {new Date(depot.synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              </span>
-            )}
-          </div>
+      {/* Header */}
+      <div className="border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <p className="flex-1 truncate font-semibold text-sm leading-tight">{depot.name}</p>
+          {depot.active !== false ? (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-[9px] text-green-700">
+              Active
+            </span>
+          ) : (
+            <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-[9px] text-muted-foreground">
+              Inactive
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-2">
+          {depot.rt_depot_id && (
+            <code className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {depot.rt_depot_id}
+            </code>
+          )}
+          {depot.synced_at && (
+            <span className="text-[10px] text-muted-foreground">
+              Synced {new Date(depot.synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Sec label="Location" />
-        <div className="space-y-2">
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Street address</Label>
-            <AddressAutocomplete
-              value={form.address || ""}
-              onChange={(v) => set("address", v)}
-              onSelect={(a) =>
-                setForm((p) => ({ ...p, address: a.address, city: a.city, state: a.state, zipcode: a.zipcode }))
-              }
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              { k: "city", p: "City" },
-              { k: "state", p: "ST", max: 2 },
-              { k: "zipcode", p: "ZIP" },
-            ].map((f) => (
-              <div key={f.k}>
-                <Label className="mb-1 block text-[10px] text-muted-foreground">{f.p}</Label>
+      {/* Scrollable body */}
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        {/* LOCATION */}
+        <div>
+          <SectionLabel>Location</SectionLabel>
+          <CardWrap>
+            <div className="px-3 py-2">
+              <p className="mb-1 text-[10px] text-muted-foreground">Street address</p>
+              <AddressAutocomplete
+                value={form.address || ""}
+                onChange={(v) => set("address", v)}
+                onSelect={(a) =>
+                  setForm((p) => ({ ...p, address: a.address, city: a.city, state: a.state, zipcode: a.zipcode }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-3 divide-x px-0">
+              {(
+                [
+                  ["city", "City"],
+                  ["state", "ST", 2],
+                  ["zipcode", "ZIP"],
+                ] as [keyof Depot, string, number?][]
+              ).map(([k, lbl, max]) => (
+                <div key={k as string} className="px-3 py-2">
+                  <p className="mb-1 text-[10px] text-muted-foreground">{lbl}</p>
+                  <Input
+                    value={((form as Record<string, unknown>)[k as string] as string) || ""}
+                    onChange={(e) => set(k, e.target.value)}
+                    maxLength={max}
+                    placeholder={lbl}
+                    className="h-7 text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="px-3 py-2">
+              <p className="mb-1.5 text-[10px] text-muted-foreground">End location</p>
+              <div className="flex gap-1.5">
+                {[
+                  { id: "return", label: "Return to start" },
+                  { id: "last_package", label: "Last package" },
+                  { id: "custom", label: "Other address" },
+                ].map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => set("end_location", e.id)}
+                    className={`flex-1 rounded-lg border px-1.5 py-1.5 text-center font-medium text-[10px] transition-all ${form.end_location === e.id ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+              {form.end_location === "custom" && (
+                <div className="mt-2">
+                  <AddressAutocomplete
+                    value={form.custom_end_address || ""}
+                    onChange={(v) => set("custom_end_address", v)}
+                    onSelect={(a) => set("custom_end_address", [a.address, a.city, a.state].filter(Boolean).join(", "))}
+                    placeholder="Search end address..."
+                  />
+                </div>
+              )}
+            </div>
+          </CardWrap>
+        </div>
+
+        {/* SCHEDULE */}
+        <div>
+          <SectionLabel>Schedule</SectionLabel>
+          <CardWrap>
+            <div className="grid grid-cols-2 divide-x">
+              <div className="px-3 py-2">
+                <p className="mb-1 text-[10px] text-muted-foreground">Start time</p>
                 <Input
-                  value={((form as Record<string, unknown>)[f.k] as string) || ""}
-                  onChange={(e) => set(f.k as keyof Depot, e.target.value)}
-                  className="h-8 text-xs"
-                  maxLength={f.max}
-                  placeholder={f.p}
+                  type="time"
+                  value={form.start_time || "07:00"}
+                  onChange={(e) => set("start_time", e.target.value)}
+                  className="h-7 text-xs"
                 />
               </div>
-            ))}
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">End location</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { id: "return", label: "Return to start" },
-                { id: "last_package", label: "Last package" },
-                { id: "custom", label: "Other address" },
-              ].map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => set("end_location", e.id)}
-                  className={`rounded-lg border px-2 py-1.5 text-center font-medium text-[10px] transition-all ${form.end_location === e.id ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-                >
-                  {e.label}
-                </button>
-              ))}
-            </div>
-            {form.end_location === "custom" && (
-              <div className="mt-1.5">
-                <AddressAutocomplete
-                  value={form.custom_end_address || ""}
-                  onChange={(v) => set("custom_end_address", v)}
-                  onSelect={(a) => set("custom_end_address", [a.address, a.city, a.state].filter(Boolean).join(", "))}
-                  placeholder="Search end address..."
+              <div className="px-3 py-2">
+                <p className="mb-1 text-[10px] text-muted-foreground">End time</p>
+                <Input
+                  type="time"
+                  value={form.end_time || ""}
+                  onChange={(e) => set("end_time", e.target.value)}
+                  className="h-7 text-xs"
                 />
               </div>
-            )}
-          </div>
+            </div>
+            <Row label="Timezone">
+              <Select value={form.timezone || "America/New_York"} onValueChange={(v) => set("timezone", v)}>
+                <SelectTrigger className="h-7 w-36 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="America/New_York">Eastern (ET)</SelectItem>
+                  <SelectItem value="America/Chicago">Central (CT)</SelectItem>
+                  <SelectItem value="America/Denver">Mountain (MT)</SelectItem>
+                  <SelectItem value="America/Los_Angeles">Pacific (PT)</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <div className="px-3 py-2">
+              <p className="mb-1.5 text-[10px] text-muted-foreground">Working days</p>
+              <div className="flex gap-1">
+                {DAYS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => toggleDay(d)}
+                    className={`h-6 w-7 rounded-md border font-semibold text-[9px] transition-all ${(form.working_days || []).includes(d) ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {DAY_L[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Row label="Time per stop">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground text-xs">{form.estimated_time_per_stop || 10} min</span>
+                <input
+                  type="range"
+                  min="2"
+                  max="60"
+                  step="1"
+                  value={form.estimated_time_per_stop || 10}
+                  onChange={(e) => set("estimated_time_per_stop", parseInt(e.target.value, 10))}
+                  className="h-1.5 w-24 accent-primary"
+                />
+              </div>
+            </Row>
+          </CardWrap>
         </div>
 
-        <Sec label="Schedule" />
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-1.5">
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">Start time</Label>
-              <Input
-                type="time"
-                value={form.start_time || "07:00"}
-                onChange={(e) => set("start_time", e.target.value)}
-                className="h-8 text-xs"
-              />
+        {/* ROUTE CONFIG */}
+        <div>
+          <SectionLabel>Route config</SectionLabel>
+          <CardWrap>
+            <div className="px-3 py-2">
+              <p className="mb-1.5 text-[10px] text-muted-foreground">Vehicle type</p>
+              <div className="flex gap-2">
+                {VEHS.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => set("vehicle_type", v.id)}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 font-medium text-xs transition-all ${form.vehicle_type === v.id ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    <span className="text-sm">{v.emoji}</span>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">End time</Label>
-              <Input
-                type="time"
-                value={form.end_time || ""}
-                onChange={(e) => set("end_time", e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Timezone</Label>
-            <Select value={form.timezone || "America/New_York"} onValueChange={(v) => set("timezone", v)}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="America/New_York">Eastern (ET)</SelectItem>
-                <SelectItem value="America/Chicago">Central (CT)</SelectItem>
-                <SelectItem value="America/Denver">Mountain (MT)</SelectItem>
-                <SelectItem value="America/Los_Angeles">Pacific (PT)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Working days</Label>
-            <div className="flex flex-wrap gap-1">
-              {DAYS.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => toggleDay(d)}
-                  className={`h-7 w-8 rounded-lg border font-semibold text-[10px] transition-all ${(form.working_days || []).includes(d) ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
-                >
-                  {DAY_L[d]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">
-              Time per stop: <strong className="text-foreground">{form.estimated_time_per_stop || 10} min</strong>
-            </Label>
-            <input
-              type="range"
-              min="2"
-              max="60"
-              step="1"
-              value={form.estimated_time_per_stop || 10}
-              onChange={(e) => set("estimated_time_per_stop", parseInt(e.target.value, 10))}
-              className="h-1.5 w-full accent-primary"
-            />
-          </div>
-        </div>
-
-        <Sec label="Route Config" />
-        <div className="space-y-2">
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Vehicle type</Label>
-            <div className="flex gap-2">
-              {VEHS.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => set("vehicle_type", v.id)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 font-medium text-xs transition-all ${form.vehicle_type === v.id ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-                >
-                  <span>{v.emoji}</span>
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] text-muted-foreground">Side of road</Label>
-            <div className="flex gap-1.5">
-              {["either", "right", "left"].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => set("side_of_road", s)}
-                  className={`flex-1 rounded-lg border py-1.5 font-medium text-[10px] transition-all ${form.side_of_road === s ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-                >
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">
-                Avg speed: <strong className="text-foreground">{form.avg_speed_mph || 35} mph</strong>
-              </Label>
-              <input
-                type="range"
-                min="15"
-                max="80"
-                step="5"
-                value={form.avg_speed_mph || 35}
-                onChange={(e) => set("avg_speed_mph", parseInt(e.target.value, 10))}
-                className="h-1.5 w-full accent-primary"
-              />
-            </div>
-            <div>
-              <Label className="mb-1 block text-[10px] text-muted-foreground">Max stops / driver</Label>
+            <Row label="Side of road">
+              <div className="flex gap-1">
+                {["either", "right", "left"].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => set("side_of_road", s)}
+                    className={`rounded-md border px-2 py-1 font-medium text-[10px] transition-all ${form.side_of_road === s ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Avg speed">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground text-xs">{form.avg_speed_mph || 35} mph</span>
+                <input
+                  type="range"
+                  min="15"
+                  max="80"
+                  step="5"
+                  value={form.avg_speed_mph || 35}
+                  onChange={(e) => set("avg_speed_mph", parseInt(e.target.value, 10))}
+                  className="h-1.5 w-24 accent-primary"
+                />
+              </div>
+            </Row>
+            <Row label="Max stops / driver">
               <Input
                 type="number"
                 value={form.max_stops_per_driver ?? ""}
                 onChange={(e) => set("max_stops_per_driver", e.target.value ? parseInt(e.target.value, 10) : null)}
                 placeholder="Unlimited"
-                className="h-8 text-xs"
+                className="h-7 w-28 text-right text-xs"
                 min={1}
               />
-            </div>
-          </div>
+            </Row>
+          </CardWrap>
         </div>
 
-        <Sec label="Tenant" />
-        <Select
-          value={form.tenant_id ? String(form.tenant_id) : ""}
-          onValueChange={(v) => set("tenant_id", parseInt(v, 10))}
-        >
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder="Select tenant...">
-              {form.tenant_id &&
-                (() => {
-                  const t = tenants.find((x) => x.tenant_id === form.tenant_id);
-                  const tName = t?.company_name || t?.contact_name || `Tenant ${form.tenant_id}`;
-                  const colorCls = AVATAR_COLORS[form.tenant_id % AVATAR_COLORS.length];
-                  return (
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${colorCls}`}
-                      >
-                        {avatar(tName)}
-                      </div>
-                      <span>{tName}</span>
-                    </div>
-                  );
-                })()}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent style={{ zIndex: 9999 }}>
-            {tenants.map((t) => {
-              const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
-              const colorCls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
-              return (
-                <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${colorCls}`}
-                    >
-                      {avatar(tName)}
-                    </div>
-                    <span>{tName}</span>
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+        {/* TENANT */}
+        <div>
+          <SectionLabel>Tenant</SectionLabel>
+          <CardWrap>
+            <div className="px-3 py-2">
+              <Select
+                value={form.tenant_id ? String(form.tenant_id) : ""}
+                onValueChange={(v) => set("tenant_id", parseInt(v, 10))}
+              >
+                <SelectTrigger className="h-8 w-full text-xs">
+                  <SelectValue placeholder="Select tenant...">
+                    {form.tenant_id &&
+                      (() => {
+                        const t = tenants.find((x) => x.tenant_id === form.tenant_id);
+                        const tName = t?.company_name || t?.contact_name || `Tenant ${form.tenant_id}`;
+                        const cls = AVATAR_COLORS[form.tenant_id % AVATAR_COLORS.length];
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${cls}`}
+                            >
+                              {avatar(tName)}
+                            </div>
+                            <span>{tName}</span>
+                          </div>
+                        );
+                      })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent style={{ zIndex: 9999 }}>
+                  {tenants.map((t) => {
+                    const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
+                    const cls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
+                    return (
+                      <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${cls}`}
+                          >
+                            {avatar(tName)}
+                          </div>
+                          <span>{tName}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardWrap>
+        </div>
 
-        <Sec label="Drivers" />
-        {drivers.length === 0 ? (
-          <p className="text-[11px] text-muted-foreground">No drivers found</p>
-        ) : (
-          <div className="rounded-xl border bg-muted/20 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">Drivers ({drivers.length})</span>
-              <span className="font-medium text-[10px] text-primary">
-                {(form.assigned_drivers || []).length} assigned
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {drivers.map((d, i) => {
-                const dName = d.full_name || d.name || "Driver";
-                const isAssigned = (form.assigned_drivers || []).includes(d._id);
-                const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
-                return (
-                  <button
-                    key={d._id}
-                    type="button"
-                    onClick={() => toggleDriver(d._id)}
-                    title={dName}
-                    className="flex items-center transition-all"
-                  >
-                    <div
-                      className={`relative flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-[10px] transition-all ${colorCls} ${isAssigned ? "border-primary opacity-100 ring-1 ring-primary ring-offset-1" : "border-transparent opacity-50 hover:opacity-80"}`}
-                    >
-                      {avatar(dName)}
-                      {isAssigned && (
-                        <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-primary">
-                          <Check className="h-2 w-2 text-white" />
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {(form.assigned_drivers || []).length > 0 && (
-              <div className="mt-2.5 flex flex-wrap gap-1.5 border-t pt-2.5">
-                {(form.assigned_drivers || []).map((id, i) => {
-                  const d = drivers.find((x) => x._id === id);
-                  if (!d) return null;
-                  const dName = d.full_name || d.name || "Driver";
-                  const colorCls = AVATAR_COLORS[i % AVATAR_COLORS.length];
-                  return (
-                    <span
-                      key={id}
-                      className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium text-[10px] ${colorCls}`}
-                    >
-                      {avatar(dName)} {dName.split(" ").slice(0, 2).join(" ")}
-                      <button
-                        type="button"
-                        onClick={() => toggleDriver(id)}
-                        className="ml-0.5 opacity-60 hover:opacity-100"
-                      >
-                        <X className="h-2.5 w-2.5" />
-                      </button>
+        {/* DRIVERS */}
+        <div>
+          <SectionLabel>Drivers</SectionLabel>
+          <CardWrap>
+            <div className="px-3 py-3">
+              {drivers.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">No drivers found</p>
+              ) : (
+                <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">Drivers ({drivers.length})</span>
+                    <span className="font-medium text-[10px] text-primary">
+                      {(form.assigned_drivers || []).length} assigned
                     </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {drivers.map((d, i) => {
+                      const dName = d.full_name || d.name || "Driver";
+                      const isAssigned = (form.assigned_drivers || []).includes(d._id);
+                      const cls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                      return (
+                        <button key={d._id} type="button" onClick={() => toggleDriver(d._id)} title={dName}>
+                          <div
+                            className={`relative flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-[10px] transition-all ${cls} ${isAssigned ? "border-primary opacity-100 ring-2 ring-primary ring-offset-1" : "border-transparent opacity-40 hover:opacity-70"}`}
+                          >
+                            {avatar(dName)}
+                            {isAssigned && (
+                              <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-primary">
+                                <Check className="h-2 w-2 text-white" />
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(form.assigned_drivers || []).length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5 border-t pt-2.5">
+                      {(form.assigned_drivers || []).map((id, i) => {
+                        const d = drivers.find((x) => x._id === id);
+                        if (!d) return null;
+                        const dName = d.full_name || d.name || "Driver";
+                        const cls = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                        return (
+                          <span
+                            key={id}
+                            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium text-[10px] ${cls}`}
+                          >
+                            {avatar(dName)} {dName.split(" ").slice(0, 2).join(" ")}
+                            <button
+                              type="button"
+                              onClick={() => toggleDriver(id)}
+                              className="ml-0.5 opacity-60 hover:opacity-100"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </CardWrap>
+        </div>
 
-        <Sec label="IDs" />
-        <div className="space-y-1.5 rounded-xl border bg-muted/30 px-3 py-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">RT Depot ID</span>
-            <code className="font-mono font-semibold text-xs">{depot.rt_depot_id || "\u2014"}</code>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">Spoke ID</span>
-            <code className="font-mono text-[10px] text-muted-foreground">
-              {depot.spoke_depot_id.replace("depots/", "")}
-            </code>
-          </div>
+        {/* IDS */}
+        <div>
+          <SectionLabel>IDs</SectionLabel>
+          <CardWrap>
+            <Row label="RT Depot ID">
+              <code className="font-mono font-semibold text-xs">{depot.rt_depot_id || "\u2014"}</code>
+            </Row>
+            <Row label="Spoke ID">
+              <code className="font-mono text-[10px] text-muted-foreground">
+                {depot.spoke_depot_id.replace("depots/", "")}
+              </code>
+            </Row>
+          </CardWrap>
         </div>
       </div>
 
+      {/* Footer */}
       <div className="border-t px-4 py-3">
         <Button onClick={handleSave} disabled={saving} size="sm" className="w-full gap-2">
           {saving ? (

@@ -131,9 +131,9 @@ function AddressAutocomplete({
       </div>
       {open && suggestions.length > 0 && (
         <div className="absolute top-full z-50 mt-1 w-full overflow-hidden rounded-xl border bg-background shadow-lg">
-          {suggestions.map((s, i) => (
+          {suggestions.map((s) => (
             <button
-              key={i}
+              key={s.main + s.sub}
               type="button"
               onMouseDown={() => {
                 onSelect(s.data as { address: string; city: string; state: string; zipcode: string });
@@ -172,7 +172,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
         if (markerRef.current) markerRef.current.setMap(null);
         markerRef.current = new window.google.maps.Marker({
           position: loc,
-          map: mapInstanceRef.current!,
+          map: mapInstanceRef.current ?? undefined,
           title: name,
           icon: {
             path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
@@ -211,10 +211,6 @@ function StaticMap({ depot }: { depot: Depot | null }) {
         ],
       });
       mapReadyRef.current = true;
-      if (depot?.address) {
-        const full = [depot.address, depot.city, depot.state, depot.zipcode].filter(Boolean).join(", ");
-        placePin(full, depot.name);
-      }
     };
 
     if (window.google?.maps) {
@@ -238,7 +234,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       }, 100);
       return () => clearInterval(iv);
     }
-  }, [depot.zipcode, depot?.address, placePin, depot.state, depot.name, depot.city]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mapReadyRef.current || !depot) return;
@@ -564,6 +560,8 @@ export default function DepotsPage() {
   const [addName, setAddName] = useState("");
   const [addSpokeId, setAddSpokeId] = useState("");
   const [addSaving, setAddSaving] = useState(false);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -573,7 +571,7 @@ export default function DepotsPage() {
         const d = await dr.value.json();
         const list: Depot[] = d.list || [];
         setDepots(list);
-        if (!selected && list.length > 0) setSelected(list[0]);
+        if (!selectedRef.current && list.length > 0) setSelected(list[0]);
       }
       if (tr.status === "fulfilled" && tr.value.ok) {
         const t = await tr.value.json();
@@ -583,7 +581,7 @@ export default function DepotsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchAll();

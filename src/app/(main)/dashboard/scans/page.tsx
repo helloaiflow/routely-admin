@@ -25,6 +25,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 
+import { RouteMap } from "@/components/route-map";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -32,8 +33,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-
-import "leaflet/dist/leaflet.css";
 
 interface Scan {
   _id: string;
@@ -184,285 +183,12 @@ function fmt(d?: string, mode: "time" | "date" = "time") {
   return dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-async function geocodeAddress(address: string): Promise<[number, number] | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us`,
-      { headers: { "Accept-Language": "en", "User-Agent": "Routely-Admin/1.0 (routelypro.com)" } },
-    );
-    const results = await res.json();
-    if (!results.length) return null;
-    return [Number.parseFloat(results[0].lat), Number.parseFloat(results[0].lon)];
-  } catch {
-    return null;
-  }
-}
-
 function normalizeAddressForGeocoding(scan: Scan): string {
   const raw = scan.full_address || [scan.address, scan.city, scan.state, scan.zipcode].filter(Boolean).join(", ");
   return raw.replace(/\b\w+/g, (word) => {
     if (/^[A-Z]{2}$/.test(word) || /^\d+$/.test(word)) return word;
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   });
-}
-
-interface InfoCardState {
-  scan: Scan;
-  x: number;
-  y: number;
-}
-
-// ── Leaflet Map ──────────────────────────────────────────────────────────────
-function LeafletMap({
-  scan,
-  checkedScans,
-  onSelectScan,
-}: {
-  scan: Scan | null;
-  checkedScans: Scan[];
-  onSelectScan: (s: Scan) => void;
-}) {
-  const mapRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
-  const multiMarkersRef = useRef<L.Marker[]>([]);
-  const contRef = useRef<HTMLDivElement>(null);
-  const scanRef = useRef<Scan | null>(null);
-  const mapReadyRef = useRef(false);
-  const pendingScanRef = useRef<Scan | null>(null);
-  const [geocoding, setGeocoding] = useState(false);
-  const [infoCard, setInfoCard] = useState<InfoCardState | null>(null);
-  scanRef.current = scan;
-
-  const placeMarkerAndFly = useCallback(async (targetScan: Scan) => {
-    if (!mapRef.current) return;
-    const L = await import("leaflet");
-    const address = normalizeAddressForGeocoding(targetScan);
-    if (!address) return;
-    setGeocoding(true);
-    try {
-      const ll = await geocodeAddress(address);
-      if (!ll) {
-        mapRef.current.setView([26.1, -80.2], 11);
-        return;
-      }
-      if (markerRef.current) {
-        markerRef.current.remove();
-        markerRef.current = null;
-      }
-      const rc = getRouteColor(targetScan.route || "");
-      const icon = L.divIcon({
-        html: `<div style="position:relative;width:36px;height:44px"><div style="position:absolute;top:0;left:4px;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:3px solid white;box-shadow:0 4px 20px ${rc.glow},0 2px 8px rgba(0,0,0,0.3)"></div><div style="position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:14px;z-index:10;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4))">${pkgEmoji(targetScan.type)}</div></div>`,
-        className: "",
-        iconSize: [36, 44],
-        iconAnchor: [18, 44],
-      });
-      const marker = L.marker(ll, { icon }).addTo(mapRef.current);
-      marker.on("click", () => {
-        const s = scanRef.current;
-        if (!s || !mapRef.current || !contRef.current) return;
-        const point = mapRef.current.latLngToContainerPoint(ll);
-        const cw = contRef.current.offsetWidth;
-        const cardW = 260;
-        setInfoCard({
-          scan: s,
-          x: Math.max(8, Math.min(point.x - cardW / 2, cw - cardW - 8)),
-          y: Math.max(8, point.y - 160),
-        });
-      });
-      markerRef.current = marker;
-      mapRef.current.flyTo(ll, 15, { duration: 1.4, easeLinearity: 0.2 });
-    } finally {
-      setGeocoding(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || mapRef.current || !contRef.current) return;
-    (async () => {
-      const L = await import("leaflet");
-      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
-      if (!contRef.current) return;
-      mapRef.current = L.map(contRef.current, { zoomControl: true, attributionControl: false }).setView(
-        [26.1, -80.2],
-        10,
-      );
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapRef.current);
-      setTimeout(() => mapRef.current?.invalidateSize(), 300);
-      setTimeout(() => {
-        mapRef.current?.invalidateSize();
-        mapReadyRef.current = true;
-        if (pendingScanRef.current) {
-          placeMarkerAndFly(pendingScanRef.current);
-          pendingScanRef.current = null;
-        }
-      }, 900);
-    })();
-  }, [placeMarkerAndFly]);
-
-  // Single scan selected — use placeMarkerAndFly or queue if map not ready
-  useEffect(() => {
-    if (!scan) return;
-    setInfoCard(null);
-    if (!mapReadyRef.current) {
-      pendingScanRef.current = scan;
-      return;
-    }
-    pendingScanRef.current = null;
-    placeMarkerAndFly(scan);
-  }, [scan, placeMarkerAndFly]);
-
-  // Batch → geocode all checked + fitBounds
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (checkedScans.length < 2) {
-      for (const m of multiMarkersRef.current) m.remove();
-      multiMarkersRef.current = [];
-      return;
-    }
-    setInfoCard(null);
-    (async () => {
-      const L = await import("leaflet");
-      if (!mapRef.current) return;
-      for (const m of multiMarkersRef.current) m.remove();
-      multiMarkersRef.current = [];
-      if (markerRef.current) {
-        markerRef.current.remove();
-        markerRef.current = null;
-      }
-      const settled = await Promise.allSettled(
-        checkedScans.map(async (s) => {
-          const addr = normalizeAddressForGeocoding(s);
-          return { s, ll: await geocodeAddress(addr) };
-        }),
-      );
-      const latlngs: [number, number][] = [];
-      for (const r of settled) {
-        if (r.status !== "fulfilled" || !r.value.ll) continue;
-        const { s, ll } = r.value;
-        const rc = getRouteColor(s.route || "");
-        const icon = L.divIcon({
-          html: `<div style="position:relative;width:28px;height:36px"><div style="position:absolute;top:0;left:2px;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${rc.text};border:2px solid white;box-shadow:0 3px 10px ${rc.glow}"></div><div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:11px;z-index:10">${pkgEmoji(s.type)}</div></div>`,
-          className: "",
-          iconSize: [28, 36],
-          iconAnchor: [14, 36],
-        });
-        if (mapRef.current) multiMarkersRef.current.push(L.marker(ll, { icon }).addTo(mapRef.current));
-        latlngs.push(ll);
-      }
-      if (latlngs.length > 0) mapRef.current.fitBounds(L.latLngBounds(latlngs), { padding: [48, 48], maxZoom: 14 });
-    })();
-  }, [checkedScans]);
-
-  return (
-    <div style={{ position: "absolute", inset: 0 }} className="overflow-hidden rounded-xl border">
-      <div ref={contRef} style={{ position: "absolute", inset: 0 }} />
-
-      {/* Empty state */}
-      {!scan && checkedScans.length === 0 && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background/60 text-muted-foreground backdrop-blur-[2px]">
-          <motion.div
-            className="relative"
-            animate={{ scale: [1, 1.06, 1] }}
-            transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
-          >
-            <MapPin className="h-14 w-14 opacity-15" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="h-4 w-4 animate-ping rounded-full bg-primary/30" />
-            </div>
-          </motion.div>
-          <div className="rounded-2xl border bg-background/95 px-6 py-4 text-center shadow-lg backdrop-blur-md">
-            <p className="font-semibold text-sm">Select a scan</p>
-            <p className="mt-0.5 text-xs opacity-50">Pin will appear on the map</p>
-          </div>
-          <p className="text-[10px] opacity-30">OpenStreetMap · Nominatim</p>
-        </div>
-      )}
-
-      {/* Geocoding indicator */}
-      <AnimatePresence>
-        {geocoding && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="absolute top-3 left-1/2 z-[1001] flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-4 py-2 font-semibold text-xs shadow-lg backdrop-blur-md"
-          >
-            <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-            Locating on map...
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Batch badge */}
-      <AnimatePresence>
-        {checkedScans.length >= 2 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            className="absolute bottom-4 left-1/2 z-[1001] -translate-x-1/2 rounded-full border bg-background/95 px-4 py-2 font-semibold text-xs shadow-lg backdrop-blur-md"
-          >
-            📍 {checkedScans.length} stops on map
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* InfoCard popup on marker click */}
-      <AnimatePresence>
-        {infoCard && (
-          <motion.div
-            key="infocard"
-            initial={{ opacity: 0, scale: 0.9, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 6 }}
-            transition={{ duration: 0.18 }}
-            style={{ position: "absolute", left: infoCard.x, top: infoCard.y, width: 252, zIndex: 1002 }}
-            className="rounded-2xl border bg-background/96 p-3.5 shadow-2xl backdrop-blur-md"
-          >
-            <div className="flex items-start gap-2">
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
-                style={{ background: getRouteColor(infoCard.scan.route || "").bg }}
-              >
-                {pkgEmoji(infoCard.scan.type)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-bold text-sm leading-tight">{infoCard.scan.full_name}</p>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {infoCard.scan.full_address || infoCard.scan.address}
-                </p>
-                <div className="mt-1.5">
-                  {infoCard.scan.route && <RouteBadge route={infoCard.scan.route} size="xs" />}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInfoCard(null)}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                onSelectScan(infoCard.scan);
-                setInfoCard(null);
-              }}
-              className="mt-2.5 w-full rounded-xl bg-primary/10 py-1.5 text-center font-semibold text-[11px] text-primary transition-colors hover:bg-primary/20"
-            >
-              View details →
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
 }
 
 // ── Scan Card ──────────────────────────────────────────────────────────────────
@@ -1208,16 +934,41 @@ export default function ScansPage() {
           <span className="flex-1 truncate font-medium text-xs">
             {selected
               ? `${selected.full_name} · ${selected.full_address || selected.address}`
-              : "Interactive Map · OpenStreetMap"}
+              : "Interactive Map · Google Maps"}
           </span>
           {selected?.route && <RouteBadge route={selected.route} size="xs" />}
         </div>
-        <div className="relative min-h-0 flex-1">
-          <LeafletMap
-            scan={checkedIds.size >= 2 ? null : selected}
-            checkedScans={checkedScans}
-            onSelectScan={(s) => setSelected(s)}
-          />
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          {selected && checkedIds.size < 2 ? (
+            <RouteMap
+              destinationAddress={normalizeAddressForGeocoding(selected)}
+              patientName={selected.full_name}
+              route={selected.route}
+            />
+          ) : checkedIds.size >= 2 ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-muted/20 text-muted-foreground">
+              <MapPin className="h-10 w-10 opacity-20" />
+              <p className="text-sm font-medium">Select one scan to view route</p>
+              <p className="text-xs opacity-60">Google Maps route available for single selections</p>
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-xl bg-background/60 text-muted-foreground backdrop-blur-[2px]">
+              <motion.div
+                className="relative"
+                animate={{ scale: [1, 1.06, 1] }}
+                transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
+              >
+                <MapPin className="h-14 w-14 opacity-15" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-4 w-4 animate-ping rounded-full bg-primary/30" />
+                </div>
+              </motion.div>
+              <div className="rounded-2xl border bg-background/95 px-6 py-4 text-center shadow-lg backdrop-blur-md">
+                <p className="font-semibold text-sm">Select a scan</p>
+                <p className="mt-0.5 text-xs opacity-50">Route from depot will appear here</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

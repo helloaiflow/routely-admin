@@ -2,20 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowRight,
+  AlertCircle,
+  ArrowUpRight,
   CheckCircle2,
-  DollarSign,
-  type LucideIcon,
+  ChevronDown,
+  ChevronUp,
+  Circle,
+  Clock,
+  ExternalLink,
   MapPin,
   Navigation2,
   Package,
-  PenLine,
+  Phone,
   ScanLine,
   Search,
-  Snowflake,
-  Star,
   Truck,
   X,
 } from "lucide-react";
@@ -28,6 +30,9 @@ interface ScanResult {
   full_name?: string;
   rx_pharma_id?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
   full_address?: string;
   route?: string;
   client_location?: string;
@@ -37,19 +42,32 @@ interface ScanResult {
   collect_amount?: number;
   signature_required?: boolean;
   delivery_today?: boolean;
+  phone?: string;
   created_at?: string;
 }
+
 interface StopResult {
   _id: string;
   rtstop_id?: number;
+  rtscan_id?: number;
   recipient_name?: string;
+  recipient_phone?: string;
   rx_pharma_id?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
+  full_address?: string;
   route_title?: string;
-  stop_position?: number;
+  event_type?: string;
+  delivery_state?: string;
   label_status?: string;
   delivery_succeeded?: boolean;
-  created_at?: string;
+  stop_position?: number;
+  eta_arrival?: string;
+  driver_notes?: string;
+  tracking_link?: string;
+  created_at?: string | { $date: string };
 }
 
 const ROUTE_COLORS: Record<string, { bg: string; text: string; border: string; emoji: string }> = {
@@ -71,9 +89,21 @@ function toTitle(s?: string) {
     /^[A-Z]{2}$/.test(w) || /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
   );
 }
-function fmt(d?: string) {
+
+function fmt(d?: string | { $date: string }) {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const str = typeof d === "object" ? d.$date : d;
+  return new Date(str).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+}
+
+function formatPhone(p?: string) {
+  if (!p) return "\u2014";
+  const digits = p.replace(/\D/g, "");
+  if (digits.length === 11 && digits[0] === "1") {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return p;
 }
 
 function fuzzyMatch(text: string, query: string): boolean {
@@ -81,33 +111,80 @@ function fuzzyMatch(text: string, query: string): boolean {
   const t = text.toLowerCase();
   const q = query.toLowerCase().trim();
   if (t.includes(q)) return true;
-  const words = q.split(/\s+/);
-  return words.every((w) => t.includes(w));
+  return q.split(/\s+/).every((w) => t.includes(w));
 }
 
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || query.length < 2) return <>{text}</>;
-  const q = query.toLowerCase().trim();
-  const idx = text.toLowerCase().indexOf(q);
+function Hl({ text, q }: { text: string; q: string }) {
+  if (!q || q.length < 2 || !text) return <>{text || "\u2014"}</>;
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(q.toLowerCase().trim());
   if (idx < 0) return <>{text}</>;
+  const len = q.trim().length;
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="rounded-sm bg-yellow-100 px-0.5 text-yellow-900">{text.slice(idx, idx + q.length)}</mark>
-      {text.slice(idx + q.length)}
+      <mark className="rounded bg-amber-100 px-0.5 font-semibold text-amber-900 not-italic">
+        {text.slice(idx, idx + len)}
+      </mark>
+      {text.slice(idx + len)}
     </>
   );
 }
 
+function DeliveryBadge({ state, succeeded }: { state?: string; succeeded?: boolean }) {
+  if (succeeded)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 font-semibold text-[10px] text-green-700">
+        <CheckCircle2 className="h-2.5 w-2.5" /> Delivered
+      </span>
+    );
+  const s = state?.toLowerCase() || "";
+  if (s.includes("failed") || s.includes("unattempted"))
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 font-semibold text-[10px] text-rose-700">
+        <AlertCircle className="h-2.5 w-2.5" />
+        {toTitle(state)}
+      </span>
+    );
+  if (s.includes("transit") || s.includes("allocated"))
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-[10px] text-blue-700">
+        <Truck className="h-2.5 w-2.5" />
+        {toTitle(state)}
+      </span>
+    );
+  if (s.includes("pending") || s.includes("unassigned"))
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-[10px] text-amber-700">
+        <Clock className="h-2.5 w-2.5" />
+        {toTitle(state)}
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 font-medium text-[10px] text-muted-foreground">
+      <Circle className="h-2 w-2" />
+      {toTitle(state) || "\u2014"}
+    </span>
+  );
+}
+
 const HINTS = [
-  { label: "West Sample Road", icon: "\u{1F4CD}" },
-  { label: "Coral Springs", icon: "\u{1F3D9}\uFE0F" },
-  { label: "GONZALEZ", icon: "\u{1F464}" },
-  { label: "NORTH FL", icon: "\u{1F33F}" },
-  { label: "Kissimmee", icon: "\u{1F4CD}" },
+  { label: "Kissimmee", icon: "\u{1F4CD}", color: "hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700" },
+  {
+    label: "Coral Springs",
+    icon: "\u{1F3D9}\uFE0F",
+    color: "hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700",
+  },
+  { label: "NORTH FL", icon: "\u{1F33F}", color: "hover:border-green-300 hover:bg-green-50 hover:text-green-700" },
+  { label: "GONZALEZ", icon: "\u{1F464}", color: "hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700" },
+  {
+    label: "West Sample Road",
+    icon: "\u{1F6E3}\uFE0F",
+    color: "hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700",
+  },
 ];
 
-const LABEL_STYLE: Record<string, string> = {
+const _LABEL_STYLE: Record<string, string> = {
   Match: "bg-green-50 text-green-700 border-green-200",
   Unmatch: "bg-amber-50 text-amber-700 border-amber-200",
   Human: "bg-rose-50  text-rose-700  border-rose-200",
@@ -122,6 +199,7 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [booting, setBooting] = useState(true);
   const [tab, setTab] = useState<"all" | "scans" | "stops">("all");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -153,24 +231,28 @@ export default function SearchPage() {
         setStops([]);
         return;
       }
-      const matchScan = (s: ScanResult) =>
+      const ms = (s: ScanResult) =>
         fuzzyMatch(s.full_name || "", q) ||
         fuzzyMatch(s.rx_pharma_id || "", q) ||
         fuzzyMatch(s.address || "", q) ||
         fuzzyMatch(s.full_address || "", q) ||
+        fuzzyMatch(s.city || "", q) ||
         fuzzyMatch(s.route || "", q) ||
-        fuzzyMatch(s.client_location || "", q) ||
+        fuzzyMatch(s.phone || "", q) ||
         fuzzyMatch(String(s.rtscan_id || ""), q);
-
-      const matchStop = (s: StopResult) =>
+      const mt = (s: StopResult) =>
         fuzzyMatch(s.recipient_name || "", q) ||
         fuzzyMatch(s.rx_pharma_id || "", q) ||
         fuzzyMatch(s.address || "", q) ||
+        fuzzyMatch(s.full_address || "", q) ||
+        fuzzyMatch(s.city || "", q) ||
         fuzzyMatch(s.route_title || "", q) ||
-        fuzzyMatch(String(s.rtstop_id || ""), q);
-
-      setScans(allScans.filter(matchScan).slice(0, 100));
-      setStops(allStops.filter(matchStop).slice(0, 100));
+        fuzzyMatch(s.recipient_phone || "", q) ||
+        fuzzyMatch(String(s.rtstop_id || ""), q) ||
+        fuzzyMatch(s.delivery_state || "", q) ||
+        fuzzyMatch(s.event_type || "", q);
+      setScans(allScans.filter(ms).slice(0, 150));
+      setStops(allStops.filter(mt).slice(0, 150));
     },
     [allScans, allStops],
   );
@@ -181,7 +263,7 @@ export default function SearchPage() {
     const t = setTimeout(() => {
       runFilter(query);
       setLoading(false);
-    }, 220);
+    }, 200);
     return () => clearTimeout(t);
   }, [query, runFilter, booting]);
 
@@ -192,79 +274,95 @@ export default function SearchPage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden bg-background">
-      {/* Search bar */}
-      <div className="border-b px-6 pt-5 pb-4">
-        <div className="mx-auto max-w-4xl">
+      {/* Hero search bar */}
+      <div className="border-b bg-background px-4 pt-5 pb-4 sm:px-8">
+        <div className="mx-auto max-w-5xl">
           <div className="relative">
-            <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+              {loading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+              ) : (
+                <Search className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by address, patient, Rx#, route..."
-              className="h-[52px] w-full rounded-2xl border border-border bg-background py-3.5 pr-12 pl-12 text-sm shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/10"
+              placeholder="Search by address, patient name, Rx#, phone, route..."
+              className="h-14 w-full rounded-2xl border border-border bg-background py-4 pr-14 pl-12 text-sm shadow-sm outline-none ring-0 transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:shadow-md focus:ring-2 focus:ring-primary/10"
             />
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setScans([]);
-                  setStops([]);
-                  inputRef.current?.focus();
-                }}
-                className="absolute top-1/2 right-4 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+            <AnimatePresence>
+              {query && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setScans([]);
+                    setStops([]);
+                    inputRef.current?.focus();
+                  }}
+                  className="absolute inset-y-0 right-4 flex items-center text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Hints */}
-          {!query && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 self-center text-[10px] text-muted-foreground">Try:</span>
+          {/* Hint chips */}
+          {!hasQuery && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-3 flex flex-wrap items-center gap-2"
+            >
+              <span className="font-medium text-[11px] text-muted-foreground/60">Quick search:</span>
               {HINTS.map((h) => (
                 <button
                   key={h.label}
                   type="button"
                   onClick={() => setQuery(h.label)}
-                  className="flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                  className={`flex items-center gap-1.5 rounded-xl border border-border bg-muted/30 px-3 py-1.5 font-medium text-muted-foreground text-xs transition-all ${h.color}`}
                 >
-                  <span className="text-xs">{h.icon}</span>
+                  <span>{h.icon}</span>
                   {h.label}
                 </button>
               ))}
-            </div>
+            </motion.div>
           )}
 
-          {/* Tabs */}
-          {hasQuery && !loading && (
+          {/* Tab bar */}
+          {hasQuery && !loading && total > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 3 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-3 flex items-center gap-1"
+              className="mt-3 flex flex-wrap items-center gap-1.5"
             >
-              {(["all", "scans", "stops"] as const).map((t) => {
-                const cnt = t === "all" ? scans.length + stops.length : t === "scans" ? scans.length : stops.length;
-                const active = tab === t;
+              {(
+                [
+                  { id: "all", label: "All", icon: Search, count: scans.length + stops.length },
+                  { id: "stops", label: "Stops", icon: Navigation2, count: stops.length },
+                  { id: "scans", label: "Scans", icon: ScanLine, count: scans.length },
+                ] as const
+              ).map((t) => {
+                const Icon = t.icon;
                 return (
                   <button
-                    key={t}
+                    key={t.id}
                     type="button"
-                    onClick={() => setTab(t)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-xs transition-all ${active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setTab(t.id)}
+                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-semibold text-xs transition-all ${tab === t.id ? "bg-primary text-primary-foreground shadow-sm" : "border border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}
                   >
-                    {t === "scans" ? (
-                      <ScanLine className="h-3 w-3" />
-                    ) : t === "stops" ? (
-                      <Navigation2 className="h-3 w-3" />
-                    ) : (
-                      <Search className="h-3 w-3" />
-                    )}
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                    <span className={`rounded-full px-1.5 font-bold text-[9px] ${active ? "bg-white/20" : "bg-muted"}`}>
-                      {cnt}
+                    <Icon className="h-3 w-3" />
+                    {t.label}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 font-bold text-[9px] ${tab === t.id ? "bg-white/25" : "bg-muted"}`}
+                    >
+                      {t.count}
                     </span>
                   </button>
                 );
@@ -277,221 +375,477 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {/* Results */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-6 py-4">
+        <div className="mx-auto max-w-5xl px-4 py-4 sm:px-8">
+          {/* Empty state */}
           {!hasQuery && !booting && (
-            <div className="flex flex-col items-center gap-4 pt-14 text-muted-foreground">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
-                <MapPin className="h-6 w-6 opacity-40" />
+            <div className="flex flex-col items-center gap-5 pt-16 text-muted-foreground">
+              <div className="relative">
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-muted/50">
+                  <Search className="h-9 w-9 opacity-30" />
+                </div>
+                <div className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-xl bg-primary/10">
+                  <MapPin className="h-4 w-4 text-primary" />
+                </div>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-sm">Search stops, scans and more</p>
-                <p className="mt-1 text-xs opacity-60">Address is the fastest way to find a delivery</p>
+                <p className="font-semibold text-base text-foreground">Find any delivery instantly</p>
+                <p className="mt-1.5 max-w-xs text-sm leading-relaxed opacity-60">
+                  Search by address, patient name, Rx number, phone or route — results from scans and stops
+                </p>
+              </div>
+              <div className="mt-2 grid w-full max-w-sm grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  { label: "By address", example: "344 Cardiff Dr", icon: "\u{1F3E0}" },
+                  { label: "By patient", example: "GONZALEZ", icon: "\u{1F464}" },
+                  { label: "By Rx#", example: "653771-01", icon: "\u{1F48A}" },
+                ].map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => setQuery(c.example)}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl border border-border bg-card px-3 py-3 text-center transition-all hover:border-primary/30 hover:bg-primary/5"
+                  >
+                    <span className="text-2xl">{c.icon}</span>
+                    <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wide">
+                      {c.label}
+                    </span>
+                    <span className="font-medium text-foreground text-xs">{c.example}</span>
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
           {booting && (
-            <div className="space-y-1.5 pt-2">
+            <div className="space-y-2 pt-2">
               {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-10 rounded-xl" style={{ opacity: 1 - i * 0.15 }} />
+                <Skeleton key={i} className="h-12 rounded-xl" style={{ opacity: 1 - i * 0.15 }} />
               ))}
             </div>
           )}
 
           {loading && hasQuery && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Skeleton key={i} className="h-10 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
+                <Skeleton key={i} className="h-12 rounded-xl" style={{ opacity: 1 - i * 0.12 }} />
               ))}
             </div>
           )}
 
           {!loading && hasQuery && total === 0 && (
-            <div className="flex flex-col items-center gap-3 pt-10 text-muted-foreground">
-              <Package className="h-10 w-10 opacity-10" />
-              <p className="font-medium text-sm">No results for &ldquo;{query}&rdquo;</p>
+            <div className="flex flex-col items-center gap-3 pt-12 text-muted-foreground">
+              <Package className="h-12 w-12 opacity-10" />
+              <p className="font-semibold text-sm">No results for &ldquo;{query}&rdquo;</p>
               <p className="text-xs opacity-60">Try a partial address, last name, or Rx number</p>
+              <div className="mt-1 flex gap-2">
+                {HINTS.slice(0, 3).map((h) => (
+                  <button
+                    key={h.label}
+                    type="button"
+                    onClick={() => setQuery(h.label)}
+                    className="rounded-xl border border-border bg-muted/30 px-3 py-1.5 text-muted-foreground text-xs hover:bg-muted"
+                  >
+                    {h.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
+          {/* Results */}
           {!loading && hasQuery && total > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-            >
-              {/* Table header */}
-              <div className="grid grid-cols-[2fr_2fr_1fr_1fr_auto] gap-0 border-b bg-muted/30 px-4 py-2">
-                <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                  Patient / Name
-                </span>
-                <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                  Address
-                </span>
-                <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">Rx #</span>
-                <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">Route</span>
-                <span className="w-16 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                  Status
-                </span>
-              </div>
-
-              {/* SCANS */}
-              {visScans.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 border-b bg-muted/10 px-4 py-1.5">
-                    <ScanLine className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Package Scans
-                    </span>
-                    <span className="ml-1 rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
-                      {visScans.length}
-                    </span>
-                  </div>
-                  {visScans.map((scan) => {
-                    const rc = getRC(scan.route);
-                    const addr = toTitle((scan.full_address || scan.address || "").toLowerCase());
-                    const flags = [
-                      scan.new_client && { icon: Star, cls: "text-violet-500", tip: "New" },
-                      scan.collect_payment && {
-                        icon: DollarSign,
-                        cls: "text-amber-500",
-                        tip: `$${scan.collect_amount?.toFixed(0) ?? 0}`,
-                      },
-                      scan.type?.includes("cold") && { icon: Snowflake, cls: "text-cyan-500", tip: "Cold" },
-                      scan.signature_required && { icon: PenLine, cls: "text-rose-500", tip: "Sig" },
-                      scan.delivery_today && { icon: Truck, cls: "text-green-500", tip: "Today" },
-                    ].filter(Boolean) as { icon: LucideIcon; cls: string; tip: string }[];
-                    return (
-                      <div
-                        key={scan._id}
-                        className="group grid grid-cols-[2fr_2fr_1fr_1fr_auto] items-center gap-0 border-b px-4 py-2.5 transition-colors last:border-b-0 hover:bg-muted/30"
-                      >
-                        <div className="flex min-w-0 items-center gap-2 pr-3">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-green-50 text-xs">
-                            {"\u{1F4E6}"}
-                          </div>
-                          <span className="truncate font-medium text-xs">
-                            <Highlight text={toTitle(scan.full_name)} query={query} />
-                          </span>
-                          {flags.map((f) => {
-                            const Icon = f.icon;
-                            return (
-                              <span key={f.tip} title={f.tip}>
-                                <Icon className={`h-3 w-3 shrink-0 ${f.cls}`} />
-                              </span>
-                            );
-                          })}
-                        </div>
-                        <div className="flex min-w-0 items-center gap-1 pr-3">
-                          <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />
-                          <span className="truncate text-muted-foreground text-xs">
-                            <Highlight text={addr} query={query} />
-                          </span>
-                        </div>
-                        <span className="truncate pr-2 font-mono text-[10px] text-muted-foreground">
-                          {scan.rx_pharma_id ? <Highlight text={scan.rx_pharma_id} query={query} /> : "\u2014"}
-                        </span>
-                        <div className="pr-2">
-                          {rc ? (
-                            <span
-                              style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
-                              className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
-                            >
-                              {rc.emoji} {scan.route}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
-                          )}
-                        </div>
-                        <div className="flex w-16 items-center justify-between gap-1">
-                          <span className="text-[10px] text-muted-foreground/50">{fmt(scan.created_at)}</span>
-                          <a
-                            href={`/dashboard/scans?search=${encodeURIComponent(scan.full_name || scan.rx_pharma_id || "")}`}
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
-                          >
-                            <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
               {/* STOPS */}
               {visStops.length > 0 && (
-                <>
-                  <div
-                    className={`flex items-center gap-2 border-b bg-muted/10 px-4 py-1.5 ${visScans.length > 0 ? "border-t" : ""}`}
-                  >
-                    <Navigation2 className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Delivery Stops
-                    </span>
-                    <span className="ml-1 rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
+                <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-2 border-b bg-muted/20 px-4 py-2.5">
+                    <Navigation2 className="h-4 w-4 text-primary" />
+                    <span className="font-semibold text-sm">Delivery Stops</span>
+                    <span className="rounded-full border bg-background px-2 py-0.5 font-bold text-[10px] text-muted-foreground">
                       {visStops.length}
                     </span>
                   </div>
-                  {visStops.map((stop) => {
-                    const rc = getRC(stop.route_title);
-                    return (
-                      <div
-                        key={stop._id}
-                        className="group grid grid-cols-[2fr_2fr_1fr_1fr_auto] items-center gap-0 border-b px-4 py-2.5 transition-colors last:border-b-0 hover:bg-muted/30"
+
+                  <div
+                    className="hidden border-b bg-muted/10 px-4 py-2 md:grid"
+                    style={{
+                      gridTemplateColumns:
+                        "minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.8fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) 32px",
+                    }}
+                  >
+                    {["Name", "Phone", "Address", "City", "State", "Rx #", "Route", "Status", ""].map((h, i) => (
+                      <span
+                        key={h || i}
+                        className="truncate font-bold text-[9px] text-muted-foreground/60 uppercase tracking-widest"
                       >
-                        <div className="flex min-w-0 items-center gap-2 pr-3">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-50 text-xs">
-                            {"\u{1F4CD}"}
-                          </div>
-                          <span className="truncate font-medium text-xs">
-                            <Highlight text={toTitle(stop.recipient_name)} query={query} />
-                          </span>
-                          {stop.delivery_succeeded && <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />}
-                        </div>
-                        <div className="flex min-w-0 items-center gap-1 pr-3">
-                          <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />
-                          <span className="truncate text-muted-foreground text-xs">
-                            <Highlight text={toTitle(stop.address || "")} query={query} />
-                          </span>
-                        </div>
-                        <span className="truncate pr-2 font-mono text-[10px] text-muted-foreground">
-                          {stop.rx_pharma_id ? <Highlight text={stop.rx_pharma_id} query={query} /> : "\u2014"}
-                        </span>
-                        <div className="pr-2">
-                          {rc ? (
-                            <span
-                              style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
-                              className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
-                            >
-                              {rc.emoji} {stop.route_title}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
-                          )}
-                        </div>
-                        <div className="flex w-16 items-center justify-between gap-1">
-                          {stop.label_status ? (
-                            <span
-                              className={`rounded-full border px-1.5 py-0.5 font-bold text-[8px] ${LABEL_STYLE[stop.label_status] || ""}`}
-                            >
-                              {stop.label_status}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground/50">{fmt(stop.created_at)}</span>
-                          )}
-                          <a
-                            href={`/dashboard/stops?search=${encodeURIComponent(stop.recipient_name || stop.address || "")}`}
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="divide-y">
+                    {visStops.map((stop) => {
+                      const rc = getRC(stop.route_title);
+                      const isExp = expanded === stop._id;
+                      const name = toTitle(stop.recipient_name);
+                      const addr = toTitle(stop.address);
+                      return (
+                        <div key={stop._id}>
+                          {/* Desktop row */}
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(isExp ? null : stop._id)}
+                            className="hidden w-full cursor-pointer items-center gap-0 px-4 py-3 text-left transition-colors hover:bg-muted/20 md:grid"
+                            style={{
+                              gridTemplateColumns:
+                                "minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.8fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) 32px",
+                            }}
                           >
-                            <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
-                          </a>
+                            <div className="flex min-w-0 items-center gap-2 pr-3">
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-xs">
+                                {"\u{1F4CD}"}
+                              </div>
+                              <span className="truncate font-semibold text-xs">
+                                <Hl text={name} q={query} />
+                              </span>
+                            </div>
+                            <div className="flex min-w-0 items-center gap-1 pr-2">
+                              <Phone className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+                              <span className="truncate font-mono text-[10px] text-muted-foreground">
+                                <Hl text={formatPhone(stop.recipient_phone)} q={query} />
+                              </span>
+                            </div>
+                            <div className="flex min-w-0 items-center gap-1 pr-2">
+                              <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+                              <span className="truncate text-muted-foreground text-xs">
+                                <Hl text={addr} q={query} />
+                              </span>
+                            </div>
+                            <span className="truncate pr-2 text-muted-foreground text-xs">
+                              <Hl text={stop.city || "\u2014"} q={query} />
+                            </span>
+                            <span className="truncate pr-2 font-medium text-xs">{stop.state || "\u2014"}</span>
+                            <span className="truncate pr-2 font-mono text-[10px] text-muted-foreground">
+                              <Hl text={stop.rx_pharma_id || "\u2014"} q={query} />
+                            </span>
+                            <div className="pr-2">
+                              {rc ? (
+                                <span
+                                  style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                  className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                                >
+                                  {rc.emoji} <Hl text={stop.route_title || ""} q={query} />
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
+                              )}
+                            </div>
+                            <div className="pr-2">
+                              <DeliveryBadge state={stop.delivery_state} succeeded={stop.delivery_succeeded} />
+                            </div>
+                            <div className="flex items-center justify-end">
+                              {isExp ? (
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/40" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Mobile card */}
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(isExp ? null : stop._id)}
+                            className="w-full cursor-pointer px-4 py-3 text-left transition-colors hover:bg-muted/20 md:hidden"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 items-start gap-2.5">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-base">
+                                  {"\u{1F4CD}"}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-sm">
+                                    <Hl text={name} q={query} />
+                                  </p>
+                                  <p className="mt-0.5 truncate text-muted-foreground text-xs">
+                                    <Hl text={addr} q={query} />
+                                    {stop.city ? `, ${stop.city}` : ""}
+                                  </p>
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                    {stop.rx_pharma_id && (
+                                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                        <Hl text={stop.rx_pharma_id} q={query} />
+                                      </span>
+                                    )}
+                                    {rc && (
+                                      <span
+                                        style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                        className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                                      >
+                                        {rc.emoji} {stop.route_title}
+                                      </span>
+                                    )}
+                                    <DeliveryBadge state={stop.delivery_state} succeeded={stop.delivery_succeeded} />
+                                  </div>
+                                </div>
+                              </div>
+                              {isExp ? (
+                                <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/40" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Expanded detail */}
+                          <AnimatePresence>
+                            {isExp && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="overflow-hidden border-t bg-muted/10"
+                              >
+                                <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
+                                  {[
+                                    { label: "Phone", value: formatPhone(stop.recipient_phone) },
+                                    { label: "City", value: stop.city },
+                                    { label: "State", value: stop.state },
+                                    { label: "Zipcode", value: stop.zipcode },
+                                    { label: "Rx #", value: stop.rx_pharma_id, mono: true },
+                                    { label: "Event", value: stop.event_type?.replace("stop.", "") },
+                                    {
+                                      label: "Stop #",
+                                      value: stop.stop_position ? `#${stop.stop_position}` : undefined,
+                                    },
+                                    { label: "ETA", value: stop.eta_arrival },
+                                    { label: "Label", value: stop.label_status },
+                                    { label: "Date", value: fmt(stop.created_at) },
+                                  ]
+                                    .filter((f) => f.value)
+                                    .map((f) => (
+                                      <div key={f.label}>
+                                        <p className="font-semibold text-[9px] text-muted-foreground/50 uppercase tracking-widest">
+                                          {f.label}
+                                        </p>
+                                        <p
+                                          className={`mt-0.5 truncate font-medium text-xs ${f.mono ? "font-mono text-muted-foreground" : ""}`}
+                                        >
+                                          {f.value}
+                                        </p>
+                                      </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 border-t px-4 py-2.5">
+                                  <a
+                                    href={`/dashboard/stops?search=${encodeURIComponent(stop.recipient_name || stop.address || "")}`}
+                                    className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary/30 hover:text-primary"
+                                  >
+                                    <ExternalLink className="h-3 w-3" /> View in Stops
+                                  </a>
+                                  {stop.tracking_link && (
+                                    <a
+                                      href={stop.tracking_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary/30 hover:text-primary"
+                                    >
+                                      <ArrowUpRight className="h-3 w-3" /> Track
+                                    </a>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
-                      </div>
-                    );
-                  })}
-                </>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* SCANS */}
+              {visScans.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-2 border-b bg-muted/20 px-4 py-2.5">
+                    <ScanLine className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-sm">Package Scans</span>
+                    <span className="rounded-full border bg-background px-2 py-0.5 font-bold text-[10px] text-muted-foreground">
+                      {visScans.length}
+                    </span>
+                  </div>
+
+                  <div
+                    className="hidden border-b bg-muted/10 px-4 py-2 md:grid"
+                    style={{
+                      gridTemplateColumns:
+                        "minmax(0,1.8fr) minmax(0,1fr) minmax(0,2fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr) 32px",
+                    }}
+                  >
+                    {["Name", "Rx #", "Address", "City", "Route", "Date", ""].map((h, i) => (
+                      <span
+                        key={h || i}
+                        className="truncate font-bold text-[9px] text-muted-foreground/60 uppercase tracking-widest"
+                      >
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="divide-y">
+                    {visScans.map((scan) => {
+                      const rc = getRC(scan.route);
+                      const isExp = expanded === scan._id;
+                      const name = toTitle(scan.full_name);
+                      const addr = toTitle((scan.full_address || scan.address || "").toLowerCase());
+                      return (
+                        <div key={scan._id}>
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(isExp ? null : scan._id)}
+                            className="hidden w-full cursor-pointer items-center px-4 py-3 text-left transition-colors hover:bg-muted/20 md:grid"
+                            style={{
+                              gridTemplateColumns:
+                                "minmax(0,1.8fr) minmax(0,1fr) minmax(0,2fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr) 32px",
+                            }}
+                          >
+                            <div className="flex min-w-0 items-center gap-2 pr-3">
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-green-50 text-xs">
+                                {"\u{1F4E6}"}
+                              </div>
+                              <span className="truncate font-semibold text-xs">
+                                <Hl text={name} q={query} />
+                              </span>
+                            </div>
+                            <span className="truncate pr-2 font-mono text-[10px] text-muted-foreground">
+                              <Hl text={scan.rx_pharma_id || "\u2014"} q={query} />
+                            </span>
+                            <div className="flex min-w-0 items-center gap-1 pr-2">
+                              <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+                              <span className="truncate text-muted-foreground text-xs">
+                                <Hl text={addr} q={query} />
+                              </span>
+                            </div>
+                            <span className="truncate pr-2 text-muted-foreground text-xs">
+                              <Hl text={scan.city || scan.client_location || "\u2014"} q={query} />
+                            </span>
+                            <div className="pr-2">
+                              {rc ? (
+                                <span
+                                  style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                  className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                                >
+                                  {rc.emoji} <Hl text={scan.route || ""} q={query} />
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">{fmt(scan.created_at)}</span>
+                            <div className="flex justify-end">
+                              {isExp ? (
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/40" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Mobile */}
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(isExp ? null : scan._id)}
+                            className="w-full cursor-pointer px-4 py-3 text-left transition-colors hover:bg-muted/20 md:hidden"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 items-start gap-2.5">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-green-50 text-base">
+                                  {"\u{1F4E6}"}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-sm">
+                                    <Hl text={name} q={query} />
+                                  </p>
+                                  <p className="mt-0.5 truncate text-muted-foreground text-xs">
+                                    <Hl text={addr} q={query} />
+                                  </p>
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                    {scan.rx_pharma_id && (
+                                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                        {scan.rx_pharma_id}
+                                      </span>
+                                    )}
+                                    {rc && (
+                                      <span
+                                        style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                        className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                                      >
+                                        {rc.emoji} {scan.route}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {isExp ? (
+                                <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/40" />
+                              )}
+                            </div>
+                          </button>
+
+                          <AnimatePresence>
+                            {isExp && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="overflow-hidden border-t bg-muted/10"
+                              >
+                                <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
+                                  {[
+                                    { label: "Rx #", value: scan.rx_pharma_id, mono: true },
+                                    { label: "City", value: scan.city },
+                                    { label: "Route", value: scan.route },
+                                    { label: "Branch", value: scan.client_location },
+                                    { label: "Type", value: scan.type },
+                                    { label: "Date", value: fmt(scan.created_at) },
+                                    { label: "Scan ID", value: scan.rtscan_id ? `#${scan.rtscan_id}` : undefined },
+                                  ]
+                                    .filter((f) => f.value)
+                                    .map((f) => (
+                                      <div key={f.label}>
+                                        <p className="font-semibold text-[9px] text-muted-foreground/50 uppercase tracking-widest">
+                                          {f.label}
+                                        </p>
+                                        <p
+                                          className={`mt-0.5 truncate font-medium text-xs ${f.mono ? "font-mono text-muted-foreground" : ""}`}
+                                        >
+                                          {f.value}
+                                        </p>
+                                      </div>
+                                    ))}
+                                </div>
+                                <div className="border-t px-4 py-2.5">
+                                  <a
+                                    href={`/dashboard/scans?search=${encodeURIComponent(scan.full_name || scan.rx_pharma_id || "")}`}
+                                    className="flex w-fit items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-colors hover:border-primary/30 hover:text-primary"
+                                  >
+                                    <ExternalLink className="h-3 w-3" /> View in Scans
+                                  </a>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </motion.div>
           )}

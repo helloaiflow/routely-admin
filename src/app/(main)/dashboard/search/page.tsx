@@ -1,17 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
+  ArrowRight,
   CheckCircle2,
-  Clock,
   DollarSign,
-  ExternalLink,
-  Filter,
   MapPin,
+  Navigation2,
   Package,
   PenLine,
+  ScanLine,
   Search,
   Snowflake,
   Star,
@@ -19,10 +19,6 @@ import {
   X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ScanResult {
@@ -56,202 +52,67 @@ interface StopResult {
   created_at?: string;
 }
 
-type ActiveTab = "all" | "scans" | "stops";
-
 const ROUTE_COLORS: Record<string, { bg: string; text: string; border: string; emoji: string }> = {
-  "CENTRAL FL": { bg: "#fff0f8", text: "#c0006a", border: "#f9a8d4", emoji: "🌆" },
-  "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", emoji: "🌴" },
-  "DEERFIELD FL": { bg: "#edfcff", text: "#0079a8", border: "#a5f3fc", emoji: "🦌" },
-  "NORTH FL": { bg: "#edfff5", text: "#007a4a", border: "#6ee7b7", emoji: "🌿" },
+  "CENTRAL FL": { bg: "#fff0f8", text: "#c0006a", border: "#f9a8d4", emoji: "\u{1F306}" },
+  "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", emoji: "\u{1F334}" },
+  "DEERFIELD FL": { bg: "#edfcff", text: "#0079a8", border: "#a5f3fc", emoji: "\u{1F98C}" },
+  "NORTH FL": { bg: "#edfff5", text: "#007a4a", border: "#6ee7b7", emoji: "\u{1F33F}" },
 };
-function getRouteColor(route?: string) {
-  if (!route) return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0", emoji: "📍" };
+function getRC(route?: string) {
+  if (!route) return null;
   const up = route.toUpperCase();
   for (const [k, v] of Object.entries(ROUTE_COLORS)) if (up.includes(k)) return v;
-  return { bg: "#f4f0ff", text: "#5b21b6", border: "#c4b5fd", emoji: "🔮" };
+  return { bg: "#f4f0ff", text: "#5b21b6", border: "#c4b5fd", emoji: "\u{1F52E}" };
 }
-
-function RouteBadge({ route }: { route?: string }) {
-  if (!route) return null;
-  const c = getRouteColor(route);
-  return (
-    <span
-      style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}
-      className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
-    >
-      {c.emoji} {route}
-    </span>
-  );
-}
-
-function LabelBadge({ status }: { status?: string }) {
-  if (!status) return null;
-  const m: Record<string, string> = {
-    Match: "border-green-200 bg-green-100 text-green-700",
-    Unmatch: "border-amber-200 bg-amber-100 text-amber-700",
-    Human: "border-rose-200 bg-rose-100 text-rose-700",
-  };
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-bold text-[9px] ${m[status] || ""}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 function toTitle(s?: string) {
-  if (!s) return "—";
+  if (!s) return "\u2014";
   return s.replace(/\b\w+/g, (w) =>
     /^[A-Z]{2}$/.test(w) || /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
   );
 }
-
 function fmt(d?: string) {
   if (!d) return "";
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function ScanCard({ scan }: { scan: ScanResult }) {
-  const flags = [
-    scan.new_client && { icon: Star, label: "New", cls: "text-violet-600" },
-    scan.collect_payment && { icon: DollarSign, label: `$${scan.collect_amount?.toFixed(0)}`, cls: "text-amber-600" },
-    scan.type?.includes("cold") && { icon: Snowflake, label: "Cold", cls: "text-cyan-600" },
-    scan.signature_required && { icon: PenLine, label: "Sig", cls: "text-rose-600" },
-    scan.delivery_today && { icon: Truck, label: "Today", cls: "text-green-600" },
-  ].filter(Boolean) as { icon: typeof Star; label: string; cls: string }[];
+const HINTS = [
+  { label: "West Sample Road", icon: "\u{1F4CD}" },
+  { label: "Coral Springs", icon: "\u{1F3D9}\uFE0F" },
+  { label: "GONZALEZ", icon: "\u{1F464}" },
+  { label: "NORTH FL", icon: "\u{1F33F}" },
+  { label: "Kissimmee", icon: "\u{1F4CD}" },
+];
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="group rounded-2xl border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xl">📦</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-bold text-sm">{toTitle(scan.full_name)}</p>
-            <Badge variant="outline" className="border-green-200 bg-green-50 text-[10px] text-green-700">
-              Scan
-            </Badge>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            {scan.rx_pharma_id && (
-              <span className="font-mono text-[10px] text-muted-foreground">Rx: {scan.rx_pharma_id}</span>
-            )}
-            {scan.rtscan_id && (
-              <span className="font-mono text-[10px] text-muted-foreground/60">#{scan.rtscan_id}</span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span className="truncate capitalize">{(scan.full_address || scan.address || "—").toLowerCase()}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <RouteBadge route={scan.route} />
-            {scan.client_location && scan.client_location !== "OTHER" && (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-medium text-[9px] text-slate-500">
-                {scan.client_location}
-              </span>
-            )}
-            {flags.map((f) => (
-              <span key={f.label} className={`inline-flex items-center gap-0.5 font-semibold text-[10px] ${f.cls}`}>
-                <f.icon className="h-3 w-3" />
-                {f.label}
-              </span>
-            ))}
-            {scan.created_at && (
-              <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/60">
-                <Clock className="h-2.5 w-2.5" />
-                {fmt(scan.created_at)}
-              </span>
-            )}
-          </div>
-        </div>
-        <a
-          href={`/dashboard/scans?search=${encodeURIComponent(scan.rx_pharma_id || scan.full_name || "")}`}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
-        >
-          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-        </a>
-      </div>
-    </motion.div>
-  );
-}
-
-function StopCard({ stop }: { stop: StopResult }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="group rounded-2xl border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-xl">📍</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-bold text-sm">{toTitle(stop.recipient_name)}</p>
-            <Badge variant="outline" className="border-violet-200 bg-violet-50 text-[10px] text-violet-700">
-              Stop
-            </Badge>
-            <LabelBadge status={stop.label_status} />
-          </div>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            {stop.rx_pharma_id && (
-              <span className="font-mono text-[10px] text-muted-foreground">Rx: {stop.rx_pharma_id}</span>
-            )}
-            {stop.stop_position && (
-              <span className="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
-                Stop #{stop.stop_position}
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span className="truncate capitalize">{(stop.address || "—").toLowerCase()}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <RouteBadge route={stop.route_title} />
-            {stop.delivery_succeeded && (
-              <span className="inline-flex items-center gap-0.5 font-semibold text-[10px] text-green-600">
-                <CheckCircle2 className="h-3 w-3" />
-                Delivered
-              </span>
-            )}
-          </div>
-        </div>
-        <a
-          href={`/dashboard/stops?search=${encodeURIComponent(stop.recipient_name || stop.address || "")}`}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
-        >
-          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-        </a>
-      </div>
-    </motion.div>
-  );
-}
+const LABEL_STYLE: Record<string, string> = {
+  Match: "bg-green-50  text-green-700  border-green-200",
+  Unmatch: "bg-amber-50  text-amber-700  border-amber-200",
+  Human: "bg-rose-50   text-rose-700   border-rose-200",
+};
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
-  const [routeFilter, setRouteFilter] = useState("all");
   const [scans, setScans] = useState<ScanResult[]>([]);
   const [stops, setStops] = useState<StopResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [tab, setTab] = useState<"all" | "scans" | "stops">("all");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const doSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  const doSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 2) {
+      setScans([]);
+      setStops([]);
+      setSearched(false);
+      return;
+    }
     setLoading(true);
     setSearched(true);
     try {
+      const ql = q.toLowerCase();
       const [scansRes, stopsRes] = await Promise.all([
-        fetch("/api/data/package-scans?limit=100"),
-        fetch("/api/data/spoke-stops"),
+        fetch("/api/data/package-scans?limit=200"),
+        fetch("/api/data/spoke-stops?limit=200"),
       ]);
-      const ql = query.toLowerCase();
       if (scansRes.ok) {
         const d = await scansRes.json();
         setScans(
@@ -261,6 +122,8 @@ export default function SearchPage() {
               s.rx_pharma_id?.toLowerCase().includes(ql) ||
               s.address?.toLowerCase().includes(ql) ||
               s.full_address?.toLowerCase().includes(ql) ||
+              s.route?.toLowerCase().includes(ql) ||
+              s.client_location?.toLowerCase().includes(ql) ||
               String(s.rtscan_id || "").includes(ql),
           ),
         );
@@ -273,6 +136,7 @@ export default function SearchPage() {
               s.recipient_name?.toLowerCase().includes(ql) ||
               s.rx_pharma_id?.toLowerCase().includes(ql) ||
               s.address?.toLowerCase().includes(ql) ||
+              s.route_title?.toLowerCase().includes(ql) ||
               String(s.rtstop_id || "").includes(ql),
           ),
         );
@@ -280,201 +144,346 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, []);
 
   useEffect(() => {
-    if (query.length < 2) {
-      setScans([]);
-      setStops([]);
-      setSearched(false);
-      return;
-    }
-    const t = setTimeout(doSearch, 400);
+    const t = setTimeout(() => doSearch(query), 380);
     return () => clearTimeout(t);
   }, [query, doSearch]);
 
-  const routes = useMemo(
-    () =>
-      [
-        ...new Set([...scans.map((s) => s.route), ...stops.map((s) => s.route_title)].filter(Boolean) as string[]),
-      ].sort(),
-    [scans, stops],
-  );
-  const filteredScans = useMemo(() => {
-    let r = scans;
-    if (routeFilter !== "all") r = r.filter((s) => s.route === routeFilter);
-    return r;
-  }, [scans, routeFilter]);
-  const filteredStops = useMemo(() => {
-    let r = stops;
-    if (routeFilter !== "all") r = r.filter((s) => s.route_title === routeFilter);
-    return r;
-  }, [stops, routeFilter]);
-  const totalCount =
-    activeTab === "all"
-      ? filteredScans.length + filteredStops.length
-      : activeTab === "scans"
-        ? filteredScans.length
-        : filteredStops.length;
+  const visibleScans = tab === "stops" ? [] : scans;
+  const visibleStops = tab === "scans" ? [] : stops;
+  const total = visibleScans.length + visibleStops.length;
+
+  const highlight = (text: string, q: string) => {
+    if (!q || q.length < 2) return <>{text}</>;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) return <>{text}</>;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="rounded-sm bg-yellow-100 px-0.5 text-yellow-900">{text.slice(idx, idx + q.length)}</mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden">
-      <div className="border-b bg-background px-6 py-4">
-        <div className="mx-auto max-w-4xl space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by patient name, Rx#, address, phone..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && doSearch()}
-                className="h-11 pr-10 pl-10 text-sm"
-                autoFocus
-              />
-              <AnimatePresence>
-                {query && (
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => {
-                      setQuery("");
-                      setScans([]);
-                      setStops([]);
-                      setSearched(false);
-                    }}
-                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className={`h-11 gap-1.5 ${showFilters ? "bg-muted" : ""}`}
-              onClick={() => setShowFilters((p) => !p)}
-            >
-              <Filter className="h-3.5 w-3.5" />
-              Filters
-            </Button>
-          </div>
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex flex-wrap gap-2 overflow-hidden"
+    <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden bg-background">
+      {/* Search hero */}
+      <div className="border-b px-6 pt-6 pb-4">
+        <div className="mx-auto max-w-3xl">
+          <div className="relative">
+            <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by address, patient name, Rx#, route..."
+              className="h-[52px] w-full rounded-2xl border border-border bg-background py-3.5 pr-12 pl-12 text-sm shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setScans([]);
+                  setStops([]);
+                  setSearched(false);
+                  inputRef.current?.focus();
+                }}
+                className="absolute top-1/2 right-4 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Select value={routeFilter} onValueChange={setRouteFilter}>
-                  <SelectTrigger className="h-8 w-40 text-xs">
-                    <SelectValue placeholder="All Routes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Routes</SelectItem>
-                    {routes.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {getRouteColor(r).emoji} {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {routeFilter !== "all" && (
-                  <button
-                    type="button"
-                    onClick={() => setRouteFilter("all")}
-                    className="flex items-center gap-1 rounded-md px-2 text-muted-foreground text-xs hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                    Clear
-                  </button>
-                )}
-              </motion.div>
+                <X className="h-4 w-4" />
+              </button>
             )}
-          </AnimatePresence>
+          </div>
+
+          {/* Hint chips */}
+          {!query && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="mr-1 self-center text-[10px] text-muted-foreground">Try:</span>
+              {HINTS.map((h) => (
+                <button
+                  key={h.label}
+                  type="button"
+                  onClick={() => setQuery(h.label)}
+                  className="flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                >
+                  <span>{h.icon}</span>
+                  {h.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Tab bar */}
           {searched && !loading && (
-            <div className="flex items-center gap-1">
-              {(["all", "scans", "stops"] as const).map((tab) => {
-                const count =
-                  tab === "all"
-                    ? filteredScans.length + filteredStops.length
-                    : tab === "scans"
-                      ? filteredScans.length
-                      : filteredStops.length;
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-3 flex items-center gap-1"
+            >
+              {(["all", "scans", "stops"] as const).map((t) => {
+                const cnt = t === "all" ? scans.length + stops.length : t === "scans" ? scans.length : stops.length;
+                const active = tab === t;
                 return (
                   <button
-                    key={tab}
+                    key={t}
                     type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-xs transition-colors ${activeTab === tab ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setTab(t)}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-xs transition-all ${active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted"}`}
                   >
-                    {tab === "scans" ? (
-                      <Package className="h-3 w-3" />
-                    ) : tab === "stops" ? (
-                      <MapPin className="h-3 w-3" />
+                    {t === "scans" ? (
+                      <ScanLine className="h-3 w-3" />
+                    ) : t === "stops" ? (
+                      <Navigation2 className="h-3 w-3" />
                     ) : (
                       <Search className="h-3 w-3" />
                     )}
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 font-bold text-[9px] ${activeTab === tab ? "bg-white/20" : "bg-muted"}`}
-                    >
-                      {count}
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                    <span className={`rounded-full px-1.5 font-bold text-[9px] ${active ? "bg-white/20" : "bg-muted"}`}>
+                      {cnt}
                     </span>
                   </button>
                 );
               })}
-              <span className="ml-auto text-[11px] text-muted-foreground">{totalCount} results</span>
-            </div>
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                {total} result{total !== 1 ? "s" : ""}
+              </span>
+            </motion.div>
           )}
         </div>
       </div>
+
+      {/* Results */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl space-y-2 p-6">
+        <div className="mx-auto max-w-3xl px-6 py-4">
+          {/* Empty state */}
           {!searched && !loading && (
             <div className="flex flex-col items-center gap-4 pt-16 text-muted-foreground">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                <Search className="h-9 w-9 opacity-40" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+                <MapPin className="h-7 w-7 opacity-40" />
               </div>
               <div className="text-center">
-                <p className="font-semibold text-base">Search across all records</p>
-                <p className="mt-1 text-sm opacity-60">Type a patient name, Rx#, address, or phone number</p>
-              </div>
-              <div className="flex gap-2 text-xs">
-                {["GONZALEZ", "650410", "Kissimmee", "+1954"].map((hint) => (
-                  <button
-                    key={hint}
-                    type="button"
-                    onClick={() => setQuery(hint)}
-                    className="rounded-full border px-3 py-1.5 transition-colors hover:bg-muted"
-                  >
-                    {hint}
-                  </button>
-                ))}
+                <p className="font-semibold text-sm">Search by address, patient or Rx#</p>
+                <p className="mt-1 text-xs opacity-60">Results from package scans and delivery stops</p>
               </div>
             </div>
           )}
-          {loading &&
-            ["a", "b", "c", "d", "e"].map((k, i) => (
-              <Skeleton key={k} className="h-24 rounded-2xl" style={{ opacity: 1 - i * 0.15 }} />
-            ))}
-          {!loading && searched && totalCount === 0 && (
+
+          {/* Loading */}
+          {loading && (
+            <div className="space-y-1.5">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-12 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
+              ))}
+            </div>
+          )}
+
+          {/* No results */}
+          {!loading && searched && total === 0 && (
             <div className="flex flex-col items-center gap-3 pt-12 text-muted-foreground">
-              <Package className="h-12 w-12 opacity-10" />
-              <p className="font-medium">No results for &ldquo;{query}&rdquo;</p>
+              <Package className="h-10 w-10 opacity-10" />
+              <p className="font-medium text-sm">No results for &ldquo;{query}&rdquo;</p>
+              <p className="text-xs opacity-60">Try a different address, name or Rx number</p>
             </div>
           )}
-          {!loading && searched && (
-            <div className="space-y-2">
-              {(activeTab === "all" || activeTab === "scans") &&
-                filteredScans.map((s) => <ScanCard key={s._id} scan={s} />)}
-              {(activeTab === "all" || activeTab === "stops") &&
-                filteredStops.map((s) => <StopCard key={s._id} stop={s} />)}
-            </div>
+
+          {/* Results table */}
+          {!loading && searched && total > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="overflow-hidden rounded-2xl border bg-card"
+            >
+              {/* SCANS */}
+              {visibleScans.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2">
+                    <ScanLine className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Package Scans
+                    </span>
+                    <span className="ml-1 rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
+                      {visibleScans.length}
+                    </span>
+                  </div>
+                  <div className="divide-y">
+                    {visibleScans.map((scan) => {
+                      const rc = getRC(scan.route);
+                      const addr = (scan.full_address || scan.address || "").toLowerCase();
+                      const flags = [
+                        scan.new_client && {
+                          icon: Star,
+                          tip: "New client",
+                          cls: "border-violet-200 bg-violet-50 text-violet-600",
+                        },
+                        scan.collect_payment && {
+                          icon: DollarSign,
+                          tip: `$${scan.collect_amount?.toFixed(0) ?? "0"}`,
+                          cls: "border-amber-200 bg-amber-50 text-amber-600",
+                        },
+                        scan.type?.includes("cold") && {
+                          icon: Snowflake,
+                          tip: "Cold",
+                          cls: "border-cyan-200 bg-cyan-50 text-cyan-600",
+                        },
+                        scan.signature_required && {
+                          icon: PenLine,
+                          tip: "Signature",
+                          cls: "border-rose-200 bg-rose-50 text-rose-600",
+                        },
+                        scan.delivery_today && {
+                          icon: Truck,
+                          tip: "Today",
+                          cls: "border-green-200 bg-green-50 text-green-600",
+                        },
+                      ].filter(Boolean) as { icon: typeof Star; tip: string; cls: string }[];
+                      return (
+                        <div
+                          key={scan._id}
+                          className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
+                        >
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-50 text-sm">
+                            {"\u{1F4E6}"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">{highlight(toTitle(scan.full_name), query)}</span>
+                              {scan.rx_pharma_id && (
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                  {highlight(scan.rx_pharma_id, query)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <MapPin className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate">{highlight(toTitle(addr), query)}</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {flags.map((f) => (
+                              <span
+                                key={f.tip}
+                                title={f.tip}
+                                className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${f.cls}`}
+                              >
+                                <f.icon className="h-3 w-3" />
+                              </span>
+                            ))}
+                            {rc && (
+                              <span
+                                style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                className="whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                              >
+                                {rc.emoji} {scan.route}
+                              </span>
+                            )}
+                            {scan.created_at && (
+                              <span className="hidden text-[10px] text-muted-foreground/60 sm:block">
+                                {fmt(scan.created_at)}
+                              </span>
+                            )}
+                            <a
+                              href={`/dashboard/scans?search=${encodeURIComponent(scan.full_name || scan.rx_pharma_id || "")}`}
+                              className="flex h-6 w-6 items-center justify-center rounded-md border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
+                            >
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* STOPS */}
+              {visibleStops.length > 0 && (
+                <>
+                  <div
+                    className={`flex items-center gap-2 border-b bg-muted/30 px-4 py-2 ${visibleScans.length > 0 ? "border-t" : ""}`}
+                  >
+                    <Navigation2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Delivery Stops
+                    </span>
+                    <span className="ml-1 rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
+                      {visibleStops.length}
+                    </span>
+                  </div>
+                  <div className="divide-y">
+                    {visibleStops.map((stop) => {
+                      const rc = getRC(stop.route_title);
+                      const labelCls = LABEL_STYLE[stop.label_status || ""] || "";
+                      return (
+                        <div
+                          key={stop._id}
+                          className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
+                        >
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-sm">
+                            {"\u{1F4CD}"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">
+                                {highlight(toTitle(stop.recipient_name), query)}
+                              </span>
+                              {stop.rx_pharma_id && (
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                  {highlight(stop.rx_pharma_id, query)}
+                                </span>
+                              )}
+                              {stop.stop_position && (
+                                <span className="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
+                                  #{stop.stop_position}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <MapPin className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate">{highlight(toTitle(stop.address || ""), query)}</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {stop.label_status && (
+                              <span className={`rounded-full border px-1.5 py-0.5 font-bold text-[9px] ${labelCls}`}>
+                                {stop.label_status}
+                              </span>
+                            )}
+                            {stop.delivery_succeeded && (
+                              <span className="flex items-center gap-0.5 font-semibold text-[10px] text-green-600">
+                                <CheckCircle2 className="h-3 w-3" />
+                              </span>
+                            )}
+                            {rc && (
+                              <span
+                                style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+                                className="whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold text-[9px]"
+                              >
+                                {rc.emoji} {stop.route_title}
+                              </span>
+                            )}
+                            {stop.created_at && (
+                              <span className="hidden text-[10px] text-muted-foreground/60 sm:block">
+                                {fmt(stop.created_at)}
+                              </span>
+                            )}
+                            <a
+                              href={`/dashboard/stops?search=${encodeURIComponent(stop.recipient_name || stop.address || "")}`}
+                              className="flex h-6 w-6 items-center justify-center rounded-md border opacity-0 transition-all hover:bg-muted group-hover:opacity-100"
+                            >
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </motion.div>
           )}
         </div>
       </div>

@@ -65,9 +65,10 @@ export const sidebarItems: NavGroup[] = [
     items: [
       { title: "Package Scans", url: "/dashboard/scans", icon: Package },
       { title: "Package Search", url: "/dashboard/search", icon: Search },
-      { title: "Stops", url: "/dashboard/stops", icon: MapPin },
+      { title: "Spoke Stops", url: "/dashboard/stops", icon: MapPin },
       { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },
-      { title: "Depots", url: "/dashboard/depots", icon: Route },
+      { title: "Spoke Depots", url: "/dashboard/depots", icon: Route },
+      { title: "Spoke Drivers", url: "/dashboard/drivers", icon: Car },
       { title: "Spoke Plans", url: "/dashboard/plans", icon: Route },
     ],
   },

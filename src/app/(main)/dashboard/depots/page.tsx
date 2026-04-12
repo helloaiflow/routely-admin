@@ -366,25 +366,35 @@ function DetailPanel({
                 }
               />
             </div>
-            <div className="grid grid-cols-3 divide-x px-0">
-              {(
-                [
-                  ["city", "City"],
-                  ["state", "ST", 2],
-                  ["zipcode", "ZIP"],
-                ] as [keyof Depot, string, number?][]
-              ).map(([k, lbl, max]) => (
-                <div key={k as string} className="px-3 py-2">
-                  <p className="mb-1 text-[10px] text-muted-foreground">{lbl}</p>
-                  <Input
-                    value={((form as Record<string, unknown>)[k as string] as string) || ""}
-                    onChange={(e) => set(k, e.target.value)}
-                    maxLength={max}
-                    placeholder={lbl}
-                    className="h-7 text-xs"
-                  />
-                </div>
-              ))}
+            <div className="border-t px-3 py-2">
+              <p className="mb-1 text-[10px] text-muted-foreground">City</p>
+              <Input
+                value={(form.city as string) || ""}
+                onChange={(e) => set("city", e.target.value)}
+                placeholder="City"
+                className="h-7 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 divide-x border-t">
+              <div className="px-3 py-2">
+                <p className="mb-1 text-[10px] text-muted-foreground">State</p>
+                <Input
+                  value={(form.state as string) || ""}
+                  onChange={(e) => set("state", e.target.value)}
+                  maxLength={2}
+                  placeholder="FL"
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="px-3 py-2">
+                <p className="mb-1 text-[10px] text-muted-foreground">ZIP</p>
+                <Input
+                  value={(form.zipcode as string) || ""}
+                  onChange={(e) => set("zipcode", e.target.value)}
+                  placeholder="33065"
+                  className="h-7 text-xs"
+                />
+              </div>
             </div>
             <div className="px-3 py-2">
               <p className="mb-1.5 text-[10px] text-muted-foreground">End location</p>
@@ -861,27 +871,23 @@ export default function DepotsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 divide-x border-b">
-          <div className="flex flex-col items-center py-2">
-            <span className="font-bold text-base text-foreground tabular-nums">{depots.length}</span>
-            <span className="font-medium text-[9px] text-muted-foreground uppercase tracking-wide">Total</span>
+        <div className="flex items-center gap-1.5 border-b px-3 py-2">
+          <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5">
+            <span className="font-bold text-foreground text-sm tabular-nums">{depots.length}</span>
+            <span className="font-medium text-[9px] text-muted-foreground">total</span>
           </div>
-          <div className="flex flex-col items-center py-2">
-            <span className="font-bold text-base text-green-600 tabular-nums">{activeCount}</span>
-            <span className="font-medium text-[9px] text-green-600 uppercase tracking-wide">Active</span>
+          <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5">
+            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            <span className="font-bold text-green-700 text-sm tabular-nums">{activeCount}</span>
+            <span className="font-medium text-[9px] text-green-600">active</span>
           </div>
-          <div className="flex flex-col items-center py-2">
-            <span
-              className={`font-bold text-base tabular-nums ${depots.length - activeCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
-            >
-              {depots.length - activeCount}
-            </span>
-            <span
-              className={`font-medium text-[9px] uppercase tracking-wide ${depots.length - activeCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
-            >
-              Inactive
-            </span>
-          </div>
+          {depots.length - activeCount > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span className="font-bold text-amber-700 text-sm tabular-nums">{depots.length - activeCount}</span>
+              <span className="font-medium text-[9px] text-amber-600">inactive</span>
+            </div>
+          )}
         </div>
 
         {syncMsg && (

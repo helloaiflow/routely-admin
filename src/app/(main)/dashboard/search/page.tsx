@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowRight,
+  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -16,6 +17,7 @@ import {
   Navigation2,
   Package,
   Phone,
+  RefreshCw,
   ScanLine,
   Search,
   Truck,
@@ -23,7 +25,9 @@ import {
   ZoomIn,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ScanResult {
@@ -47,8 +51,8 @@ interface ScanResult {
   phone?: string;
   image_url?: string;
   created_at?: string;
+  _score?: number;
 }
-
 interface StopResult {
   _id: string;
   rtstop_id?: number;
@@ -69,8 +73,6 @@ interface StopResult {
   delivery_succeeded?: boolean;
   stop_position?: number;
   eta_arrival?: string;
-  eta_earliest?: string;
-  eta_latest?: string;
   driver_notes?: string;
   stop_notes?: string;
   tracking_link?: string;
@@ -78,19 +80,43 @@ interface StopResult {
   signature_url?: string;
   web_app_link?: string;
   created_at?: string | { $date: string };
+  _score?: number;
+  _scanImage?: string;
 }
 
-const RC: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  "CENTRAL FL": { bg: "#fff0f8", text: "#c0006a", border: "#f9a8d4", dot: "#c0006a" },
-  "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", dot: "#7a7200" },
-  "DEERFIELD FL": { bg: "#edfcff", text: "#0079a8", border: "#a5f3fc", dot: "#0079a8" },
-  "NORTH FL": { bg: "#edfff5", text: "#007a4a", border: "#6ee7b7", dot: "#007a4a" },
+const ROUTE_MAP: Record<string, { bg: string; text: string; border: string; glow: string; emoji: string }> = {
+  "CENTRAL FL": {
+    bg: "#fff0f8",
+    text: "#c0006a",
+    border: "#f9a8d4",
+    glow: "rgba(254,33,139,0.20)",
+    emoji: "\u{1F306}",
+  },
+  "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", glow: "rgba(253,255,43,0.25)", emoji: "\u{1F334}" },
+  "DEERFIELD FL": {
+    bg: "#edfcff",
+    text: "#0079a8",
+    border: "#a5f3fc",
+    glow: "rgba(10,239,255,0.20)",
+    emoji: "\u{1F98C}",
+  },
+  "NORTH FL": { bg: "#edfff5", text: "#007a4a", border: "#6ee7b7", glow: "rgba(10,255,104,0.20)", emoji: "\u{1F33F}" },
 };
+const FALLBACK_RC = [
+  { bg: "#f4f0ff", text: "#5b21b6", border: "#c4b5fd", glow: "rgba(139,92,246,0.15)", emoji: "\u{1F52E}" },
+  { bg: "#fff4ed", text: "#c2410c", border: "#fdba74", glow: "rgba(249,115,22,0.15)", emoji: "\u{1F525}" },
+];
+const _rcCache: Record<string, (typeof FALLBACK_RC)[0]> = {};
+let _rcIdx = 0;
 function getRC(r?: string) {
-  if (!r) return null;
+  if (!r) return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0", glow: "transparent", emoji: "\u{1F4CD}" };
   const u = r.toUpperCase();
-  for (const [k, v] of Object.entries(RC)) if (u.includes(k)) return v;
-  return { bg: "#f4f0ff", text: "#5b21b6", border: "#c4b5fd", dot: "#5b21b6" };
+  for (const [k, v] of Object.entries(ROUTE_MAP)) if (u.includes(k)) return v;
+  if (!_rcCache[r]) {
+    _rcCache[r] = FALLBACK_RC[_rcIdx % FALLBACK_RC.length];
+    _rcIdx++;
+  }
+  return _rcCache[r];
 }
 function toTitle(s?: string) {
   if (!s) return "\u2014";
@@ -110,17 +136,42 @@ function fmtPhone(p?: string) {
   if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
   return p;
 }
-function shortPlan(id?: string) {
-  if (!id) return "\u2014";
-  const p = id.replace("plans/", "");
-  return p.length > 10 ? `${p.slice(0, 8)}\u2026` : p;
+function fuzzy(text: string, q: string): number {
+  if (!text || !q) return 0;
+  const t = text.toLowerCase(),
+    ql = q.toLowerCase().trim();
+  if (t === ql) return 3;
+  if (t.startsWith(ql)) return 2.5;
+  if (t.includes(ql)) return 2;
+  const w = ql.split(/\s+/);
+  if (w.every((x) => t.includes(x))) return 1;
+  if (w.some((x) => t.includes(x))) return 0.5;
+  return 0;
 }
-function fuzzy(text: string, q: string) {
-  if (!text || !q) return false;
-  const t = text.toLowerCase();
-  const ql = q.toLowerCase().trim();
-  if (t.includes(ql)) return true;
-  return ql.split(/\s+/).every((w) => t.includes(w));
+function scoreStop(s: StopResult, q: string) {
+  return Math.max(
+    fuzzy(s.recipient_name || "", q) * 3,
+    fuzzy(s.address || "", q) * 2.5,
+    fuzzy(s.city || "", q) * 2,
+    fuzzy(s.rx_pharma_id || "", q) * 2,
+    fuzzy(s.recipient_phone || "", q) * 1.5,
+    fuzzy(s.route_title || "", q),
+    fuzzy(String(s.rtstop_id || ""), q),
+    fuzzy(s.delivery_state || "", q) * 0.5,
+    fuzzy(s.event_type || "", q) * 0.5,
+  );
+}
+function scoreScan(s: ScanResult, q: string) {
+  return Math.max(
+    fuzzy(s.full_name || "", q) * 3,
+    fuzzy(s.address || "", q) * 2.5,
+    fuzzy(s.full_address || "", q) * 2.5,
+    fuzzy(s.city || "", q) * 2,
+    fuzzy(s.rx_pharma_id || "", q) * 2,
+    fuzzy(s.phone || "", q) * 1.5,
+    fuzzy(s.route || "", q),
+    fuzzy(String(s.rtscan_id || ""), q),
+  );
 }
 function Hl({ text, q }: { text: string; q: string }) {
   if (!q || q.length < 2 || !text) return <>{text || "\u2014"}</>;
@@ -139,9 +190,11 @@ function Hl({ text, q }: { text: string; q: string }) {
 }
 
 function StatusBadge({ state, succeeded }: { state?: string; succeeded?: boolean }) {
+  const cls =
+    "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 font-semibold text-[10px]";
   if (succeeded)
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 font-semibold text-[10px] text-green-700">
+      <span className={`${cls} border-green-200 bg-green-50 text-green-700`}>
         <CheckCircle2 className="h-2.5 w-2.5" />
         Delivered
       </span>
@@ -149,39 +202,51 @@ function StatusBadge({ state, succeeded }: { state?: string; succeeded?: boolean
   const s = state?.toLowerCase() || "";
   if (s.includes("failed") || s.includes("unattempted"))
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 font-semibold text-[10px] text-rose-700">
+      <span className={`${cls} border-rose-200 bg-rose-50 text-rose-700`}>
         <AlertCircle className="h-2.5 w-2.5" />
         {toTitle(state)}
       </span>
     );
   if (s.includes("transit") || s.includes("allocated"))
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-[10px] text-blue-700">
+      <span className={`${cls} border-blue-200 bg-blue-50 text-blue-700`}>
         <Truck className="h-2.5 w-2.5" />
         {toTitle(state)}
       </span>
     );
-  if (s.includes("pending") || s.includes("unassigned"))
+  if (s.includes("pending") || s.includes("complete"))
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-[10px] text-amber-700">
+      <span className={`${cls} border-amber-200 bg-amber-50 text-amber-700`}>
         <Clock className="h-2.5 w-2.5" />
         {toTitle(state)}
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 font-medium text-[10px] text-muted-foreground">
+    <span className={`${cls} border-border bg-muted/40 font-medium text-muted-foreground`}>
       <Circle className="h-2 w-2" />
       {toTitle(state) || "\u2014"}
     </span>
   );
 }
-
-function ImgThumb({ url, alt }: { url?: string; alt?: string }) {
+function RouteBadge({ route }: { route?: string }) {
+  if (!route) return <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>;
+  const c = getRC(route);
+  return (
+    <span
+      style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, boxShadow: `0 0 6px ${c.glow}` }}
+      className="inline-flex max-w-full items-center gap-0.5 whitespace-nowrap rounded-full px-2 py-0.5 font-bold text-[9px]"
+    >
+      {c.emoji} <span className="truncate">{route}</span>
+    </span>
+  );
+}
+function ImgThumb({ url, alt, fullName, rxId }: { url?: string; alt?: string; fullName?: string; rxId?: string }) {
   const [open, setOpen] = useState(false);
-  if (!url)
+  const [err, setErr] = useState(false);
+  if (!url || err)
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border border-dashed text-muted-foreground/30">
-        <ZoomIn className="h-3 w-3" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border border-dashed bg-muted/20">
+        <Camera className="h-3 w-3 text-muted-foreground/25" />
       </div>
     );
   return (
@@ -192,31 +257,50 @@ function ImgThumb({ url, alt }: { url?: string; alt?: string }) {
           e.stopPropagation();
           setOpen(true);
         }}
-        className="group/img relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted transition-all hover:border-primary/40 hover:shadow-sm"
+        className="group/img relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted transition-all hover:border-primary/40 hover:shadow-sm"
       >
-        {/* biome-ignore lint/a11y/useAltText: thumbnail */}
-        <img
-          src={url}
-          alt={alt || "photo"}
-          className="h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
+        {/* biome-ignore lint/a11y/useAltText: thumb */}
+        <img src={url} alt={alt || "photo"} className="h-full w-full object-cover" onError={() => setErr(true)} />
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover/img:bg-black/20 group-hover/img:opacity-100">
           <ZoomIn className="h-3 w-3 text-white" />
         </div>
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg p-2">
-          {/* biome-ignore lint/a11y/useAltText: fullscreen */}
-          <img src={url} alt={alt || "photo"} className="w-full rounded-xl object-contain" />
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="overflow-hidden rounded-2xl bg-black/95 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-center justify-between border-white/10 border-b px-4 py-3">
+              <div>
+                <p className="font-semibold text-sm text-white">{fullName || alt || "Photo"}</p>
+                {rxId && <p className="font-mono text-[11px] text-white/50">{rxId}</p>}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+                className="h-7 w-7 text-white/50 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-3">
+              {/* biome-ignore lint/a11y/useAltText: full */}
+              <img src={url} alt={alt || "photo"} className="w-full rounded-xl object-contain" />
+            </div>
+          </motion.div>
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
+const STOP_COLS =
+  "minmax(150px,1.6fr) minmax(110px,.9fr) minmax(150px,1.6fr) minmax(80px,.7fr) minmax(90px,.9fr) minmax(90px,.9fr) 38px 38px minmax(100px,.9fr) 28px";
+const SCAN_COLS =
+  "minmax(150px,1.6fr) minmax(110px,.9fr) minmax(160px,1.8fr) minmax(80px,.7fr) minmax(90px,.9fr) minmax(90px,.9fr) 38px minmax(80px,.7fr) 28px";
 const HINTS = [
   { label: "Kissimmee", icon: "\u{1F4CD}", cls: "hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700" },
   {
@@ -233,11 +317,6 @@ const HINTS = [
   },
 ];
 
-const STOP_COLS =
-  "minmax(160px,1.8fr) minmax(120px,1fr) minmax(160px,1.8fr) minmax(90px,.8fr) minmax(100px,1fr) minmax(100px,1fr) minmax(60px,.5fr) 40px 28px minmax(120px,1fr) 28px";
-const SCAN_COLS =
-  "minmax(160px,1.8fr) minmax(120px,1fr) minmax(180px,2fr) minmax(90px,.8fr) minmax(100px,1fr) minmax(100px,1fr) 40px minmax(80px,.9fr) 28px";
-
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [scans, setScans] = useState<ScanResult[]>([]);
@@ -248,29 +327,42 @@ export default function SearchPage() {
   const [booting, setBooting] = useState(true);
   const [tab, setTab] = useState<"all" | "scans" | "stops">("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [routeFilter, setRouteFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "scans" | "stops">("all");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    (async () => {
-      setBooting(true);
-      try {
-        const [sr, tr] = await Promise.all([
-          fetch("/api/data/package-scans?limit=500"),
-          fetch("/api/data/spoke-stops?limit=500"),
-        ]);
-        if (sr.ok) {
-          const d = await sr.json();
-          setAllScans(d.list || d || []);
-        }
-        if (tr.ok) {
-          const d = await tr.json();
-          setAllStops(d.list || d || []);
-        }
-      } finally {
-        setBooting(false);
+  const boot = useCallback(async (silent = false) => {
+    if (!silent) setBooting(true);
+    try {
+      const [sr, tr] = await Promise.all([
+        fetch("/api/data/package-scans?limit=500"),
+        fetch("/api/data/spoke-stops?limit=500"),
+      ]);
+      if (sr.ok) {
+        const d = await sr.json();
+        setAllScans(d.list || d || []);
       }
-    })();
+      if (tr.ok) {
+        const d = await tr.json();
+        setAllStops(d.list || d || []);
+      }
+    } finally {
+      setBooting(false);
+    }
   }, []);
+  useEffect(() => {
+    boot();
+  }, [boot]);
+
+  const scanImageMap = useRef<Map<number, string>>(new Map());
+  useEffect(() => {
+    const m = new Map<number, string>();
+    for (const s of allScans) {
+      if (s.rtscan_id && s.image_url) m.set(s.rtscan_id, s.image_url);
+    }
+    scanImageMap.current = m;
+  }, [allScans]);
 
   const runFilter = useCallback(
     (q: string) => {
@@ -281,34 +373,20 @@ export default function SearchPage() {
       }
       setScans(
         allScans
-          .filter(
-            (s) =>
-              fuzzy(s.full_name || "", q) ||
-              fuzzy(s.rx_pharma_id || "", q) ||
-              fuzzy(s.address || "", q) ||
-              fuzzy(s.full_address || "", q) ||
-              fuzzy(s.city || "", q) ||
-              fuzzy(s.route || "", q) ||
-              fuzzy(s.phone || "", q) ||
-              fuzzy(String(s.rtscan_id || ""), q),
-          )
+          .map((s) => ({ ...s, _score: scoreScan(s, q) }))
+          .filter((s) => (s._score ?? 0) > 0)
+          .sort((a, b) => (b._score || 0) - (a._score || 0))
           .slice(0, 150),
       );
       setStops(
         allStops
-          .filter(
-            (s) =>
-              fuzzy(s.recipient_name || "", q) ||
-              fuzzy(s.rx_pharma_id || "", q) ||
-              fuzzy(s.address || "", q) ||
-              fuzzy(s.full_address || "", q) ||
-              fuzzy(s.city || "", q) ||
-              fuzzy(s.route_title || "", q) ||
-              fuzzy(s.recipient_phone || "", q) ||
-              fuzzy(String(s.rtstop_id || ""), q) ||
-              fuzzy(s.delivery_state || "", q) ||
-              fuzzy(s.event_type || "", q),
-          )
+          .map((s) => ({
+            ...s,
+            _score: scoreStop(s, q),
+            _scanImage: s.rtscan_id ? scanImageMap.current.get(s.rtscan_id) || "" : "",
+          }))
+          .filter((s) => (s._score ?? 0) > 0)
+          .sort((a, b) => (b._score || 0) - (a._score || 0))
           .slice(0, 150),
       );
     },
@@ -325,33 +403,111 @@ export default function SearchPage() {
     return () => clearTimeout(t);
   }, [query, runFilter, booting]);
 
-  const visScans = tab === "stops" ? [] : scans;
-  const visStops = tab === "scans" ? [] : stops;
+  const visStops = (() => {
+    if (sourceFilter === "scans" || tab === "scans") return [];
+    let r = stops;
+    if (routeFilter !== "all") r = r.filter((s) => s.route_title === routeFilter);
+    if (statusFilter !== "all") r = r.filter((s) => s.delivery_state === statusFilter);
+    return r;
+  })();
+  const visScans = (() => {
+    if (sourceFilter === "stops" || tab === "stops") return [];
+    let r = scans;
+    if (routeFilter !== "all") r = r.filter((s) => s.route === routeFilter);
+    return r;
+  })();
   const total = visScans.length + visStops.length;
   const hasQuery = query.trim().length >= 2;
-
+  const allRoutes = [
+    ...new Set([...stops.map((s) => s.route_title), ...scans.map((s) => s.route)].filter(Boolean) as string[]),
+  ].sort();
+  const allStatuses = [...new Set(stops.map((s) => s.delivery_state).filter(Boolean) as string[])].sort();
   const TH = ({ children }: { children: React.ReactNode }) => (
     <span className="truncate font-bold text-[9px] text-muted-foreground/50 uppercase tracking-widest">{children}</span>
   );
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden bg-background">
-      {/* Search bar */}
-      <div className="border-b bg-background px-5 pt-5 pb-4">
-        <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+    <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+      <div className="border-b bg-muted/10 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="font-bold text-sm">Package Search</h1>
+            <p className="text-[10px] text-muted-foreground">
+              {booting
+                ? "Loading..."
+                : hasQuery
+                  ? `${total} result${total !== 1 ? "s" : ""} \u00B7 ${allStops.length + allScans.length} indexed`
+                  : `${allStops.length} stops \u00B7 ${allScans.length} scans indexed`}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {hasQuery && allRoutes.length > 0 && (
+              <Select value={routeFilter} onValueChange={setRouteFilter}>
+                <SelectTrigger className="h-7 w-36 text-xs">
+                  <SelectValue placeholder="All Routes" />
+                </SelectTrigger>
+                <SelectContent style={{ zIndex: 9999 }}>
+                  <SelectItem value="all">All Routes</SelectItem>
+                  {allRoutes.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {getRC(r).emoji} {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {hasQuery && allStatuses.length > 0 && (
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-7 w-36 text-xs">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent style={{ zIndex: 9999 }}>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {allStatuses.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {toTitle(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {hasQuery && (
+              <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "scans" | "stops")}>
+                <SelectTrigger className="h-7 w-28 text-xs">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent style={{ zIndex: 9999 }}>
+                  <SelectItem value="all">All sources</SelectItem>
+                  <SelectItem value="stops">Stops only</SelectItem>
+                  <SelectItem value="scans">Scans only</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <motion.button
+              whileTap={{ rotate: 180 }}
+              type="button"
+              onClick={() => boot(true)}
+              disabled={booting}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${booting ? "animate-spin" : ""}`} />
+            </motion.button>
+          </div>
+        </div>
+        <div className="relative mt-2.5">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             {loading ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
             ) : (
-              <Search className="h-5 w-5 text-muted-foreground" />
+              <Search className="h-3.5 w-3.5 text-muted-foreground" />
             )}
           </div>
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by address, patient name, Rx#, phone, route..."
-            className="h-[52px] w-full rounded-2xl border border-border bg-background py-4 pr-14 pl-12 text-sm shadow-sm outline-none ring-0 transition-all placeholder:text-muted-foreground/50 focus:border-primary focus:shadow-md focus:ring-2 focus:ring-primary/10"
+            placeholder="Search by address, patient name, Rx#, phone or route..."
+            className="h-9 w-full rounded-xl border border-border bg-background py-2 pr-9 pl-9 text-sm shadow-sm outline-none ring-0 transition-all placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/10"
           />
           <AnimatePresence>
             {query && (
@@ -366,18 +522,17 @@ export default function SearchPage() {
                   setStops([]);
                   inputRef.current?.focus();
                 }}
-                className="absolute inset-y-0 right-4 flex items-center text-muted-foreground hover:text-foreground"
+                className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </motion.button>
             )}
           </AnimatePresence>
         </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {!hasQuery ? (
             <>
-              <span className="mr-0.5 font-medium text-[10px] text-muted-foreground/50">Try:</span>
+              <span className="mr-0.5 text-[10px] text-muted-foreground/50">Try:</span>
               {HINTS.map((h) => (
                 <button
                   key={h.label}
@@ -405,7 +560,7 @@ export default function SearchPage() {
                     key={t.id}
                     type="button"
                     onClick={() => setTab(t.id)}
-                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-semibold text-xs transition-all ${tab === t.id ? "bg-primary text-primary-foreground shadow-sm" : "border border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}
+                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1 font-semibold text-xs transition-all ${tab === t.id ? "bg-primary text-primary-foreground shadow-sm" : "border border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}
                   >
                     <Icon className="h-3 w-3" />
                     {t.label}
@@ -425,15 +580,13 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {/* Results */}
       <div className="flex-1 overflow-auto">
-        <div className="px-5 py-4">
-          {/* Empty state */}
+        <div className="p-3">
           {!hasQuery && !booting && (
-            <div className="flex flex-col items-center gap-5 pt-14 text-muted-foreground">
+            <div className="flex flex-col items-center gap-4 pt-12 text-muted-foreground">
               <div className="relative">
-                <div className="flex h-[72px] w-[72px] items-center justify-center rounded-3xl bg-muted/50 p-5">
-                  <Search className="h-8 w-8 opacity-25" />
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 p-4">
+                  <Search className="h-7 w-7 opacity-25" />
                 </div>
                 <div className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-xl bg-primary/10">
                   <MapPin className="h-3.5 w-3.5 text-primary" />
@@ -457,7 +610,7 @@ export default function SearchPage() {
                     onClick={() => setQuery(c.e)}
                     className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-card px-2 py-3 text-center transition-all hover:border-primary/30 hover:bg-primary/5"
                   >
-                    <span className="text-lg">{c.i}</span>
+                    <span className="text-xl">{c.i}</span>
                     <span className="font-bold text-[9px] text-muted-foreground uppercase tracking-wide">{c.l}</span>
                     <span className="font-medium text-[10px] text-foreground">{c.e}</span>
                   </button>
@@ -465,22 +618,20 @@ export default function SearchPage() {
               </div>
             </div>
           )}
-
           {booting && (
-            <div className="space-y-2 pt-2">
+            <div className="space-y-1.5 pt-1">
               {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-11 rounded-xl" style={{ opacity: 1 - i * 0.18 }} />
+                <Skeleton key={i} className="h-10 rounded-xl" style={{ opacity: 1 - i * 0.18 }} />
               ))}
             </div>
           )}
           {loading && hasQuery && (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Skeleton key={i} className="h-11 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
+            <div className="space-y-1.5">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-10 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
               ))}
             </div>
           )}
-
           {!loading && hasQuery && total === 0 && (
             <div className="flex flex-col items-center gap-3 pt-10 text-muted-foreground">
               <Package className="h-10 w-10 opacity-10" />
@@ -490,62 +641,65 @@ export default function SearchPage() {
           )}
 
           {!loading && hasQuery && total > 0 && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-              {/* STOPS TABLE */}
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
               {visStops.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-2 border-b bg-muted/20 px-4 py-2.5">
-                    <Navigation2 className="h-4 w-4 text-primary" />
-                    <span className="font-semibold text-sm">Delivery Stops</span>
-                    <span className="rounded-full border bg-background px-2 py-0.5 font-bold text-[10px] text-muted-foreground">
+                <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-2 border-b bg-muted/20 px-3.5 py-2">
+                    <Navigation2 className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold text-xs">Delivery Stops</span>
+                    <span className="rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
                       {visStops.length}
                     </span>
                   </div>
-
                   <div className="overflow-x-auto">
-                    <div className="min-w-[900px]">
+                    <div className="min-w-[860px]">
                       <div
-                        className="grid gap-2 border-b bg-muted/10 px-4 py-2"
+                        className="grid gap-2 border-b bg-muted/10 px-3.5 py-1.5"
                         style={{ gridTemplateColumns: STOP_COLS }}
                       >
                         <TH>Name</TH>
                         <TH>Phone</TH>
                         <TH>Address</TH>
                         <TH>City</TH>
-                        <TH>Rx / Pkg ID</TH>
+                        <TH>Rx / ID</TH>
                         <TH>Zone</TH>
-                        <TH>Stop #</TH>
+                        <TH>Stop</TH>
                         <TH>Img</TH>
-                        <TH>{""}</TH>
                         <TH>Status</TH>
                         <TH>{""}</TH>
                       </div>
-
                       <div className="divide-y">
-                        {visStops.map((stop) => {
-                          const rc = getRC(stop.route_title);
+                        {visStops.map((stop, idx) => {
                           const isExp = expanded === stop._id;
                           const name = toTitle(stop.recipient_name);
                           const addr = toTitle(stop.address);
-                          const photo = stop.photo_urls?.split(",")?.[0]?.trim() || "";
-
+                          const img = stop._scanImage || stop.photo_urls?.split(",")?.[0]?.trim() || "";
+                          const isTop = idx === 0;
                           return (
                             <div
                               key={stop._id}
-                              className={`group transition-colors ${isExp ? "bg-primary/[0.025]" : "hover:bg-muted/30"}`}
-                              style={{ borderLeft: isExp ? "3px solid hsl(var(--primary))" : "3px solid transparent" }}
+                              className={`group transition-colors ${isExp ? "bg-primary/[0.025]" : "hover:bg-muted/25"}`}
+                              style={{
+                                borderLeft: isExp
+                                  ? "3px solid hsl(var(--primary))"
+                                  : isTop
+                                    ? "3px solid hsl(var(--primary)/0.3)"
+                                    : "3px solid transparent",
+                              }}
                             >
                               <button
                                 type="button"
                                 onClick={() => setExpanded(isExp ? null : stop._id)}
-                                className="grid w-full cursor-pointer items-center gap-2 px-4 py-3 text-left"
+                                className="grid w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left"
                                 style={{ gridTemplateColumns: STOP_COLS }}
                               >
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-xs">
-                                    {"\u{1F4CD}"}
+                                  <div
+                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs ${isTop ? "bg-primary/10" : "bg-violet-50"}`}
+                                  >
+                                    {isTop ? "\u{1F947}" : "\u{1F4CD}"}
                                   </div>
-                                  <span className="truncate font-semibold text-xs leading-tight">
+                                  <span className="truncate font-semibold text-xs">
                                     <Hl text={name} q={query} />
                                   </span>
                                 </div>
@@ -567,20 +721,7 @@ export default function SearchPage() {
                                 <span className="truncate font-mono text-[10px] text-muted-foreground">
                                   <Hl text={stop.rx_pharma_id || "\u2014"} q={query} />
                                 </span>
-                                <div>
-                                  {rc ? (
-                                    <span
-                                      style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
-                                      className="inline-flex max-w-full items-center gap-0.5 rounded-full px-2 py-0.5 font-bold text-[9px]"
-                                    >
-                                      <span className="truncate">
-                                        <Hl text={stop.route_title || ""} q={query} />
-                                      </span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
-                                  )}
-                                </div>
+                                <RouteBadge route={stop.route_title} />
                                 <div className="flex items-center justify-center">
                                   {stop.stop_position ? (
                                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted font-bold text-[9px] text-muted-foreground">
@@ -590,20 +731,16 @@ export default function SearchPage() {
                                     <span className="text-[10px] text-muted-foreground/30">{"\u2014"}</span>
                                   )}
                                 </div>
-                                <ImgThumb url={photo} alt={name} />
-                                <div className="flex items-center justify-center">
+                                <ImgThumb url={img} alt={name} fullName={name} rxId={stop.rx_pharma_id} />
+                                <StatusBadge state={stop.delivery_state} succeeded={stop.delivery_succeeded} />
+                                <div className="flex justify-end">
                                   {isExp ? (
                                     <ChevronUp className="h-3.5 w-3.5 text-primary" />
                                   ) : (
                                     <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground" />
                                   )}
                                 </div>
-                                <div>
-                                  <StatusBadge state={stop.delivery_state} succeeded={stop.delivery_succeeded} />
-                                </div>
-                                <div />
                               </button>
-
                               <AnimatePresence>
                                 {isExp && (
                                   <motion.div
@@ -614,17 +751,21 @@ export default function SearchPage() {
                                     className="overflow-hidden border-primary/10 border-t bg-primary/[0.015]"
                                   >
                                     <div className="px-4 py-3">
-                                      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4 lg:grid-cols-6">
+                                      <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 lg:grid-cols-5">
                                         {[
                                           { l: "State", v: stop.state },
                                           { l: "Zipcode", v: stop.zipcode },
-                                          { l: "Event type", v: stop.event_type?.replace(/^stop\./, "") },
-                                          { l: "Label status", v: stop.label_status },
+                                          { l: "Event", v: stop.event_type?.replace(/^stop\./, "") },
+                                          { l: "Label", v: stop.label_status },
                                           { l: "ETA", v: stop.eta_arrival },
                                           { l: "Date", v: fmtDate(stop.created_at) },
-                                          { l: "Plan ID", v: shortPlan(stop.plan_id), mono: true },
                                           {
-                                            l: "RT Stop ID",
+                                            l: "Plan",
+                                            v: stop.plan_id?.replace("plans/", "")?.slice(0, 10) || undefined,
+                                            mono: true,
+                                          },
+                                          {
+                                            l: "Stop ID",
                                             v: stop.rtstop_id ? `#${stop.rtstop_id}` : undefined,
                                             mono: true,
                                           },
@@ -646,19 +787,11 @@ export default function SearchPage() {
                                       {stop.stop_notes && (
                                         <div className="mt-3 rounded-xl border border-border bg-background/60 px-3 py-2">
                                           <p className="font-bold text-[9px] text-muted-foreground/40 uppercase tracking-widest">
-                                            Stop notes
+                                            Notes
                                           </p>
                                           <p className="mt-1 whitespace-pre-wrap text-muted-foreground text-xs leading-relaxed">
                                             {stop.stop_notes}
                                           </p>
-                                        </div>
-                                      )}
-                                      {stop.signature_url && (
-                                        <div className="mt-3 flex items-center gap-2">
-                                          <span className="font-bold text-[9px] text-muted-foreground/40 uppercase tracking-widest">
-                                            Signature
-                                          </span>
-                                          <ImgThumb url={stop.signature_url} alt="Signature" />
                                         </div>
                                       )}
                                       <div className="mt-3 flex flex-wrap gap-2 border-border/50 border-t pt-3">
@@ -666,7 +799,8 @@ export default function SearchPage() {
                                           href={`/dashboard/stops?search=${encodeURIComponent(stop.rx_pharma_id || stop.recipient_name || stop.address || "")}`}
                                           className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm transition-all hover:opacity-90"
                                         >
-                                          <ArrowRight className="h-3.5 w-3.5" /> Go to Stop detail
+                                          <ArrowRight className="h-3.5 w-3.5" />
+                                          Go to Stop detail
                                         </a>
                                         {stop.tracking_link && (
                                           <a
@@ -675,7 +809,8 @@ export default function SearchPage() {
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-all hover:border-primary/30 hover:text-primary"
                                           >
-                                            <ExternalLink className="h-3 w-3" /> Track delivery
+                                            <ExternalLink className="h-3 w-3" />
+                                            Track
                                           </a>
                                         )}
                                         {stop.web_app_link && (
@@ -685,7 +820,8 @@ export default function SearchPage() {
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-all hover:border-primary/30 hover:text-primary"
                                           >
-                                            <Navigation2 className="h-3 w-3" /> Dispatch view
+                                            <Navigation2 className="h-3 w-3" />
+                                            Dispatch
                                           </a>
                                         )}
                                       </div>
@@ -701,21 +837,19 @@ export default function SearchPage() {
                   </div>
                 </div>
               )}
-
-              {/* SCANS TABLE */}
               {visScans.length > 0 && (
-                <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                  <div className="flex items-center gap-2 border-b bg-muted/20 px-4 py-2.5">
-                    <ScanLine className="h-4 w-4 text-green-600" />
-                    <span className="font-semibold text-sm">Package Scans</span>
-                    <span className="rounded-full border bg-background px-2 py-0.5 font-bold text-[10px] text-muted-foreground">
+                <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-2 border-b bg-muted/20 px-3.5 py-2">
+                    <ScanLine className="h-3.5 w-3.5 text-green-600" />
+                    <span className="font-semibold text-xs">Package Scans</span>
+                    <span className="rounded-full border bg-background px-1.5 py-0.5 font-bold text-[9px] text-muted-foreground">
                       {visScans.length}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
                     <div className="min-w-[800px]">
                       <div
-                        className="grid gap-2 border-b bg-muted/10 px-4 py-2"
+                        className="grid gap-2 border-b bg-muted/10 px-3.5 py-1.5"
                         style={{ gridTemplateColumns: SCAN_COLS }}
                       >
                         <TH>Name</TH>
@@ -729,26 +863,34 @@ export default function SearchPage() {
                         <TH>{""}</TH>
                       </div>
                       <div className="divide-y">
-                        {visScans.map((scan) => {
-                          const rc = getRC(scan.route);
+                        {visScans.map((scan, idx) => {
                           const isExp = expanded === scan._id;
                           const name = toTitle(scan.full_name);
                           const addr = toTitle((scan.full_address || scan.address || "").toLowerCase());
+                          const isTop = idx === 0;
                           return (
                             <div
                               key={scan._id}
-                              className={`group transition-colors ${isExp ? "bg-primary/[0.025]" : "hover:bg-muted/30"}`}
-                              style={{ borderLeft: isExp ? "3px solid hsl(var(--primary))" : "3px solid transparent" }}
+                              className={`group transition-colors ${isExp ? "bg-primary/[0.025]" : "hover:bg-muted/25"}`}
+                              style={{
+                                borderLeft: isExp
+                                  ? "3px solid hsl(var(--primary))"
+                                  : isTop
+                                    ? "3px solid hsl(var(--primary)/0.3)"
+                                    : "3px solid transparent",
+                              }}
                             >
                               <button
                                 type="button"
                                 onClick={() => setExpanded(isExp ? null : scan._id)}
-                                className="grid w-full cursor-pointer items-center gap-2 px-4 py-3 text-left"
+                                className="grid w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left"
                                 style={{ gridTemplateColumns: SCAN_COLS }}
                               >
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-green-50 text-xs">
-                                    {"\u{1F4E6}"}
+                                  <div
+                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs ${isTop ? "bg-primary/10" : "bg-green-50"}`}
+                                  >
+                                    {isTop ? "\u{1F947}" : "\u{1F4E6}"}
                                   </div>
                                   <span className="truncate font-semibold text-xs">
                                     <Hl text={name} q={query} />
@@ -772,19 +914,8 @@ export default function SearchPage() {
                                 <span className="truncate font-mono text-[10px] text-muted-foreground">
                                   <Hl text={scan.rx_pharma_id || "\u2014"} q={query} />
                                 </span>
-                                <div>
-                                  {rc ? (
-                                    <span
-                                      style={{ background: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
-                                      className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 font-bold text-[9px]"
-                                    >
-                                      {scan.route}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>
-                                  )}
-                                </div>
-                                <ImgThumb url={scan.image_url} alt={name} />
+                                <RouteBadge route={scan.route} />
+                                <ImgThumb url={scan.image_url} alt={name} fullName={name} rxId={scan.rx_pharma_id} />
                                 <span className="text-[10px] text-muted-foreground/60">{fmtDate(scan.created_at)}</span>
                                 <div className="flex justify-end">
                                   {isExp ? (
@@ -804,7 +935,7 @@ export default function SearchPage() {
                                     className="overflow-hidden border-primary/10 border-t bg-primary/[0.015]"
                                   >
                                     <div className="px-4 py-3">
-                                      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4">
+                                      <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
                                         {[
                                           { l: "State", v: scan.state },
                                           { l: "Zipcode", v: scan.zipcode },
@@ -836,7 +967,8 @@ export default function SearchPage() {
                                           href={`/dashboard/scans?search=${encodeURIComponent(scan.full_name || scan.rx_pharma_id || "")}`}
                                           className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm transition-all hover:opacity-90"
                                         >
-                                          <ArrowRight className="h-3.5 w-3.5" /> Go to Scan detail
+                                          <ArrowRight className="h-3.5 w-3.5" />
+                                          Go to Scan detail
                                         </a>
                                       </div>
                                     </div>

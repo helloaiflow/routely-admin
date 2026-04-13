@@ -387,8 +387,8 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
             {scan.route && <RouteBadge route={scan.route} />}
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
-          <X className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
+          <X className="h-5 w-5" />
         </Button>
       </div>
 
@@ -730,12 +730,12 @@ export default function ScansPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: selected ? "min(300px,90vw) 1fr min(300px,90vw)" : "min(300px,90vw) 1fr",
+        gridTemplateColumns: "300px 1fr",
         gridTemplateRows: "1fr",
       }}
     >
-      {/* COL 1: Scan List */}
-      <div className="flex min-w-0 flex-col overflow-hidden border-r">
+      {/* COL 1: Scan List — hidden on mobile when detail is open */}
+      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected ? "hidden md:flex" : "flex"}`}>
         <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>
@@ -925,8 +925,8 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* COL 2: Map */}
-      <div className={`flex flex-col overflow-hidden ${!selected ? "hidden sm:flex" : "flex"}`}>
+      {/* COL 2: Map — hidden on mobile */}
+      <div className="hidden flex-col overflow-hidden sm:flex">
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
@@ -972,11 +972,16 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* COL 3: Detail panel */}
+      {/* COL 3: Detail panel — full screen on mobile, sidebar on desktop */}
       {selected && (
-        <div className="flex min-w-0 max-w-full flex-col overflow-hidden border-l">
-          <DetailPanel scan={selected} onClose={() => setSelected(null)} />
-        </div>
+        <>
+          <div className="hidden min-w-0 max-w-[300px] flex-col overflow-hidden border-l sm:flex">
+            <DetailPanel scan={selected} onClose={() => setSelected(null)} />
+          </div>
+          <div className="fixed inset-0 z-50 flex flex-col bg-background sm:hidden">
+            <DetailPanel scan={selected} onClose={() => setSelected(null)} />
+          </div>
+        </>
       )}
     </div>
   );

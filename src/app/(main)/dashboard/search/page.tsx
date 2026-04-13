@@ -407,7 +407,7 @@ export default function SearchPage() {
                 ? "Loading..."
                 : hasQuery
                   ? `${total} result${total !== 1 ? "s" : ""} found`
-                  : `${allStops.length} stops \u00B7 ${allScans.length} scans indexed`}
+                  : `${allStops.length} stops · ${allScans.length} scans indexed`}
             </p>
           </div>
           <motion.button
@@ -420,8 +420,8 @@ export default function SearchPage() {
             <RefreshCw className={`h-4 w-4 ${booting ? "animate-spin" : ""}`} />
           </motion.button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[160px] flex-1 sm:max-w-xs">
+        <div className="flex flex-col gap-2">
+          <div className="relative w-full">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
               {loading ? (
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
@@ -434,7 +434,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search stops, scans..."
-              className="h-9 pr-9 pl-9 text-sm"
+              className="h-10 pr-9 pl-9 text-base"
               autoFocus
             />
             <AnimatePresence>
@@ -452,48 +452,50 @@ export default function SearchPage() {
                   }}
                   className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                 </motion.button>
               )}
             </AnimatePresence>
           </div>
-          <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "scans" | "stops")}>
-            <SelectTrigger className="h-9 w-28 text-sm">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent style={{ zIndex: 9999 }}>
-              <SelectItem value="all">All Sources</SelectItem>
-              <SelectItem value="stops">Stops only</SelectItem>
-              <SelectItem value="scans">Scans only</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={routeFilter} onValueChange={setRouteFilter}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <SelectValue placeholder="All Routes" />
-            </SelectTrigger>
-            <SelectContent style={{ zIndex: 9999 }}>
-              <SelectItem value="all">All Routes</SelectItem>
-              {allRoutes.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {getRC(r).emoji} {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-36 text-sm">
-              <SelectValue placeholder="All Delivery" />
-            </SelectTrigger>
-            <SelectContent style={{ zIndex: 9999 }}>
-              <SelectItem value="all">All Delivery</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              {allStatuses.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {toTitle(s)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "scans" | "stops")}>
+              <SelectTrigger className="h-9 w-28 shrink-0 text-sm">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent style={{ zIndex: 9999 }}>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="stops">Stops only</SelectItem>
+                <SelectItem value="scans">Scans only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={routeFilter} onValueChange={setRouteFilter}>
+              <SelectTrigger className="h-9 w-32 shrink-0 text-sm">
+                <SelectValue placeholder="All Routes" />
+              </SelectTrigger>
+              <SelectContent style={{ zIndex: 9999 }}>
+                <SelectItem value="all">All Routes</SelectItem>
+                {allRoutes.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {getRC(r).emoji} {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-36 shrink-0 text-sm">
+                <SelectValue placeholder="All Delivery" />
+              </SelectTrigger>
+              <SelectContent style={{ zIndex: 9999 }}>
+                <SelectItem value="all">All Delivery</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                {allStatuses.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {toTitle(s)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
       <div className="flex-1 overflow-auto px-4 pb-4 sm:px-6 sm:pb-6">
@@ -504,7 +506,7 @@ export default function SearchPage() {
             </div>
             <div className="text-center">
               <p className="font-semibold text-foreground text-sm">Search across all records</p>
-              <p className="mt-1 text-xs opacity-55">Address \u00B7 patient \u00B7 Rx# \u00B7 phone \u00B7 route</p>
+              <p className="mt-1 text-xs opacity-55">Address · patient · Rx# · phone · route</p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               {HINTS.map((h) => (
@@ -675,7 +677,7 @@ export default function SearchPage() {
                                   </span>
                                 )}
                                 {stop.driver_name && (
-                                  <span className="text-[10px] text-muted-foreground">\u00B7 {stop.driver_name}</span>
+                                  <span className="text-[10px] text-muted-foreground">· {stop.driver_name}</span>
                                 )}
                               </div>
                             </div>

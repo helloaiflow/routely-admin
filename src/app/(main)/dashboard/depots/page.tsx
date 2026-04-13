@@ -841,12 +841,12 @@ export default function DepotsPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: selected ? "260px 1fr 380px" : "260px 1fr",
+        gridTemplateColumns: selected ? "min(260px,90vw) 1fr min(380px,90vw)" : "min(260px,90vw) 1fr",
         gridTemplateRows: "1fr",
       }}
     >
       {/* COL 1 — List */}
-      <div className="flex flex-col overflow-hidden border-r">
+      <div className="flex min-w-0 flex-col overflow-hidden border-r">
         <div className="flex items-center justify-between border-b px-3.5 py-3">
           <div>
             <h1 className="font-semibold text-sm">Depots</h1>
@@ -982,7 +982,7 @@ export default function DepotsPage() {
       </div>
 
       {/* COL 2 — Map */}
-      <div className="flex flex-col overflow-hidden">
+      <div className={`flex flex-col overflow-hidden ${!selected ? "hidden sm:flex" : "flex"}`}>
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />

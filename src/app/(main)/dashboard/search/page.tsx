@@ -85,7 +85,7 @@ interface StopResult {
   _scanImage?: string;
 }
 
-const ROUTE_MAP: Record<string, { bg: string; text: string; border: string; emoji: string }> = {
+const RM: Record<string, { bg: string; text: string; border: string; emoji: string }> = {
   "CENTRAL FL": { bg: "#fff0f8", text: "#c0006a", border: "#f9a8d4", emoji: "\u{1F306}" },
   "SOUTH FL": { bg: "#fffff0", text: "#7a7200", border: "#fde68a", emoji: "\u{1F334}" },
   "DEERFIELD FL": { bg: "#edfcff", text: "#0079a8", border: "#a5f3fc", emoji: "\u{1F98C}" },
@@ -100,7 +100,7 @@ const FB = [
 function getRC(r?: string) {
   if (!r) return { bg: "#f1f5f9", text: "#475569", border: "#e2e8f0", emoji: "\u{1F4CD}" };
   const u = r.toUpperCase();
-  for (const [k, v] of Object.entries(ROUTE_MAP)) if (u.includes(k)) return v;
+  for (const [k, v] of Object.entries(RM)) if (u.includes(k)) return v;
   if (!_rc[r]) {
     _rc[r] = FB[_ri % FB.length];
     _ri++;
@@ -216,21 +216,6 @@ function StatusBadge({ state, succeeded }: { state?: string; succeeded?: boolean
     </span>
   );
 }
-function LabelBadge({ s }: { s?: string }) {
-  if (!s) return null;
-  const m: Record<string, string> = {
-    Match: "border-green-200 bg-green-50 text-green-700",
-    Unmatch: "border-amber-200 bg-amber-50 text-amber-700",
-    Human: "border-rose-200 bg-rose-50 text-rose-700",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 font-bold text-[9px] ${m[s] || "border-border bg-muted text-muted-foreground"}`}
-    >
-      {s}
-    </span>
-  );
-}
 function RouteBadge({ route }: { route?: string }) {
   if (!route) return <span className="text-[10px] text-muted-foreground/40">{"\u2014"}</span>;
   const c = getRC(route);
@@ -262,8 +247,8 @@ function ImgThumb({ url, alt, fullName, rxId }: { url?: string; alt?: string; fu
         }}
         className="group/img relative flex h-7 w-7 shrink-0 overflow-hidden rounded-md border border-border bg-muted transition-all hover:border-primary/40 hover:shadow-sm"
       >
-        {/* biome-ignore lint/a11y/useAltText: thumb */}
-        <img src={url} alt={alt || "photo"} className="h-full w-full object-cover" onError={() => setErr(true)} />
+        {/* biome-ignore lint/a11y/useAltText: t */}
+        <img src={url} alt={alt || "p"} className="h-full w-full object-cover" onError={() => setErr(true)} />
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover/img:bg-black/20 group-hover/img:opacity-100">
           <ZoomIn className="h-2.5 w-2.5 text-white" />
         </div>
@@ -290,8 +275,8 @@ function ImgThumb({ url, alt, fullName, rxId }: { url?: string; alt?: string; fu
               </Button>
             </div>
             <div className="p-3">
-              {/* biome-ignore lint/a11y/useAltText: full */}
-              <img src={url} alt={alt || "photo"} className="w-full rounded-xl object-contain" />
+              {/* biome-ignore lint/a11y/useAltText: f */}
+              <img src={url} alt={alt || "p"} className="w-full rounded-xl object-contain" />
             </div>
           </motion.div>
         </DialogContent>
@@ -307,9 +292,9 @@ const HINTS = [
   { label: "GONZALEZ", icon: "\u{1F464}" },
   { label: "West Sample Road", icon: "\u{1F6E3}\uFE0F" },
 ];
-
+// Cols: Img|Name|Rx/ID|Address|City|Phone|Route|Zone|Driver|Stop#|Status|Chevron
 const COLS =
-  "32px minmax(130px,1.8fr) minmax(90px,1fr) minmax(140px,1.8fr) minmax(70px,.7fr) minmax(100px,.9fr) minmax(90px,.9fr) minmax(90px,.9fr) 60px minmax(100px,1fr) 28px";
+  "32px minmax(120px,1.6fr) minmax(90px,1fr) minmax(130px,1.6fr) minmax(65px,.65fr) minmax(95px,.85fr) minmax(110px,1fr) minmax(80px,.8fr) minmax(85px,.8fr) 48px minmax(95px,.9fr) 28px";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -347,16 +332,12 @@ export default function SearchPage() {
   useEffect(() => {
     boot();
   }, [boot]);
-
   const scanImageMap = useRef<Map<number, string>>(new Map());
   useEffect(() => {
     const m = new Map<number, string>();
-    for (const s of allScans) {
-      if (s.rtscan_id && s.image_url) m.set(s.rtscan_id, s.image_url);
-    }
+    for (const s of allScans) if (s.rtscan_id && s.image_url) m.set(s.rtscan_id, s.image_url);
     scanImageMap.current = m;
   }, [allScans]);
-
   const runFilter = useCallback(
     (q: string) => {
       if (!q.trim() || q.trim().length < 2) {
@@ -385,7 +366,6 @@ export default function SearchPage() {
     },
     [allScans, allStops],
   );
-
   useEffect(() => {
     if (booting) return;
     setLoading(true);
@@ -418,10 +398,10 @@ export default function SearchPage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden">
-      <div className="flex flex-col gap-2 px-6 py-4">
+      <div className="flex flex-col gap-2 px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-semibold text-2xl">Package Search</h1>
+            <h1 className="font-semibold text-xl sm:text-2xl">Package Search</h1>
             <p className="text-muted-foreground text-sm">
               {booting
                 ? "Loading..."
@@ -435,13 +415,13 @@ export default function SearchPage() {
             type="button"
             onClick={() => boot(true)}
             disabled={booting}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             <RefreshCw className={`h-4 w-4 ${booting ? "animate-spin" : ""}`} />
           </motion.button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+          <div className="relative min-w-[160px] flex-1 sm:max-w-xs">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
               {loading ? (
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
@@ -478,8 +458,8 @@ export default function SearchPage() {
             </AnimatePresence>
           </div>
           <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "scans" | "stops")}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <SelectValue placeholder="All Sources" />
+            <SelectTrigger className="h-9 w-28 text-sm">
+              <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent style={{ zIndex: 9999 }}>
               <SelectItem value="all">All Sources</SelectItem>
@@ -488,7 +468,7 @@ export default function SearchPage() {
             </SelectContent>
           </Select>
           <Select value={routeFilter} onValueChange={setRouteFilter}>
-            <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectTrigger className="h-9 w-32 text-sm">
               <SelectValue placeholder="All Routes" />
             </SelectTrigger>
             <SelectContent style={{ zIndex: 9999 }}>
@@ -501,7 +481,7 @@ export default function SearchPage() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-40 text-sm">
+            <SelectTrigger className="h-9 w-36 text-sm">
               <SelectValue placeholder="All Delivery" />
             </SelectTrigger>
             <SelectContent style={{ zIndex: 9999 }}>
@@ -516,10 +496,9 @@ export default function SearchPage() {
           </Select>
         </div>
       </div>
-
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-4 pb-4 sm:px-6 sm:pb-6">
         {!hasQuery && !booting && (
-          <div className="flex flex-col items-center gap-4 pt-12 text-muted-foreground">
+          <div className="flex flex-col items-center gap-4 pt-10 text-muted-foreground">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
               <Search className="h-6 w-6 opacity-30" />
             </div>
@@ -527,7 +506,7 @@ export default function SearchPage() {
               <p className="font-semibold text-foreground text-sm">Search across all records</p>
               <p className="mt-1 text-xs opacity-55">Address \u00B7 patient \u00B7 Rx# \u00B7 phone \u00B7 route</p>
             </div>
-            <div className="mt-1 flex flex-wrap justify-center gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {HINTS.map((h) => (
                 <button
                   key={h.label}
@@ -563,7 +542,6 @@ export default function SearchPage() {
             <p className="text-xs opacity-55">Try a partial address, last name, or Rx number</p>
           </div>
         )}
-
         {!loading && hasQuery && total > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -571,7 +549,7 @@ export default function SearchPage() {
             className="overflow-hidden rounded-xl border bg-card shadow-sm"
           >
             <div className="hidden overflow-x-auto md:block">
-              <div className="min-w-[900px]">
+              <div className="min-w-[1000px]">
                 <div
                   className="grid items-center gap-2 border-b bg-muted/30 px-4 py-2"
                   style={{ gridTemplateColumns: COLS }}
@@ -582,15 +560,15 @@ export default function SearchPage() {
                   <TH>Address</TH>
                   <TH>City</TH>
                   <TH>Phone</TH>
+                  <TH>Route</TH>
                   <TH>Zone</TH>
                   <TH>Driver</TH>
-                  <TH>Label</TH>
+                  <TH>Stop #</TH>
                   <TH>Status</TH>
                   <TH>{""}</TH>
                 </div>
               </div>
             </div>
-
             {visStops.length > 0 && (
               <>
                 <div className="flex items-center gap-2 border-b bg-violet-50/50 px-4 py-1.5">
@@ -603,7 +581,7 @@ export default function SearchPage() {
                   </span>
                 </div>
                 <div className="divide-y overflow-x-auto">
-                  <div className="min-w-[900px]">
+                  <div className="min-w-[1000px]">
                     {visStops.map((stop, idx) => {
                       const isExp = expanded === stop._id;
                       const name = toTitle(stop.recipient_name);
@@ -649,11 +627,16 @@ export default function SearchPage() {
                                 <Hl text={fmtPhone(stop.recipient_phone)} q={query} />
                               </span>
                             </div>
+                            <span className="truncate font-medium text-[10px] text-muted-foreground">
+                              <Hl text={stop.route_title || "\u2014"} q={query} />
+                            </span>
                             <RouteBadge route={stop.route_title} />
                             <span className="truncate text-[10px] text-muted-foreground">
                               <Hl text={stop.driver_name || "\u2014"} q={query} />
                             </span>
-                            <LabelBadge s={stop.label_status} />
+                            <span className="text-center font-mono text-[10px] text-foreground">
+                              {stop.stop_position ? `#${stop.stop_position}` : "\u2014"}
+                            </span>
                             <StatusBadge state={stop.delivery_state} succeeded={stop.delivery_succeeded} />
                             <div className="flex justify-end">
                               {isExp ? (
@@ -686,8 +669,14 @@ export default function SearchPage() {
                                     <Hl text={stop.rx_pharma_id} q={query} />
                                   </span>
                                 )}
-                                <RouteBadge route={stop.route_title} />
-                                <LabelBadge s={stop.label_status} />
+                                {stop.route_title && (
+                                  <span className="truncate font-medium text-[10px] text-muted-foreground">
+                                    {stop.route_title}
+                                  </span>
+                                )}
+                                {stop.driver_name && (
+                                  <span className="text-[10px] text-muted-foreground">\u00B7 {stop.driver_name}</span>
+                                )}
                               </div>
                             </div>
                             {isExp ? (
@@ -748,7 +737,7 @@ export default function SearchPage() {
                                   <div className="mt-3 flex flex-wrap gap-2 border-border/50 border-t pt-3">
                                     <a
                                       href={`/dashboard/stops?search=${encodeURIComponent(stop.rx_pharma_id || stop.recipient_name || stop.address || "")}`}
-                                      className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm transition-all hover:opacity-90"
+                                      className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm hover:opacity-90"
                                     >
                                       <ArrowRight className="h-3.5 w-3.5" />
                                       Go to Stop
@@ -758,7 +747,7 @@ export default function SearchPage() {
                                         href={stop.tracking_link}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-all hover:border-primary/30 hover:text-primary"
+                                        className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs hover:border-primary/30 hover:text-primary"
                                       >
                                         <ExternalLink className="h-3 w-3" />
                                         Track
@@ -769,7 +758,7 @@ export default function SearchPage() {
                                         href={stop.web_app_link}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs transition-all hover:border-primary/30 hover:text-primary"
+                                        className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 font-medium text-muted-foreground text-xs hover:border-primary/30 hover:text-primary"
                                       >
                                         <Navigation2 className="h-3 w-3" />
                                         Dispatch
@@ -787,7 +776,6 @@ export default function SearchPage() {
                 </div>
               </>
             )}
-
             {visScans.length > 0 && (
               <>
                 <div
@@ -802,7 +790,7 @@ export default function SearchPage() {
                   </span>
                 </div>
                 <div className="divide-y overflow-x-auto">
-                  <div className="min-w-[900px]">
+                  <div className="min-w-[1000px]">
                     {visScans.map((scan, idx) => {
                       const isExp = expanded === scan._id;
                       const name = toTitle(scan.full_name);
@@ -847,10 +835,13 @@ export default function SearchPage() {
                                 <Hl text={fmtPhone(scan.phone)} q={query} />
                               </span>
                             </div>
+                            <span className="truncate font-medium text-[10px] text-muted-foreground">
+                              <Hl text={scan.route || "\u2014"} q={query} />
+                            </span>
                             <RouteBadge route={scan.route} />
                             <span className="text-[10px] text-muted-foreground/50">{"\u2014"}</span>
-                            <span className="text-[10px] text-muted-foreground/50">{"\u2014"}</span>
                             <span className="text-[10px] text-muted-foreground/60">{fmtDate(scan.created_at)}</span>
+                            <span className="text-[10px] text-muted-foreground/50">{"\u2014"}</span>
                             <div className="flex justify-end">
                               {isExp ? (
                                 <ChevronUp className="h-3.5 w-3.5 text-primary" />
@@ -928,7 +919,7 @@ export default function SearchPage() {
                                   <div className="mt-3 flex gap-2 border-border/50 border-t pt-3">
                                     <a
                                       href={`/dashboard/scans?search=${encodeURIComponent(scan.full_name || scan.rx_pharma_id || "")}`}
-                                      className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm transition-all hover:opacity-90"
+                                      className="flex items-center gap-1.5 rounded-xl border border-primary bg-primary px-3 py-1.5 font-semibold text-primary-foreground text-xs shadow-sm hover:opacity-90"
                                     >
                                       <ArrowRight className="h-3.5 w-3.5" />
                                       Go to Scan

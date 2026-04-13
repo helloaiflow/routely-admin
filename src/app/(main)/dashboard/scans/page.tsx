@@ -533,7 +533,7 @@ function DetailPanel({ scan, onClose }: { scan: Scan; onClose: () => void }) {
   );
 }
 
-function RowBadge({ label, color }: { label: string; color: "violet" | "green" | "rose" | "amber" }) {
+function _RowBadge({ label, color }: { label: string; color: "violet" | "green" | "rose" | "amber" }) {
   const styles = {
     violet: "border-violet-200 bg-violet-50 text-violet-700",
     green: "border-green-200 bg-green-50 text-green-700",
@@ -591,7 +591,7 @@ export default function ScansPage() {
     });
   }, []);
 
-  const checkedScans = useMemo(() => data.filter((s) => checkedIds.has(s._id)), [data, checkedIds]);
+  const _checkedScans = useMemo(() => data.filter((s) => checkedIds.has(s._id)), [data, checkedIds]);
 
   const fetchData = useCallback(
     async (silent = false) => {
@@ -730,12 +730,12 @@ export default function ScansPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: selected ? "300px 1fr 300px" : "300px 1fr",
+        gridTemplateColumns: selected ? "min(300px,90vw) 1fr min(300px,90vw)" : "min(300px,90vw) 1fr",
         gridTemplateRows: "1fr",
       }}
     >
       {/* COL 1: Scan List */}
-      <div className="flex flex-col overflow-hidden border-r">
+      <div className="flex min-w-0 flex-col overflow-hidden border-r">
         <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>
@@ -827,7 +827,7 @@ export default function ScansPage() {
                         setDateFilter(undefined);
                         setCalOpen(false);
                       }}
-                      className="w-full rounded-lg py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      className="w-full rounded-lg py-1.5 text-center text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
                     >
                       Clear · show all dates
                     </button>
@@ -925,8 +925,8 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* COL 2: Map — always visible, always in grid */}
-      <div className="flex flex-col overflow-hidden">
+      {/* COL 2: Map */}
+      <div className={`flex flex-col overflow-hidden ${!selected ? "hidden sm:flex" : "flex"}`}>
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
@@ -948,7 +948,7 @@ export default function ScansPage() {
           ) : checkedIds.size >= 2 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-muted/20 text-muted-foreground">
               <MapPin className="h-10 w-10 opacity-20" />
-              <p className="text-sm font-medium">Select one scan to view route</p>
+              <p className="font-medium text-sm">Select one scan to view route</p>
               <p className="text-xs opacity-60">Google Maps route available for single selections</p>
             </div>
           ) : (
@@ -972,9 +972,9 @@ export default function ScansPage() {
         </div>
       </div>
 
-      {/* COL 3: Detail panel — true grid column, no absolute */}
+      {/* COL 3: Detail panel */}
       {selected && (
-        <div className="flex flex-col overflow-hidden border-l">
+        <div className="flex min-w-0 max-w-full flex-col overflow-hidden border-l">
           <DetailPanel scan={selected} onClose={() => setSelected(null)} />
         </div>
       )}

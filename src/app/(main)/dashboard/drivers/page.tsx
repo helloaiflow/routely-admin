@@ -16,6 +16,8 @@ interface Driver {
   phone?: string;
   active?: boolean;
   depot_id?: string;
+  depots?: string[];
+  display_name?: string;
   synced_at?: string;
   created_at?: string;
 }
@@ -73,6 +75,7 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selected, setSelected] = useState<Driver | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
@@ -110,16 +113,28 @@ export default function DriversPage() {
     }
   };
 
-  const filtered = search
-    ? drivers.filter(
-        (d) =>
-          (d.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
-          (d.email || "").toLowerCase().includes(search.toLowerCase()) ||
-          (d.phone || "").includes(search),
-      )
-    : drivers;
+  const sorted = [...drivers].sort((a, b) => {
+    const aActive = a.active !== false ? 0 : 1;
+    const bActive = b.active !== false ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return (a.full_name || "").localeCompare(b.full_name || "");
+  });
+
+  const filtered = sorted.filter((d) => {
+    const matchSearch =
+      !search ||
+      (d.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.email || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.phone || "").includes(search);
+    const matchStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" && d.active !== false) ||
+      (statusFilter === "inactive" && d.active === false);
+    return matchSearch && matchStatus;
+  });
 
   const activeCount = drivers.filter((d) => d.active !== false).length;
+  const inactiveCount = drivers.filter((d) => d.active === false).length;
   const linkedCount = drivers.filter((d) => d.spoke_driver_id).length;
 
   return (
@@ -169,8 +184,16 @@ export default function DriversPage() {
               <p className="font-semibold text-[8px] text-green-600 uppercase tracking-wide">Active</p>
             </div>
             <div className="px-2 py-1.5 text-center">
-              <p className="font-bold text-primary text-sm tabular-nums">{linkedCount}</p>
-              <p className="font-semibold text-[8px] text-primary uppercase tracking-wide">Synced</p>
+              <p
+                className={`font-bold text-sm tabular-nums ${inactiveCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
+              >
+                {inactiveCount}
+              </p>
+              <p
+                className={`font-semibold text-[8px] uppercase tracking-wide ${inactiveCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}
+              >
+                Inactive
+              </p>
             </div>
           </div>
 
@@ -201,6 +224,26 @@ export default function DriversPage() {
                 <X className="h-3 w-3" />
               </button>
             )}
+          </div>
+          <div className="mt-1.5 flex gap-1">
+            {(["all", "active", "inactive"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`flex-1 rounded-lg border py-1 font-semibold text-[10px] capitalize transition-all ${
+                  statusFilter === s
+                    ? s === "active"
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : s === "inactive"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-primary bg-primary/5 text-primary"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -335,14 +378,24 @@ export default function DriversPage() {
                   <DRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={selected.email} />
                 </Sec>
 
-                {selected.depot_id && (
-                  <Sec title="Assignment">
-                    <DRow
-                      icon={<Warehouse className="h-3.5 w-3.5" />}
-                      label="Depot"
-                      value={selected.depot_id.replace("depots/", "").slice(0, 16)}
-                      mono
-                    />
+                {(selected.depots?.length || selected.depot_id) && (
+                  <Sec title="Depots">
+                    {(selected.depots || (selected.depot_id ? [selected.depot_id] : [])).map((dep, i) => {
+                      const depotNames: Record<string, string> = {
+                        "depots/RH4rD13JWv1BDHP1oLnP": "Hello AI, LLC",
+                        "depots/afVhthjmXoKistoTTnua": "AP Vision Labs",
+                        "depots/ppcmLgyRExaQu9utpZyI": "MCM - CENTRAL",
+                        "depots/fV5yop9VtIM1V1DSfmyR": "MedFlorida - Pharmacy",
+                      };
+                      return (
+                        <DRow
+                          key={dep}
+                          icon={<Warehouse className="h-3.5 w-3.5" />}
+                          label={`Depot ${i + 1}`}
+                          value={depotNames[dep] || dep.replace("depots/", "").slice(0, 16)}
+                        />
+                      );
+                    })}
                   </Sec>
                 )}
 

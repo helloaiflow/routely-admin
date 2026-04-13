@@ -20,13 +20,16 @@ export async function POST() {
       const spokeId = d.id as string;
       if (!spokeId) continue;
       const existing = await db.collection("spoke_drivers").findOne({ spoke_driver_id: spokeId });
+      const depots = (d.depots as string[]) || [];
       const doc = {
         spoke_driver_id: spokeId,
         full_name: (d.name as string) || "Unknown",
         email: (d.email as string) || "",
         phone: (d.phone as string) || "",
         active: d.active !== false,
-        depot_id: (d.depotId as string) || "",
+        depot_id: depots[0] || (d.depotId as string) || "",
+        depots,
+        display_name: (d.displayName as string) || "",
         synced_at: new Date(),
       };
       if (existing) {

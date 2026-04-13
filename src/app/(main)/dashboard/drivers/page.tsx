@@ -3,39 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Car, Check, Loader2, Mail, MapPin, Phone, RefreshCw, Search, X, Zap } from "lucide-react";
+import { Car, Check, Loader2, Mail, Phone, RefreshCw, Search, Warehouse, X, Zap } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface SpokeDriver {
-  id: string;
-  name?: string;
-  full_name?: string;
-  email?: string;
-  phone?: string;
-  active?: boolean;
-  depotId?: string;
-  depot_id?: string;
-}
-
-interface LocalDriver {
+interface Driver {
   _id: string;
+  spoke_driver_id?: string;
   full_name?: string;
-  name?: string;
   email?: string;
   phone?: string;
-  vehicle_type?: string;
-  license_plate?: string;
-  service_area?: string;
-  status?: string;
-  spoke_driver_id?: string;
   active?: boolean;
   depot_id?: string;
   synced_at?: string;
+  created_at?: string;
 }
-
-type Driver = LocalDriver & { _spoke?: SpokeDriver };
 
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-700",
@@ -47,6 +30,10 @@ const AVATAR_COLORS = [
   "bg-orange-100 text-orange-700",
   "bg-cyan-100 text-cyan-700",
 ];
+function avatarColor(name?: string) {
+  const idx = (name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[idx % AVATAR_COLORS.length];
+}
 function initials(name?: string) {
   if (!name) return "?";
   return name
@@ -56,13 +43,30 @@ function initials(name?: string) {
     .join("")
     .toUpperCase();
 }
-function avatarColor(name?: string) {
-  const idx = (name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return AVATAR_COLORS[idx % AVATAR_COLORS.length];
-}
 
-function StatusDot({ active }: { active?: boolean }) {
-  return <div className={`h-2 w-2 rounded-full ${active !== false ? "bg-green-500" : "bg-gray-300"}`} />;
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <p className="mb-1.5 font-bold text-[10px] text-muted-foreground/50 uppercase tracking-widest">{title}</p>
+      <div className="divide-y overflow-hidden rounded-xl border bg-muted/20">{children}</div>
+    </section>
+  );
+}
+function DRow({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value?: string; mono?: boolean }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-[11px]">{label}</span>
+      </div>
+      <span
+        className={`max-w-[200px] truncate text-right font-medium text-[11px] ${mono ? "font-mono text-muted-foreground" : ""}`}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
 
 export default function DriversPage() {
@@ -73,57 +77,34 @@ export default function DriversPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
 
-  const fetchAll = useCallback(async (silent = false) => {
+  const fetchDrivers = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [localRes, spokeRes] = await Promise.all([
-        fetch("/api/data/drivers?limit=100"),
-        fetch("/api/spoke/drivers"),
-      ]);
-      const localData = localRes.ok ? await localRes.json() : { list: [] };
-      const spokeData = spokeRes.ok ? await spokeRes.json() : { drivers: [] };
-      const spokeList: SpokeDriver[] = spokeData.drivers || [];
-
-      const merged: Driver[] = (localData.list || []).map((d: LocalDriver) => {
-        const s = spokeList.find((x) => x.id === d.spoke_driver_id);
-        return { ...d, _spoke: s };
-      });
-
-      for (const s of spokeList) {
-        const exists = merged.find((d) => d.spoke_driver_id === s.id);
-        if (!exists) {
-          merged.push({
-            _id: `spoke_${s.id}`,
-            full_name: s.name || s.full_name,
-            email: s.email,
-            phone: s.phone,
-            active: s.active !== false,
-            spoke_driver_id: s.id,
-            depot_id: s.depotId || s.depot_id,
-            _spoke: s,
-          } as Driver);
-        }
+      const res = await fetch("/api/data/spoke-drivers?limit=200");
+      if (res.ok) {
+        const d = await res.json();
+        setDrivers(d.list || []);
       }
-
-      setDrivers(merged.sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    fetchDrivers();
+  }, [fetchDrivers]);
 
-  const syncSpoke = async () => {
+  const handleSync = async () => {
     setSyncing(true);
     setSyncMsg("");
     try {
-      const res = await fetch("/api/spoke/drivers", { method: "POST" });
+      const res = await fetch("/api/spoke/sync-drivers", { method: "POST" });
       const d = await res.json();
       setSyncMsg(`${d.added || 0} added \u00B7 ${d.updated || 0} updated`);
-      await fetchAll(true);
+      await fetchDrivers(true);
       setTimeout(() => setSyncMsg(""), 3000);
+    } catch {
+      setSyncMsg("Sync failed");
     } finally {
       setSyncing(false);
     }
@@ -139,14 +120,14 @@ export default function DriversPage() {
     : drivers;
 
   const activeCount = drivers.filter((d) => d.active !== false).length;
-  const spokeLinked = drivers.filter((d) => d.spoke_driver_id).length;
+  const linkedCount = drivers.filter((d) => d.spoke_driver_id).length;
 
   return (
     <div
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{ display: "grid", gridTemplateColumns: "280px 1fr", gridTemplateRows: "1fr" }}
     >
-      {/* COL 1 - List */}
+      {/* COL 1 — List */}
       <div className="flex flex-col overflow-hidden border-r">
         <div className="border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
@@ -156,11 +137,11 @@ export default function DriversPage() {
                 {activeCount} active \u00B7 {drivers.length} total
               </p>
             </div>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-1">
               <motion.button
                 whileTap={{ rotate: 180 }}
                 type="button"
-                onClick={() => fetchAll(true)}
+                onClick={() => fetchDrivers(true)}
                 disabled={loading}
                 className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
               >
@@ -168,12 +149,12 @@ export default function DriversPage() {
               </motion.button>
               <button
                 type="button"
-                onClick={syncSpoke}
+                onClick={handleSync}
                 disabled={syncing}
                 className="flex h-6 items-center gap-1 rounded-lg bg-primary/10 px-2 font-semibold text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
               >
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                Sync
+                Sync Spoke
               </button>
             </div>
           </div>
@@ -188,7 +169,7 @@ export default function DriversPage() {
               <p className="font-semibold text-[8px] text-green-600 uppercase tracking-wide">Active</p>
             </div>
             <div className="px-2 py-1.5 text-center">
-              <p className="font-bold text-primary text-sm tabular-nums">{spokeLinked}</p>
+              <p className="font-bold text-primary text-sm tabular-nums">{linkedCount}</p>
               <p className="font-semibold text-[8px] text-primary uppercase tracking-wide">Synced</p>
             </div>
           </div>
@@ -230,17 +211,24 @@ export default function DriversPage() {
                 <Skeleton key={i} className="h-14 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
               ))}
             </div>
+          ) : drivers.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 pt-12 text-muted-foreground">
+              <Car className="h-10 w-10 opacity-15" />
+              <div className="text-center">
+                <p className="font-medium text-xs">No drivers synced yet</p>
+                <p className="mt-0.5 text-[10px] opacity-60">Click Sync Spoke to import drivers</p>
+              </div>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 pt-12 text-muted-foreground">
               <Car className="h-8 w-8 opacity-15" />
-              <p className="text-xs">No drivers found</p>
+              <p className="text-xs">No results</p>
             </div>
           ) : (
             filtered.map((driver) => {
-              const name = driver.full_name || driver.name || "Unknown";
+              const name = driver.full_name || "Unknown";
               const isSel = selected?._id === driver._id;
               const cls = avatarColor(name);
-              const isSpoke = !!driver.spoke_driver_id;
               return (
                 <button
                   key={driver._id}
@@ -259,15 +247,12 @@ export default function DriversPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate font-medium text-xs">{name}</span>
-                      {isSpoke && <Zap className="h-2.5 w-2.5 shrink-0 text-primary" />}
+                      {driver.spoke_driver_id && <Zap className="h-2.5 w-2.5 shrink-0 text-primary" />}
                     </div>
                     <p className="truncate text-[10px] text-muted-foreground">
                       {driver.email || driver.phone || "No contact"}
                     </p>
                   </div>
-                  {driver.vehicle_type && (
-                    <span className="shrink-0 text-[9px] text-muted-foreground">{driver.vehicle_type}</span>
-                  )}
                 </button>
               );
             })
@@ -275,30 +260,28 @@ export default function DriversPage() {
         </div>
       </div>
 
-      {/* COL 2 - Detail */}
+      {/* COL 2 — Detail */}
       <div className="flex flex-col overflow-hidden">
         {!selected ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-5 text-muted-foreground">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
               <Car className="h-7 w-7 opacity-25" />
             </div>
             <div className="text-center">
               <p className="font-semibold text-foreground text-sm">Select a driver</p>
-              <p className="mt-1 text-xs opacity-55">Details and Spoke info will appear here</p>
+              <p className="mt-1 text-xs opacity-55">Spoke details will appear here</p>
             </div>
-            <div className="grid w-full max-w-xs grid-cols-2 gap-2 px-6">
-              <div className="rounded-xl border bg-card px-3 py-2.5 text-center">
-                <p className="font-bold text-foreground text-lg">{drivers.length}</p>
-                <p className="text-[10px] text-muted-foreground">Total drivers</p>
-              </div>
-              <div className="rounded-xl border bg-card px-3 py-2.5 text-center">
-                <p className="font-bold text-green-600 text-lg">{activeCount}</p>
-                <p className="text-[10px] text-muted-foreground">Active</p>
-              </div>
-              <div className="col-span-2 rounded-xl border bg-card px-3 py-2.5 text-center">
-                <p className="font-bold text-lg text-primary">{spokeLinked}</p>
-                <p className="text-[10px] text-muted-foreground">Linked to Spoke</p>
-              </div>
+            <div className="grid w-full max-w-sm grid-cols-3 gap-2 px-8">
+              {[
+                { v: drivers.length, l: "Total", c: "text-foreground" },
+                { v: activeCount, l: "Active", c: "text-green-600" },
+                { v: linkedCount, l: "Synced", c: "text-primary" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-xl border bg-card px-3 py-2.5 text-center">
+                  <p className={`font-bold text-lg ${s.c}`}>{s.v}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.l}</p>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
@@ -310,24 +293,29 @@ export default function DriversPage() {
               transition={{ duration: 0.2 }}
               className="flex h-full flex-col overflow-hidden"
             >
-              <div className="flex items-center gap-3 border-b px-5 py-4">
+              <div
+                className="flex items-center gap-3 border-b px-5 py-4"
+                style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.05), transparent)" }}
+              >
                 <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-base ${avatarColor(selected.full_name || selected.name)}`}
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-base ${avatarColor(selected.full_name)}`}
                 >
-                  {initials(selected.full_name || selected.name)}
+                  {initials(selected.full_name)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-base leading-tight">
-                    {selected.full_name || selected.name || "Unknown"}
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <StatusDot active={selected.active} />
-                    <span className="text-muted-foreground text-xs capitalize">
+                  <p className="truncate font-bold text-base leading-tight">{selected.full_name || "Unknown"}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`flex items-center gap-1 text-xs ${selected.active !== false ? "text-green-600" : "text-muted-foreground"}`}
+                    >
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${selected.active !== false ? "bg-green-500" : "bg-gray-300"}`}
+                      />
                       {selected.active !== false ? "Active" : "Inactive"}
                     </span>
                     {selected.spoke_driver_id && (
                       <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-[9px] text-primary">
-                        <Zap className="h-2.5 w-2.5" /> Spoke
+                        <Zap className="h-2.5 w-2.5" /> Spoke synced
                       </span>
                     )}
                   </div>
@@ -343,114 +331,59 @@ export default function DriversPage() {
 
               <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
                 <Sec title="Contact">
-                  {selected.phone && (
-                    <DetailRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={selected.phone} mono />
-                  )}
-                  {selected.email && (
-                    <DetailRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={selected.email} />
-                  )}
-                  {selected.service_area && (
-                    <DetailRow icon={<MapPin className="h-3.5 w-3.5" />} label="Area" value={selected.service_area} />
-                  )}
+                  <DRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={selected.phone} mono />
+                  <DRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={selected.email} />
                 </Sec>
 
-                {(selected.vehicle_type || selected.license_plate) && (
-                  <Sec title="Vehicle">
-                    {selected.vehicle_type && (
-                      <DetailRow icon={<Car className="h-3.5 w-3.5" />} label="Type" value={selected.vehicle_type} />
-                    )}
-                    {selected.license_plate && (
-                      <DetailRow
-                        icon={<Car className="h-3.5 w-3.5" />}
-                        label="Plate"
-                        value={selected.license_plate}
-                        mono
-                      />
-                    )}
-                  </Sec>
-                )}
-
-                {selected.spoke_driver_id && (
-                  <Sec title="Spoke Integration">
-                    <DetailRow
-                      icon={<Zap className="h-3.5 w-3.5" />}
-                      label="Spoke ID"
-                      value={selected.spoke_driver_id.replace("drivers/", "")}
+                {selected.depot_id && (
+                  <Sec title="Assignment">
+                    <DRow
+                      icon={<Warehouse className="h-3.5 w-3.5" />}
+                      label="Depot"
+                      value={selected.depot_id.replace("depots/", "").slice(0, 16)}
                       mono
                     />
-                    {selected.depot_id && (
-                      <DetailRow
-                        icon={<MapPin className="h-3.5 w-3.5" />}
-                        label="Depot"
-                        value={selected.depot_id.replace("depots/", "").slice(0, 12)}
-                        mono
-                      />
-                    )}
-                    {selected.synced_at && (
-                      <DetailRow
-                        icon={<RefreshCw className="h-3.5 w-3.5" />}
-                        label="Synced"
-                        value={new Date(selected.synced_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      />
-                    )}
                   </Sec>
                 )}
 
-                <div className="flex flex-wrap gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold text-xs ${selected.active !== false ? "border-green-200 bg-green-50 text-green-700" : "border-border bg-muted text-muted-foreground"}`}
-                  >
-                    <Check className="h-3 w-3" />
-                    {selected.active !== false ? "Active" : "Inactive"}
-                  </span>
-                  {selected.status && selected.status !== "active" && (
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-700 text-xs capitalize">
-                      {selected.status.replace(/_/g, " ")}
+                <Sec title="Spoke">
+                  <DRow
+                    icon={<Zap className="h-3.5 w-3.5" />}
+                    label="Spoke ID"
+                    value={selected.spoke_driver_id?.replace("drivers/", "")}
+                    mono
+                  />
+                  <DRow
+                    icon={<RefreshCw className="h-3.5 w-3.5" />}
+                    label="Last synced"
+                    value={
+                      selected.synced_at
+                        ? new Date(selected.synced_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "2-digit",
+                          })
+                        : undefined
+                    }
+                  />
+                </Sec>
+
+                <Sec title="Status">
+                  <div className="flex items-center justify-between px-3 py-2.5">
+                    <span className="text-[11px] text-muted-foreground">Delivery status</span>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold text-[10px] ${selected.active !== false ? "border-green-200 bg-green-50 text-green-700" : "border-border bg-muted text-muted-foreground"}`}
+                    >
+                      <Check className="h-2.5 w-2.5" />
+                      {selected.active !== false ? "Active" : "Inactive"}
                     </span>
-                  )}
-                </div>
+                  </div>
+                </Sec>
               </div>
             </motion.div>
           </AnimatePresence>
         )}
       </div>
-    </div>
-  );
-}
-
-function Sec({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <p className="mb-1.5 font-bold text-[10px] text-muted-foreground/50 uppercase tracking-widest">{title}</p>
-      <div className="divide-y overflow-hidden rounded-xl border bg-muted/20">{children}</div>
-    </section>
-  );
-}
-function DetailRow({
-  icon,
-  label,
-  value,
-  mono,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-[11px]">{label}</span>
-      </div>
-      <span
-        className={`max-w-[200px] truncate text-right font-medium text-[11px] ${mono ? "font-mono text-muted-foreground" : ""}`}
-      >
-        {value}
-      </span>
     </div>
   );
 }

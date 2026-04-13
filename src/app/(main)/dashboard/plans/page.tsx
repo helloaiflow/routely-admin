@@ -3,20 +3,38 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, Calendar, Car, ChevronRight, MapPin, Package, RefreshCw, Route, Search, X } from "lucide-react";
+import {
+  AlertCircle,
+  Calendar,
+  Car,
+  ChevronRight,
+  MapPin,
+  Package,
+  RefreshCw,
+  Route,
+  Search,
+  X,
+  Zap,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface SpokePlan {
-  id: string;
+  _id?: string;
+  id?: string;
+  spoke_plan_id?: string;
   name?: string;
   title?: string;
   startsAt?: number;
+  starts_at?: number;
   status?: string;
   routeCount?: number;
+  route_count?: number;
   stopCount?: number;
+  stop_count?: number;
   distributedAt?: number;
+  distributed_at?: number;
 }
 interface SpokeRoute {
   id: string;
@@ -95,13 +113,13 @@ export default function PlansPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/spoke/plans");
+      const res = await fetch("/api/data/spoke-plans?limit=100");
       if (!res.ok) {
-        setError(`Spoke API error ${res.status}`);
+        setError(`DB error ${res.status}`);
         return;
       }
       const d = await res.json();
-      setPlans(d.plans || []);
+      setPlans(d.list || []);
     } catch {
       setError("Failed to load plans");
     } finally {
@@ -121,7 +139,8 @@ export default function PlansPage() {
     setStops([]);
     setLoadRoutes(true);
     try {
-      const res = await fetch(`/api/spoke/plans?id=${encodeURIComponent(plan.id)}`);
+      const planId = plan.spoke_plan_id || plan.id || "";
+      const res = await fetch(`/api/spoke/plans?id=${encodeURIComponent(planId)}`);
       const d = await res.json();
       setRoutes(d.routes || []);
     } finally {
@@ -147,7 +166,9 @@ export default function PlansPage() {
     ? plans.filter((p) => (p.name || p.title || "").toLowerCase().includes(search.toLowerCase()))
     : plans;
 
-  const planTitle = (p: SpokePlan) => p.title || p.name || p.id.replace("plans/", "").slice(0, 10);
+  const planDate = (p: SpokePlan) => fmtTs(p.startsAt || p.starts_at);
+  const planTitle = (p: SpokePlan) =>
+    p.title || p.name || (p.spoke_plan_id || p.id || "").replace("plans/", "").slice(0, 10);
 
   return (
     <div className="flex h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm">
@@ -168,6 +189,19 @@ export default function PlansPage() {
             >
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
             </motion.button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                await fetch("/api/spoke/sync-plans", { method: "POST" });
+                await fetchPlans();
+              }}
+              className="flex h-6 items-center gap-1 rounded-lg bg-primary/10 px-2 font-semibold text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
+            >
+              <Zap className="h-3 w-3" />
+              Sync
+            </button>
           </div>
           <div className="relative mt-2">
             <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -220,22 +254,22 @@ export default function PlansPage() {
                       <PlanStatusBadge s={plan.status} />
                     </div>
                     <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
-                      {fmtTs(plan.startsAt) && (
+                      {planDate(plan) && (
                         <span className="flex items-center gap-0.5">
                           <Calendar className="h-2.5 w-2.5" />
-                          {fmtTs(plan.startsAt)}
+                          {planDate(plan)}
                         </span>
                       )}
-                      {plan.routeCount != null && (
+                      {(plan.routeCount || plan.route_count) != null && (
                         <span className="flex items-center gap-0.5">
                           <Route className="h-2.5 w-2.5" />
-                          {plan.routeCount}
+                          {plan.routeCount || plan.route_count}
                         </span>
                       )}
-                      {plan.stopCount != null && (
+                      {(plan.stopCount || plan.stop_count) != null && (
                         <span className="flex items-center gap-0.5">
                           <MapPin className="h-2.5 w-2.5" />
-                          {plan.stopCount}
+                          {plan.stopCount || plan.stop_count}
                         </span>
                       )}
                     </div>

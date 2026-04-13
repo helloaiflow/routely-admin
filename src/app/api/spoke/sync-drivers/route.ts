@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+
+import { getDb } from "@/lib/mongodb";
+
+const SPOKE_BASE = "https://api.getcircuit.com/public/v0.2b";
+
+function auth() {
+  const key = process.env.SPOKE_API_KEY;
+  if (!key) throw new Error("SPOKE_API_KEY not set");
+  return `Basic ${Buffer.from(`${key}:`).toString("base64")}`;
+}
+
+export async function POST() {
+  try {
+    const res = await fetch(`${SPOKE_BASE}/drivers?pageSize=100`, {
+      headers: { Authorization: auth() },
+    });
+    if (!res.ok) return NextResponse.json({ error: `Spoke ${res.status}` }, { status: res.status });
+    const data = await res.json();
+    const drivers: Record<string, unknown>[] = data.drivers || [];
+
+    const db = await getDb();
+    let added = 0;
+    let updated = 0;
+
+    for (const d of drivers) {
+      const spokeId = d.id as string;
+      const existing = await db.collection("spoke_drivers").findOne({ spoke_driver_id: spokeId });
+      const doc = {
+        spoke_driver_id: spokeId,
+        full_name: (d.name as string) || "Unknown",
+        email: (d.email as string) || "",
+        phone: (d.phone as string) || "",
+        active: d.active !== false,
+        depot_id: (d.depotId as string) || (d.depot_id as string) || "",
+        synced_at: new Date(),
+      };
+      if (existing) {
+        await db.collection("spoke_drivers").updateOne({ spoke_driver_id: spokeId }, { $set: doc });
+        updated++;
+      } else {
+        await db.collection("spoke_drivers").insertOne({ ...doc, created_at: new Date() });
+        added++;
+      }
+    }
+    return NextResponse.json({ success: true, total: drivers.length, added, updated });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}

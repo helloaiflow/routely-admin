@@ -2,11 +2,30 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/mongodb";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const limit = parseInt(searchParams.get("limit") || "500", 10);
     const db = await getDb();
-    const stops = await db.collection("spoke_stops").find({}).sort({ created_at: -1 }).limit(500).toArray();
-    return NextResponse.json(stops);
+    const stops = await db.collection("spoke_stops").find({}).sort({ created_at: -1 }).limit(limit).toArray();
+
+    // Build driver lookup map
+    const drivers = await db
+      .collection("spoke_drivers")
+      .find({}, { projection: { spoke_driver_id: 1, full_name: 1 } })
+      .toArray();
+    const driverMap = new Map<string, string>();
+    for (const d of drivers) {
+      if (d.spoke_driver_id) driverMap.set(d.spoke_driver_id, d.full_name || "");
+    }
+
+    // Enrich stops with driver_name
+    const enriched = stops.map((s) => ({
+      ...s,
+      driver_name: s.driver_id ? driverMap.get(s.driver_id) || "" : "",
+    }));
+
+    return NextResponse.json({ list: enriched, total: enriched.length });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -841,7 +841,7 @@ export default function DepotsPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: selected ? "min(260px,90vw) 1fr min(380px,90vw)" : "min(260px,90vw) 1fr",
+        gridTemplateColumns: "clamp(220px, 25vw, 280px) 1fr",
         gridTemplateRows: "1fr",
       }}
     >
@@ -1036,11 +1036,25 @@ export default function DepotsPage() {
         </div>
       </div>
 
-      {/* COL 3 — Detail */}
+      {/* COL 3 — Detail: desktop sidebar, mobile bottom sheet */}
       {selected && (
-        <div className="flex flex-col overflow-hidden border-l">
-          <DetailPanel key={selected._id} depot={selected} onSave={handleSave} drivers={drivers} tenants={tenants} />
-        </div>
+        <>
+          <div className="hidden flex-col overflow-hidden border-l md:flex">
+            <DetailPanel key={selected._id} depot={selected} onSave={handleSave} drivers={drivers} tenants={tenants} />
+          </div>
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-2xl md:hidden"
+            style={{ height: "70vh", animation: "slideUp 0.25s ease-out" }}
+          >
+            <DetailPanel
+              key={`m_${selected._id}`}
+              depot={selected}
+              onSave={handleSave}
+              drivers={drivers}
+              tenants={tenants}
+            />
+          </div>
+        </>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

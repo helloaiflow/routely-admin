@@ -730,12 +730,12 @@ export default function ScansPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: "300px 1fr",
+        gridTemplateColumns: "clamp(260px, 30vw, 320px) 1fr",
         gridTemplateRows: "1fr",
       }}
     >
       {/* COL 1: Scan List — hidden on mobile when detail is open */}
-      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected ? "hidden md:flex" : "flex"}`}>
+      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected ? "hidden sm:flex" : "flex"}`}>
         <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>
@@ -926,7 +926,7 @@ export default function ScansPage() {
       </div>
 
       {/* COL 2: Map — hidden on mobile */}
-      <div className="hidden flex-col overflow-hidden sm:flex">
+      <div className="hidden flex-col overflow-hidden md:flex">
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
@@ -975,10 +975,15 @@ export default function ScansPage() {
       {/* COL 3: Detail panel — full screen on mobile, sidebar on desktop */}
       {selected && (
         <>
-          <div className="hidden min-w-0 max-w-[300px] flex-col overflow-hidden border-l sm:flex">
+          {/* Desktop side panel */}
+          <div className="hidden min-w-0 max-w-[320px] flex-col overflow-hidden border-l md:flex">
             <DetailPanel scan={selected} onClose={() => setSelected(null)} />
           </div>
-          <div className="fixed inset-0 z-50 flex flex-col bg-background sm:hidden">
+          {/* Mobile full-screen sheet */}
+          <div
+            className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-background md:hidden"
+            style={{ animation: "slideUp 0.25s ease-out" }}
+          >
             <DetailPanel scan={selected} onClose={() => setSelected(null)} />
           </div>
         </>

@@ -420,7 +420,7 @@ export default function SearchPage() {
             <RefreshCw className={`h-4 w-4 ${booting ? "animate-spin" : ""}`} />
           </motion.button>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <div className="relative w-full">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
               {loading ? (
@@ -457,7 +457,7 @@ export default function SearchPage() {
               )}
             </AnimatePresence>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "scans" | "stops")}>
               <SelectTrigger className="h-9 w-28 shrink-0 text-sm">
                 <SelectValue placeholder="All" />
@@ -592,6 +592,7 @@ export default function SearchPage() {
                       return (
                         <div
                           key={stop._id}
+                          data-stop-id={stop._id}
                           className={`group transition-colors ${isExp ? "bg-primary/[0.025]" : "hover:bg-muted/20"}`}
                           style={{
                             borderLeft: isExp
@@ -650,7 +651,17 @@ export default function SearchPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setExpanded(isExp ? null : stop._id)}
+                            onClick={(e) => {
+                              setExpanded(isExp ? null : stop._id);
+                              if (!isExp)
+                                setTimeout(
+                                  () =>
+                                    (e.target as HTMLElement)
+                                      .closest("[data-stop-id]")
+                                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                                  50,
+                                );
+                            }}
                             className="flex w-full items-start gap-3 px-4 py-3 text-left md:hidden"
                           >
                             <ImgThumb url={img} alt={name} fullName={name} rxId={stop.rx_pharma_id} />

@@ -31,7 +31,7 @@ export async function POST() {
             { $inc: { seq: 1 } },
             { returnDocument: "after" },
           );
-        const rt_depot_id = `RTD-${String(counter!.seq).padStart(4, "0")}`;
+        const rt_depot_id = `RTD-${String(counter?.seq).padStart(4, "0")}`;
         await db.collection("spoke_depots").insertOne({
           spoke_depot_id: depot.id,
           rt_depot_id,

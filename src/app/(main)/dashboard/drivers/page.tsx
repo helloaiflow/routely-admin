@@ -1,448 +1,456 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { AnimatePresence, motion } from "framer-motion";
+import { Car, Check, Loader2, Mail, MapPin, Phone, RefreshCw, Search, X, Zap } from "lucide-react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const API = "https://routelypro.com/api/data/drivers";
+interface SpokeDriver {
+  id: string;
+  name?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  active?: boolean;
+  depotId?: string;
+  depot_id?: string;
+}
 
-const schema = z.object({
-  full_name: z.string().min(2),
-  phone: z.string().min(10),
-  email: z.string().email().optional().or(z.literal("")),
-  license_plate: z.string().optional(),
-  vehicle_type: z.string().optional(),
-  service_area: z.string().optional(),
-  status: z.string().optional(),
-  spoke_driver_id: z.string().optional(),
-});
-type FD = z.infer<typeof schema>;
-
-interface Driver {
+interface LocalDriver {
   _id: string;
   full_name?: string;
-  phone?: string;
+  name?: string;
   email?: string;
-  license_plate?: string;
+  phone?: string;
   vehicle_type?: string;
+  license_plate?: string;
   service_area?: string;
   status?: string;
   spoke_driver_id?: string;
-  created_at?: string;
+  active?: boolean;
+  depot_id?: string;
+  synced_at?: string;
+}
+
+type Driver = LocalDriver & { _spoke?: SpokeDriver };
+
+const AVATAR_COLORS = [
+  "bg-blue-100 text-blue-700",
+  "bg-green-100 text-green-700",
+  "bg-violet-100 text-violet-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-teal-100 text-teal-700",
+  "bg-orange-100 text-orange-700",
+  "bg-cyan-100 text-cyan-700",
+];
+function initials(name?: string) {
+  if (!name) return "?";
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+function avatarColor(name?: string) {
+  const idx = (name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[idx % AVATAR_COLORS.length];
+}
+
+function StatusDot({ active }: { active?: boolean }) {
+  return <div className={`h-2 w-2 rounded-full ${active !== false ? "bg-green-500" : "bg-gray-300"}`} />;
 }
 
 export default function DriversPage() {
-  const [data, setData] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selected, setSelected] = useState<Driver | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Driver | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Driver | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
 
-  const form = useForm<FD>({ resolver: zodResolver(schema), defaultValues: { status: "active" } });
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch(`${API}?limit=100`);
-      if (res.ok) {
-        const d = await res.json();
-        setData(d.list || d || []);
+      const [localRes, spokeRes] = await Promise.all([
+        fetch("/api/data/drivers?limit=100"),
+        fetch("/api/spoke/drivers"),
+      ]);
+      const localData = localRes.ok ? await localRes.json() : { list: [] };
+      const spokeData = spokeRes.ok ? await spokeRes.json() : { drivers: [] };
+      const spokeList: SpokeDriver[] = spokeData.drivers || [];
+
+      const merged: Driver[] = (localData.list || []).map((d: LocalDriver) => {
+        const s = spokeList.find((x) => x.id === d.spoke_driver_id);
+        return { ...d, _spoke: s };
+      });
+
+      for (const s of spokeList) {
+        const exists = merged.find((d) => d.spoke_driver_id === s.id);
+        if (!exists) {
+          merged.push({
+            _id: `spoke_${s.id}`,
+            full_name: s.name || s.full_name,
+            email: s.email,
+            phone: s.phone,
+            active: s.active !== false,
+            spoke_driver_id: s.id,
+            depot_id: s.depotId || s.depot_id,
+            _spoke: s,
+          } as Driver);
+        }
       }
+
+      setDrivers(merged.sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")));
     } finally {
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchAll();
+  }, [fetchAll]);
 
-  const filtered = useMemo(() => {
-    let r = data;
-    if (search) {
-      const q = search.toLowerCase();
-      r = r.filter((d) => d.full_name?.toLowerCase().includes(q) || d.phone?.includes(q));
-    }
-    if (statusFilter !== "all") r = r.filter((d) => d.status === statusFilter);
-    return r;
-  }, [data, search, statusFilter]);
-
-  const cols: ColumnDef<Driver>[] = [
-    {
-      accessorKey: "full_name",
-      header: "Name",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 text-xs">
-            {(row.original.full_name || "?").slice(0, 2).toUpperCase()}
-          </div>
-          <span className="font-medium">{row.original.full_name}</span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "phone",
-      header: "Phone",
-      cell: ({ row }) => <span className="font-mono text-sm">{row.original.phone || "—"}</span>,
-    },
-    { accessorKey: "vehicle_type", header: "Vehicle" },
-    {
-      accessorKey: "license_plate",
-      header: "Plate",
-      cell: ({ row }) => (
-        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{row.original.license_plate || "—"}</span>
-      ),
-    },
-    { accessorKey: "service_area", header: "Area" },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => (
-        <Badge variant={row.original.status === "active" ? "default" : "secondary"} className="capitalize">
-          {row.original.status}
-        </Badge>
-      ),
-    },
-    {
-      accessorKey: "spoke_driver_id",
-      header: "Spoke ID",
-      cell: ({ row }) =>
-        row.original.spoke_driver_id ? (
-          <span className="font-mono text-muted-foreground text-xs">{row.original.spoke_driver_id.slice(-8)}</span>
-        ) : (
-          <span className="text-muted-foreground text-xs">Not linked</span>
-        ),
-    },
-  ];
-
-  const table = useReactTable({
-    data: filtered,
-    columns: cols,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 20 } },
-  });
-
-  const openCreate = () => {
-    setEditing(null);
-    form.reset({ status: "active" });
-    setDialogOpen(true);
-  };
-  const openEdit = (r: Driver) => {
-    setEditing(r);
-    form.reset({ ...r, status: r.status || "active" });
-    setDialogOpen(true);
-  };
-  const onSubmit = async (v: FD) => {
-    setSaving(true);
+  const syncSpoke = async () => {
+    setSyncing(true);
+    setSyncMsg("");
     try {
-      const method = editing ? "PUT" : "POST";
-      const url = editing ? `${API}/${editing._id}` : API;
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
-      setDialogOpen(false);
-      await fetchData();
+      const res = await fetch("/api/spoke/drivers", { method: "POST" });
+      const d = await res.json();
+      setSyncMsg(`${d.added || 0} added \u00B7 ${d.updated || 0} updated`);
+      await fetchAll(true);
+      setTimeout(() => setSyncMsg(""), 3000);
     } finally {
-      setSaving(false);
+      setSyncing(false);
     }
   };
-  const onDelete = async () => {
-    if (!deleteTarget) return;
-    await fetch(`${API}/${deleteTarget._id}`, { method: "DELETE" });
-    setDeleteTarget(null);
-    await fetchData();
-  };
 
-  const active = data.filter((d) => d.status === "active").length;
+  const filtered = search
+    ? drivers.filter(
+        (d) =>
+          (d.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
+          (d.email || "").toLowerCase().includes(search.toLowerCase()) ||
+          (d.phone || "").includes(search),
+      )
+    : drivers;
 
-  if (loading)
-    return (
-      <div className="p-6">
-        <Skeleton className="h-96 rounded-xl" />
-      </div>
-    );
+  const activeCount = drivers.filter((d) => d.active !== false).length;
+  const spokeLinked = drivers.filter((d) => d.spoke_driver_id).length;
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-0">
-      <div className={`flex flex-1 flex-col gap-4 overflow-hidden p-6 ${selected ? "pr-0" : ""}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-semibold text-2xl">Drivers</h1>
-            <p className="text-muted-foreground text-sm">
-              {active} active · {data.length} total
-            </p>
+    <div
+      className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
+      style={{ display: "grid", gridTemplateColumns: "280px 1fr", gridTemplateRows: "1fr" }}
+    >
+      {/* COL 1 - List */}
+      <div className="flex flex-col overflow-hidden border-r">
+        <div className="border-b bg-muted/10 px-3.5 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-bold text-sm">Spoke Drivers</h1>
+              <p className="text-[10px] text-muted-foreground">
+                {activeCount} active \u00B7 {drivers.length} total
+              </p>
+            </div>
+            <div className="flex gap-1">
+              <motion.button
+                whileTap={{ rotate: 180 }}
+                type="button"
+                onClick={() => fetchAll(true)}
+                disabled={loading}
+                className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+              >
+                <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+              </motion.button>
+              <button
+                type="button"
+                onClick={syncSpoke}
+                disabled={syncing}
+                className="flex h-6 items-center gap-1 rounded-lg bg-primary/10 px-2 font-semibold text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
+              >
+                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                Sync
+              </button>
+            </div>
           </div>
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Driver
-          </Button>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {(
-            [
-              ["Total", data.length, "text-blue-600"],
-              ["Active", active, "text-green-600"],
-              ["Inactive", data.length - active, "text-gray-500"],
-            ] as [string, number, string][]
-          ).map(([l, v, c]) => (
-            <Card key={l}>
-              <CardContent className="pt-4 pb-4">
-                <p className="mb-1 text-muted-foreground text-xs">{l}</p>
-                <p className={`font-bold text-2xl ${c}`}>{v}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search drivers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-64"
-          />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="on_leave">On Leave</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1 overflow-auto rounded-xl border">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
-                  {hg.headers.map((h) => (
-                    <TableHead key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</TableHead>
-                  ))}
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={cols.length + 1} className="h-24 text-center text-muted-foreground">
-                    No drivers found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className={`cursor-pointer hover:bg-muted/50 ${selected?._id === row.original._id ? "bg-muted" : ""}`}
-                    onClick={() => setSelected(row.original)}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
-                    <TableCell>
-                      <span className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(row.original);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(row.original);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-sm">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
+
+          <div className="mt-2.5 grid grid-cols-3 divide-x rounded-xl border bg-background">
+            <div className="px-2 py-1.5 text-center">
+              <p className="font-bold text-foreground text-sm tabular-nums">{drivers.length}</p>
+              <p className="font-semibold text-[8px] text-muted-foreground uppercase tracking-wide">Total</p>
+            </div>
+            <div className="px-2 py-1.5 text-center">
+              <p className="font-bold text-green-600 text-sm tabular-nums">{activeCount}</p>
+              <p className="font-semibold text-[8px] text-green-600 uppercase tracking-wide">Active</p>
+            </div>
+            <div className="px-2 py-1.5 text-center">
+              <p className="font-bold text-primary text-sm tabular-nums">{spokeLinked}</p>
+              <p className="font-semibold text-[8px] text-primary uppercase tracking-wide">Synced</p>
+            </div>
+          </div>
+
+          {syncMsg && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-2 rounded-lg bg-green-50 px-2.5 py-1 font-medium text-[10px] text-green-700"
             >
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              Next
-            </Button>
+              {syncMsg}
+            </motion.div>
+          )}
+
+          <div className="relative mt-2">
+            <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search drivers..."
+              className="h-7 pr-7 pl-7 text-xs"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-1">
+          {loading ? (
+            <div className="space-y-1.5 p-2">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" style={{ opacity: 1 - i * 0.13 }} />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 pt-12 text-muted-foreground">
+              <Car className="h-8 w-8 opacity-15" />
+              <p className="text-xs">No drivers found</p>
+            </div>
+          ) : (
+            filtered.map((driver) => {
+              const name = driver.full_name || driver.name || "Unknown";
+              const isSel = selected?._id === driver._id;
+              const cls = avatarColor(name);
+              const isSpoke = !!driver.spoke_driver_id;
+              return (
+                <button
+                  key={driver._id}
+                  type="button"
+                  onClick={() => setSelected(driver)}
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors ${isSel ? "border-primary border-r-[3px] bg-primary/5" : "hover:bg-muted/50"}`}
+                >
+                  <div
+                    className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-xs ${cls}`}
+                  >
+                    {initials(name)}
+                    <div
+                      className={`absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${driver.active !== false ? "bg-green-500" : "bg-gray-300"}`}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium text-xs">{name}</span>
+                      {isSpoke && <Zap className="h-2.5 w-2.5 shrink-0 text-primary" />}
+                    </div>
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      {driver.email || driver.phone || "No contact"}
+                    </p>
+                  </div>
+                  {driver.vehicle_type && (
+                    <span className="shrink-0 text-[9px] text-muted-foreground">{driver.vehicle_type}</span>
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
-      {selected && (
-        <div className="w-[380px] shrink-0 overflow-auto border-l bg-background p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">
-                {(selected.full_name || "?").slice(0, 2).toUpperCase()}
+
+      {/* COL 2 - Detail */}
+      <div className="flex flex-col overflow-hidden">
+        {!selected ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+              <Car className="h-7 w-7 opacity-25" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-foreground text-sm">Select a driver</p>
+              <p className="mt-1 text-xs opacity-55">Details and Spoke info will appear here</p>
+            </div>
+            <div className="grid w-full max-w-xs grid-cols-2 gap-2 px-6">
+              <div className="rounded-xl border bg-card px-3 py-2.5 text-center">
+                <p className="font-bold text-foreground text-lg">{drivers.length}</p>
+                <p className="text-[10px] text-muted-foreground">Total drivers</p>
               </div>
-              <div>
-                <h2 className="font-semibold text-base">{selected.full_name}</h2>
-                <p className="text-muted-foreground text-xs capitalize">{selected.status}</p>
+              <div className="rounded-xl border bg-card px-3 py-2.5 text-center">
+                <p className="font-bold text-green-600 text-lg">{activeCount}</p>
+                <p className="text-[10px] text-muted-foreground">Active</p>
+              </div>
+              <div className="col-span-2 rounded-xl border bg-card px-3 py-2.5 text-center">
+                <p className="font-bold text-lg text-primary">{spokeLinked}</p>
+                <p className="text-[10px] text-muted-foreground">Linked to Spoke</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setSelected(null)}>
-              <X className="h-4 w-4" />
-            </Button>
           </div>
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="space-y-1.5 pt-4 text-sm">
-                {(
-                  [
-                    ["Phone", selected.phone],
-                    ["Email", selected.email],
-                    ["Vehicle", selected.vehicle_type],
-                    ["Plate", selected.license_plate],
-                    ["Area", selected.service_area],
-                    ["Spoke ID", selected.spoke_driver_id],
-                  ] as [string, string | undefined][]
-                ).map(([l, v]) =>
-                  v ? (
-                    <div key={l} className="flex justify-between">
-                      <span className="text-muted-foreground">{l}</span>
-                      <span className="font-medium font-mono text-xs">{v}</span>
-                    </div>
-                  ) : null,
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={selected._id}
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex h-full flex-col overflow-hidden"
+            >
+              <div className="flex items-center gap-3 border-b px-5 py-4">
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-base ${avatarColor(selected.full_name || selected.name)}`}
+                >
+                  {initials(selected.full_name || selected.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-base leading-tight">
+                    {selected.full_name || selected.name || "Unknown"}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <StatusDot active={selected.active} />
+                    <span className="text-muted-foreground text-xs capitalize">
+                      {selected.active !== false ? "Active" : "Inactive"}
+                    </span>
+                    {selected.spoke_driver_id && (
+                      <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-[9px] text-primary">
+                        <Zap className="h-2.5 w-2.5" /> Spoke
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <Sec title="Contact">
+                  {selected.phone && (
+                    <DetailRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={selected.phone} mono />
+                  )}
+                  {selected.email && (
+                    <DetailRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={selected.email} />
+                  )}
+                  {selected.service_area && (
+                    <DetailRow icon={<MapPin className="h-3.5 w-3.5" />} label="Area" value={selected.service_area} />
+                  )}
+                </Sec>
+
+                {(selected.vehicle_type || selected.license_plate) && (
+                  <Sec title="Vehicle">
+                    {selected.vehicle_type && (
+                      <DetailRow icon={<Car className="h-3.5 w-3.5" />} label="Type" value={selected.vehicle_type} />
+                    )}
+                    {selected.license_plate && (
+                      <DetailRow
+                        icon={<Car className="h-3.5 w-3.5" />}
+                        label="Plate"
+                        value={selected.license_plate}
+                        mono
+                      />
+                    )}
+                  </Sec>
                 )}
-              </CardContent>
-            </Card>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(selected)}>
-                Edit
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(selected)}>
-                Delete
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Driver" : "Add Driver"}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 pt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Full Name *</Label>
-                <Input {...form.register("full_name")} />
+
+                {selected.spoke_driver_id && (
+                  <Sec title="Spoke Integration">
+                    <DetailRow
+                      icon={<Zap className="h-3.5 w-3.5" />}
+                      label="Spoke ID"
+                      value={selected.spoke_driver_id.replace("drivers/", "")}
+                      mono
+                    />
+                    {selected.depot_id && (
+                      <DetailRow
+                        icon={<MapPin className="h-3.5 w-3.5" />}
+                        label="Depot"
+                        value={selected.depot_id.replace("depots/", "").slice(0, 12)}
+                        mono
+                      />
+                    )}
+                    {selected.synced_at && (
+                      <DetailRow
+                        icon={<RefreshCw className="h-3.5 w-3.5" />}
+                        label="Synced"
+                        value={new Date(selected.synced_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      />
+                    )}
+                  </Sec>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold text-xs ${selected.active !== false ? "border-green-200 bg-green-50 text-green-700" : "border-border bg-muted text-muted-foreground"}`}
+                  >
+                    <Check className="h-3 w-3" />
+                    {selected.active !== false ? "Active" : "Inactive"}
+                  </span>
+                  {selected.status && selected.status !== "active" && (
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-700 text-xs capitalize">
+                      {selected.status.replace(/_/g, " ")}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div>
-                <Label>Phone *</Label>
-                <Input {...form.register("phone")} />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input type="email" {...form.register("email")} />
-              </div>
-              <div>
-                <Label>Vehicle Type</Label>
-                <Input {...form.register("vehicle_type")} placeholder="Sedan, SUV, Van..." />
-              </div>
-              <div>
-                <Label>License Plate</Label>
-                <Input {...form.register("license_plate")} className="uppercase" />
-              </div>
-              <div>
-                <Label>Service Area</Label>
-                <Input {...form.register("service_area")} placeholder="Broward, Miami-Dade..." />
-              </div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.watch("status")} onValueChange={(v) => form.setValue("status", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="on_leave">On Leave</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2">
-                <Label>Spoke Driver ID</Label>
-                <Input {...form.register("spoke_driver_id")} placeholder="drivers/xxxxx" className="font-mono" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : editing ? "Update" : "Create"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Driver</AlertDialogTitle>
-            <AlertDialogDescription>Delete &quot;{deleteTarget?.full_name}&quot;?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Sec({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <p className="mb-1.5 font-bold text-[10px] text-muted-foreground/50 uppercase tracking-widest">{title}</p>
+      <div className="divide-y overflow-hidden rounded-xl border bg-muted/20">{children}</div>
+    </section>
+  );
+}
+function DetailRow({
+  icon,
+  label,
+  value,
+  mono,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-[11px]">{label}</span>
+      </div>
+      <span
+        className={`max-w-[200px] truncate text-right font-medium text-[11px] ${mono ? "font-mono text-muted-foreground" : ""}`}
+      >
+        {value}
+      </span>
     </div>
   );
 }

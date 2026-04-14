@@ -730,7 +730,7 @@ export default function ScansPage() {
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
       style={{
         display: "grid",
-        gridTemplateColumns: "clamp(260px, 30vw, 320px) 1fr",
+        gridTemplateColumns: selected ? "clamp(260px, 28vw, 300px) 1fr 300px" : "clamp(260px, 28vw, 300px) 1fr",
         gridTemplateRows: "1fr",
       }}
     >

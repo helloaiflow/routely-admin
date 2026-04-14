@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Building2,
   Check,
-  ChevronRight,
   Clock,
   Loader2,
   MapPin,
@@ -14,9 +13,11 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   Truck,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,6 @@ interface Depot {
   synced_at?: string;
   assigned_drivers?: string[];
 }
-
 interface Driver {
   _id: string;
   full_name?: string;
@@ -70,21 +70,10 @@ interface Tenant {
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_L: Record<string, string> = { mon: "Mo", tue: "Tu", wed: "We", thu: "Th", fri: "Fr", sat: "Sa", sun: "Su" };
 const VEHS = [
-  { id: "car", emoji: "\u{1F697}", label: "Car" },
-  { id: "van", emoji: "\u{1F690}", label: "Van" },
-  { id: "truck", emoji: "\u{1F69B}", label: "Truck" },
+  { id: "car", emoji: "🚗", label: "Car" },
+  { id: "van", emoji: "🚐", label: "Van" },
+  { id: "truck", emoji: "🚛", label: "Truck" },
 ];
-
-let acTimer: ReturnType<typeof setTimeout>;
-
-function avatar(name: string) {
-  return (name || "?")
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-700",
   "bg-green-100 text-green-700",
@@ -93,7 +82,106 @@ const AVATAR_COLORS = [
   "bg-rose-100 text-rose-700",
   "bg-teal-100 text-teal-700",
 ];
+function av(name: string) {
+  return (name || "?")
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+let acTimer: ReturnType<typeof setTimeout>;
 
+// ── DepotCard — same design as ScanCard ──────────────────────────────────────
+function DepotCard({
+  depot,
+  tenantDepotId,
+  tenants,
+  isSelected,
+  onClick,
+}: {
+  depot: Depot;
+  tenantDepotId: string;
+  tenants: Tenant[];
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const isPrimary = depot.spoke_depot_id === tenantDepotId;
+  const tenantName = depot.tenant_id
+    ? (() => {
+        const t = tenants.find((x) => x.tenant_id === depot.tenant_id);
+        return t?.company_name || t?.contact_name || null;
+      })()
+    : null;
+  const syncDate = depot.synced_at
+    ? new Date(depot.synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
+  const addressLine = depot.address ? [depot.address, depot.city, depot.state].filter(Boolean).join(", ") : null;
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+      whileTap={{ scale: 0.98 }}
+      className={`relative w-full rounded-xl border text-left transition-all duration-200 ${
+        isSelected
+          ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/20"
+          : "border-border/60 bg-card hover:border-primary/25 hover:shadow-sm"
+      }`}
+    >
+      <div className="px-3.5 py-3">
+        {/* Top: emoji + name + sync date — same structure as ScanCard */}
+        <div className="mb-1.5 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base leading-none">{isPrimary ? "⭐" : "🏢"}</span>
+              <p className="truncate font-semibold text-xs">{depot.name}</p>
+            </div>
+            {depot.rt_depot_id && (
+              <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{depot.rt_depot_id}</p>
+            )}
+          </div>
+          {syncDate && (
+            <div className="shrink-0 text-right">
+              <p className="font-medium text-[10px] text-muted-foreground">{syncDate}</p>
+            </div>
+          )}
+        </div>
+        {/* Middle: address line — same as scan address */}
+        <p
+          className={`mb-1.5 flex items-center gap-1 truncate text-[11px] ${addressLine ? "text-muted-foreground" : "text-amber-500"}`}
+        >
+          <MapPin className="h-2.5 w-2.5 shrink-0 opacity-60" />
+          {addressLine || "No address — click to add"}
+        </p>
+        {/* Bottom: badges — same as scan route badges */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-bold text-[9px] ${depot.active !== false ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${depot.active !== false ? "bg-green-500" : "bg-gray-400"}`} />
+            {depot.active !== false ? "Active" : "Inactive"}
+          </span>
+          {isPrimary && (
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 font-bold text-[9px] text-primary">
+              <Zap className="h-2.5 w-2.5" /> Primary
+            </span>
+          )}
+          {tenantName && (
+            <span className="truncate rounded-full bg-blue-50 px-1.5 py-0.5 font-medium text-[9px] text-blue-600 border border-blue-100">
+              {tenantName}
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+// ── Address autocomplete ──────────────────────────────────────────────────────
 function AddressAutocomplete({
   value,
   onChange,
@@ -108,7 +196,6 @@ function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<{ main: string; sub: string; data: Record<string, string> }[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-
   const search = (q: string) => {
     if (q.length < 3) {
       setSuggestions([]);
@@ -145,7 +232,6 @@ function AddressAutocomplete({
       }
     }, 350);
   };
-
   return (
     <div className="relative">
       <div className="relative">
@@ -189,6 +275,7 @@ function AddressAutocomplete({
   );
 }
 
+// ── Static map ────────────────────────────────────────────────────────────────
 function StaticMap({ depot }: { depot: Depot | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
@@ -208,8 +295,8 @@ function StaticMap({ depot }: { depot: Depot | null }) {
       );
       const data = await res.json();
       if (!data.length || !mapRef.current) return;
-      const lat = parseFloat(data[0].lat);
-      const lng = parseFloat(data[0].lon);
+      const lat = parseFloat(data[0].lat),
+        lng = parseFloat(data[0].lon);
       const L = await import("leaflet");
       mapRef.current.flyTo([lat, lng], 17, { duration: 1.2, easeLinearity: 0.25 });
       if (markerRef.current) {
@@ -217,12 +304,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
         markerRef.current = null;
       }
       const icon = L.divIcon({
-        html: `<div style="display:flex;flex-direction:column;align-items:center">
-          <div style="width:36px;height:36px;background:#2563EB;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,99,235,.45)">
-            <span style="transform:rotate(45deg);font-size:16px">\u{1F3E2}</span>
-          </div>
-          <div style="margin-top:5px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;color:#1e293b;box-shadow:0 2px 8px rgba(0,0,0,.10);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">${dep.name}</div>
-        </div>`,
+        html: `<div style="display:flex;flex-direction:column;align-items:center"><div style="width:36px;height:36px;background:#2563EB;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,99,235,.45)"><span style="transform:rotate(45deg);font-size:16px">🏢</span></div><div style="margin-top:5px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;color:#1e293b;box-shadow:0 2px 8px rgba(0,0,0,.10);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">${dep.name}</div></div>`,
         className: "",
         iconSize: [36, 60],
         iconAnchor: [18, 36],
@@ -243,9 +325,9 @@ function StaticMap({ depot }: { depot: Depot | null }) {
         [26.2, -80.25],
         10,
       );
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-      }).addTo(mapRef.current);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(
+        mapRef.current,
+      );
       setTimeout(() => {
         mapRef.current?.invalidateSize();
         mapReadyRef.current = true;
@@ -270,6 +352,7 @@ function StaticMap({ depot }: { depot: Depot | null }) {
   return <div ref={containerRef} className="absolute inset-0" />;
 }
 
+// ── Detail Panel ──────────────────────────────────────────────────────────────
 function DetailPanel({
   depot,
   onSave,
@@ -293,11 +376,9 @@ function DetailPanel({
     const arr = form.assigned_drivers || [];
     set("assigned_drivers", arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
   };
-
   useEffect(() => {
     setForm({ ...depot });
   }, [depot]);
-
   const handleSave = async () => {
     setSaving(true);
     await onSave(depot.spoke_depot_id, form);
@@ -306,15 +387,13 @@ function DetailPanel({
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const SectionLabel = ({ children }: { children: string }) => (
+  const SL = ({ children }: { children: string }) => (
     <p className="mb-2 font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-widest">{children}</p>
   );
-
-  const CardWrap = ({ children }: { children: React.ReactNode }) => (
+  const CW = ({ children }: { children: React.ReactNode }) => (
     <div className="divide-y overflow-hidden rounded-xl border bg-card">{children}</div>
   );
-
-  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  const R = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5">
       <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
       <div className="flex-1 text-right">{children}</div>
@@ -323,7 +402,6 @@ function DetailPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
       <div className="border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <p className="flex-1 truncate font-semibold text-sm leading-tight">{depot.name}</p>
@@ -350,13 +428,10 @@ function DetailPanel({
           )}
         </div>
       </div>
-
-      {/* Scrollable body */}
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {/* LOCATION */}
         <div>
-          <SectionLabel>Location</SectionLabel>
-          <CardWrap>
+          <SL>Location</SL>
+          <CW>
             <div className="px-3 py-2">
               <p className="mb-1 text-[10px] text-muted-foreground">Street address</p>
               <AddressAutocomplete
@@ -426,13 +501,11 @@ function DetailPanel({
                 </div>
               )}
             </div>
-          </CardWrap>
+          </CW>
         </div>
-
-        {/* SCHEDULE */}
         <div>
-          <SectionLabel>Schedule</SectionLabel>
-          <CardWrap>
+          <SL>Schedule</SL>
+          <CW>
             <div className="grid grid-cols-2 divide-x">
               <div className="px-3 py-2">
                 <p className="mb-1 text-[10px] text-muted-foreground">Start time</p>
@@ -453,7 +526,7 @@ function DetailPanel({
                 />
               </div>
             </div>
-            <Row label="Timezone">
+            <R label="Timezone">
               <Select value={form.timezone || "America/New_York"} onValueChange={(v) => set("timezone", v)}>
                 <SelectTrigger className="h-7 w-36 text-xs">
                   <SelectValue />
@@ -465,7 +538,7 @@ function DetailPanel({
                   <SelectItem value="America/Los_Angeles">Pacific (PT)</SelectItem>
                 </SelectContent>
               </Select>
-            </Row>
+            </R>
             <div className="px-3 py-2">
               <p className="mb-1.5 text-[10px] text-muted-foreground">Working days</p>
               <div className="flex gap-1">
@@ -481,7 +554,7 @@ function DetailPanel({
                 ))}
               </div>
             </div>
-            <Row label="Time per stop">
+            <R label="Time per stop">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground text-xs">{form.estimated_time_per_stop || 10} min</span>
                 <input
@@ -494,14 +567,12 @@ function DetailPanel({
                   className="h-1.5 w-24 accent-primary"
                 />
               </div>
-            </Row>
-          </CardWrap>
+            </R>
+          </CW>
         </div>
-
-        {/* ROUTE CONFIG */}
         <div>
-          <SectionLabel>Route config</SectionLabel>
-          <CardWrap>
+          <SL>Route config</SL>
+          <CW>
             <div className="px-3 py-2">
               <p className="mb-1.5 text-[10px] text-muted-foreground">Vehicle type</p>
               <div className="flex gap-2">
@@ -518,7 +589,7 @@ function DetailPanel({
                 ))}
               </div>
             </div>
-            <Row label="Side of road">
+            <R label="Side of road">
               <div className="flex gap-1">
                 {["either", "right", "left"].map((s) => (
                   <button
@@ -531,8 +602,8 @@ function DetailPanel({
                   </button>
                 ))}
               </div>
-            </Row>
-            <Row label="Avg speed">
+            </R>
+            <R label="Avg speed">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-foreground text-xs">{form.avg_speed_mph || 35} mph</span>
                 <input
@@ -545,8 +616,8 @@ function DetailPanel({
                   className="h-1.5 w-24 accent-primary"
                 />
               </div>
-            </Row>
-            <Row label="Max stops / driver">
+            </R>
+            <R label="Max stops / driver">
               <Input
                 type="number"
                 value={form.max_stops_per_driver ?? ""}
@@ -555,14 +626,12 @@ function DetailPanel({
                 className="h-7 w-28 text-right text-xs"
                 min={1}
               />
-            </Row>
-          </CardWrap>
+            </R>
+          </CW>
         </div>
-
-        {/* TENANT */}
         <div>
-          <SectionLabel>Tenant</SectionLabel>
-          <CardWrap>
+          <SL>Tenant</SL>
+          <CW>
             <div className="px-3 py-2">
               <Select
                 value={form.tenant_id ? String(form.tenant_id) : ""}
@@ -574,13 +643,12 @@ function DetailPanel({
                       (() => {
                         const t = tenants.find((x) => x.tenant_id === form.tenant_id);
                         const tName = t?.company_name || t?.contact_name || `Tenant ${form.tenant_id}`;
-                        const cls = AVATAR_COLORS[form.tenant_id % AVATAR_COLORS.length];
                         return (
                           <div className="flex items-center gap-2">
                             <div
-                              className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${cls}`}
+                              className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${AVATAR_COLORS[form.tenant_id % AVATAR_COLORS.length]}`}
                             >
-                              {avatar(tName)}
+                              {av(tName)}
                             </div>
                             <span>{tName}</span>
                           </div>
@@ -591,14 +659,13 @@ function DetailPanel({
                 <SelectContent style={{ zIndex: 9999 }}>
                   {tenants.map((t) => {
                     const tName = t.company_name || t.contact_name || `Tenant ${t.tenant_id}`;
-                    const cls = AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length];
                     return (
                       <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
                         <div className="flex items-center gap-2">
                           <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${cls}`}
+                            className={`flex h-5 w-5 items-center justify-center rounded-full font-bold text-[9px] ${AVATAR_COLORS[t.tenant_id % AVATAR_COLORS.length]}`}
                           >
-                            {avatar(tName)}
+                            {av(tName)}
                           </div>
                           <span>{tName}</span>
                         </div>
@@ -608,13 +675,11 @@ function DetailPanel({
                 </SelectContent>
               </Select>
             </div>
-          </CardWrap>
+          </CW>
         </div>
-
-        {/* DRIVERS */}
         <div>
-          <SectionLabel>Drivers</SectionLabel>
-          <CardWrap>
+          <SL>Drivers</SL>
+          <CW>
             <div className="px-3 py-3">
               {drivers.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">No drivers found</p>
@@ -630,13 +695,12 @@ function DetailPanel({
                     {drivers.map((d, i) => {
                       const dName = d.full_name || d.name || "Driver";
                       const isAssigned = (form.assigned_drivers || []).includes(d._id);
-                      const cls = AVATAR_COLORS[i % AVATAR_COLORS.length];
                       return (
                         <button key={d._id} type="button" onClick={() => toggleDriver(d._id)} title={dName}>
                           <div
-                            className={`relative flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-[10px] transition-all ${cls} ${isAssigned ? "border-primary opacity-100 ring-2 ring-primary ring-offset-1" : "border-transparent opacity-40 hover:opacity-70"}`}
+                            className={`relative flex h-8 w-8 items-center justify-center rounded-full border-2 font-bold text-[10px] transition-all ${AVATAR_COLORS[i % AVATAR_COLORS.length]} ${isAssigned ? "border-primary opacity-100 ring-2 ring-primary ring-offset-1" : "border-transparent opacity-40 hover:opacity-70"}`}
                           >
-                            {avatar(dName)}
+                            {av(dName)}
                             {isAssigned && (
                               <span className="absolute -right-0.5 -bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-primary">
                                 <Check className="h-2 w-2 text-white" />
@@ -653,13 +717,12 @@ function DetailPanel({
                         const d = drivers.find((x) => x._id === id);
                         if (!d) return null;
                         const dName = d.full_name || d.name || "Driver";
-                        const cls = AVATAR_COLORS[i % AVATAR_COLORS.length];
                         return (
                           <span
                             key={id}
-                            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium text-[10px] ${cls}`}
+                            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium text-[10px] ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}
                           >
-                            {avatar(dName)} {dName.split(" ").slice(0, 2).join(" ")}
+                            {av(dName)} {dName.split(" ").slice(0, 2).join(" ")}
                             <button
                               type="button"
                               onClick={() => toggleDriver(id)}
@@ -675,27 +738,23 @@ function DetailPanel({
                 </>
               )}
             </div>
-          </CardWrap>
+          </CW>
         </div>
-
-        {/* IDS */}
         <div>
-          <SectionLabel>IDs</SectionLabel>
-          <CardWrap>
-            <Row label="RT Depot ID">
-              <code className="font-mono font-semibold text-xs">{depot.rt_depot_id || "\u2014"}</code>
-            </Row>
-            <Row label="Spoke ID">
+          <SL>IDs</SL>
+          <CW>
+            <R label="RT Depot ID">
+              <code className="font-mono font-semibold text-xs">{depot.rt_depot_id || "—"}</code>
+            </R>
+            <R label="Spoke ID">
               <code className="font-mono text-[10px] text-muted-foreground">
                 {depot.spoke_depot_id.replace("depots/", "")}
               </code>
-            </Row>
-          </CardWrap>
+            </R>
+          </CW>
         </div>
       </div>
-
-      {/* Footer */}
-      <div className="border-t px-4 py-3">
+      <div className="flex flex-col gap-2 border-t bg-muted/10 px-5 py-3">
         <Button onClick={handleSave} disabled={saving} size="sm" className="w-full gap-2">
           {saving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -711,6 +770,7 @@ function DetailPanel({
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function DepotsPage() {
   const [depots, setDepots] = useState<Depot[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -725,7 +785,7 @@ export default function DepotsPage() {
   const [addName, setAddName] = useState("");
   const [addSpokeId, setAddSpokeId] = useState("");
   const [addSaving, setAddSaving] = useState(false);
-  const initDone = useRef(false);
+  const isMobile = useIsMobile();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -737,9 +797,7 @@ export default function DepotsPage() {
       ]);
       if (dr.status === "fulfilled" && dr.value.ok) {
         const d = await dr.value.json();
-        const list: Depot[] = d.list || [];
-        setDepots(list);
-        initDone.current = true;
+        setDepots(d.list || []);
       }
       if (tr.status === "fulfilled" && tr.value.ok) {
         const t = await tr.value.json();
@@ -756,8 +814,6 @@ export default function DepotsPage() {
       setLoading(false);
     }
   }, []);
-
-  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchAll();
@@ -778,7 +834,6 @@ export default function DepotsPage() {
       setSyncing(false);
     }
   };
-
   const handleSave = async (spokeId: string, data: Partial<Depot>) => {
     await fetch(`/api/data/spoke-depots?id=${encodeURIComponent(spokeId)}`, {
       method: "PUT",
@@ -788,7 +843,6 @@ export default function DepotsPage() {
     setDepots((prev) => prev.map((d) => (d.spoke_depot_id === spokeId ? { ...d, ...data } : d)));
     setSelected((prev) => (prev?.spoke_depot_id === spokeId ? ({ ...prev, ...data } as Depot) : prev));
   };
-
   const handleAddDepot = async () => {
     if (!addName) return;
     setAddSaving(true);
@@ -812,272 +866,242 @@ export default function DepotsPage() {
           d.address?.toLowerCase().includes(search.toLowerCase()),
       )
     : depots;
-
-  const noAddr = depots.filter((d) => !d.address).length;
   const activeCount = depots.filter((d) => d.active !== false).length;
-
-  const _STATS = [
-    { emoji: "\u{1F3E2}", value: depots.length, label: "Total", active: false },
-    { emoji: "\u2705", value: activeCount, label: "Active", active: true },
-    { emoji: "\u23F8\uFE0F", value: depots.length - activeCount, label: "Inactive", active: false },
-  ];
+  const noAddr = depots.filter((d) => !d.address).length;
 
   if (loading)
     return (
-      <div className="flex h-[calc(100vh-5rem)] gap-0">
-        <div className="w-[260px] shrink-0 space-y-2 border-r p-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-16 rounded-xl" />
+      <div className="flex h-[calc(100vh-8rem)] gap-3">
+        <div className="w-[280px] shrink-0 space-y-2 p-3">
+          {[1, 2, 3, 4].map((i, idx) => (
+            <Skeleton key={i} className="rounded-xl" style={{ height: 88, opacity: 1 - idx * 0.18 }} />
           ))}
         </div>
-        <Skeleton className="m-3 flex-1 rounded-xl" />
-        <div className="w-[380px] shrink-0 space-y-2 border-l p-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-10 rounded-xl" />
-          ))}
-        </div>
+        <Skeleton className="flex-1 rounded-xl" />
       </div>
     );
 
+  // Summary pills — same as scans
+  const pills = [
+    { k: "all", e: "🏢", v: depots.length, c: "bg-slate-100 text-slate-700 ring-slate-200" },
+    { k: "active", e: "✅", v: activeCount, c: "bg-green-100 text-green-700 ring-green-200" },
+    { k: "noaddr", e: "📍", v: noAddr, c: "bg-amber-100 text-amber-700 ring-amber-200" },
+  ];
+
   return (
-    <div
-      className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
-      style={
-        isMobile
-          ? { display: "flex", flexDirection: "column" as const }
-          : {
-              display: "grid",
-              gridTemplateColumns: selected ? "clamp(220px, 25vw, 260px) 1fr 360px" : "clamp(220px, 25vw, 260px) 1fr",
-              gridTemplateRows: "1fr",
-            }
-      }
-    >
-      {/* COL 1 — List */}
+    <>
       <div
-        className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : "flex"} md:flex`}
+        className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
+        style={
+          isMobile
+            ? { display: "flex", flexDirection: "column" }
+            : {
+                display: "grid",
+                gridTemplateColumns: selected ? "clamp(240px,26vw,280px) 1fr 360px" : "clamp(240px,26vw,280px) 1fr",
+                gridTemplateRows: "1fr",
+              }
+        }
       >
-        <div className="flex items-center justify-between border-b px-3.5 py-3">
-          <div>
-            <h1 className="font-semibold text-sm">Depots</h1>
-            <p className="text-[10px] text-muted-foreground">
-              {depots.length} total · {activeCount} active
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={handleSync}
-              disabled={syncing}
-              title="Sync Spoke"
-            >
-              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddOpen(true)} title="Add depot">
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 border-b px-3 py-2">
-          <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5">
-            <span className="font-bold text-foreground text-sm tabular-nums">{depots.length}</span>
-            <span className="font-medium text-[9px] text-muted-foreground">total</span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5">
-            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            <span className="font-bold text-green-700 text-sm tabular-nums">{activeCount}</span>
-            <span className="font-medium text-[9px] text-green-600">active</span>
-          </div>
-          {depots.length - activeCount > 0 && (
-            <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              <span className="font-bold text-amber-700 text-sm tabular-nums">{depots.length - activeCount}</span>
-              <span className="font-medium text-[9px] text-amber-600">inactive</span>
-            </div>
-          )}
-        </div>
-
-        {syncMsg && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="border-b bg-green-50 px-3 py-1.5 font-medium text-[10px] text-green-700"
-          >
-            {syncMsg}
-          </motion.div>
-        )}
-
-        <div className="border-b px-3 py-2">
-          <Input
-            placeholder="Search depots..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-7 text-xs"
-          />
-        </div>
-
-        {noAddr > 0 && (
-          <div className="flex items-center gap-1.5 border-b bg-amber-50 px-3 py-1.5 text-[10px] text-amber-700">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span>
-              <strong>{noAddr}</strong> missing address
-            </span>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto py-1">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-              <Building2 className="h-8 w-8 opacity-15" />
-              <p className="text-xs">No depots — click sync</p>
-            </div>
-          ) : (
-            filtered.map((depot) => {
-              const isPrimary = depot.spoke_depot_id === tenantDepotId;
-              const isSel = selected?._id === depot._id;
-              return (
-                <button
-                  key={depot._id}
+        {/* COL 1 — List */}
+        <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : ""}`}>
+          {/* Header — exact scans pattern */}
+          <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="font-bold text-sm">🏢 Spoke Depots</h1>
+                <p className="text-[10px] text-muted-foreground">
+                  {filtered.length} of {depots.length}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <motion.button
+                  whileTap={{ rotate: 180 }}
                   type="button"
-                  onClick={() => setSelected(depot)}
-                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors ${isSel ? "border-primary border-r-[3px] bg-primary/5" : "hover:bg-muted/50"}`}
+                  onClick={() => fetchAll()}
+                  disabled={loading}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isPrimary ? "bg-primary/10" : "bg-muted"}`}
-                  >
-                    <Building2 className={`h-3.5 w-3.5 ${isPrimary ? "text-primary" : "text-muted-foreground"}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="truncate font-medium text-xs">{depot.name}</span>
-                      {isPrimary && (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-bold text-[8px] text-primary">
-                          PRIMARY
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      {depot.rt_depot_id && (
-                        <code className="text-[9px] text-muted-foreground">{depot.rt_depot_id}</code>
-                      )}
-                      {depot.tenant_id &&
-                        (() => {
-                          const t = tenants.find((x) => x.tenant_id === depot.tenant_id);
-                          const tName = t?.company_name || t?.contact_name;
-                          if (!tName) return null;
-                          return <span className="truncate font-medium text-[9px] text-blue-600">{tName}</span>;
-                        })()}
-                      {!depot.tenant_id && depot.address && (
-                        <span className="truncate text-[10px] text-muted-foreground">
-                          {depot.city}, {depot.state}
-                        </span>
-                      )}
-                      {!depot.address && <span className="text-[10px] text-amber-500">No address</span>}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <div
-                      className={`h-1.5 w-1.5 rounded-full ${depot.active !== false ? "bg-green-500" : "bg-gray-300"}`}
-                    />
-                    <ChevronRight className="h-3 w-3 text-muted-foreground/30" />
-                  </div>
+                  <RefreshCw className="h-3 w-3" />
+                </motion.button>
+                <button
+                  type="button"
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="flex h-6 items-center gap-1 rounded-lg bg-primary/10 px-2 font-semibold text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}Sync
                 </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* COL 2 — Map */}
-      <div className="hidden flex-col overflow-hidden md:flex">
-        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-            <MapPin className="h-3 w-3 text-primary" />
-          </div>
-          <span className="flex-1 truncate font-medium text-xs">
-            {selected?.address
-              ? `${selected.address}, ${selected.city}, ${selected.state}`
-              : selected
-                ? "No address — add in detail panel"
-                : "Select a depot"}
-          </span>
-          {selected && (
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {selected.start_time || "07:00"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Truck className="h-3 w-3" />
-                {selected.vehicle_type || "van"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Navigation className="h-3 w-3" />
-                {selected.avg_speed_mph || 35} mph
-              </span>
-              {(selected.assigned_drivers || []).length > 0 && (
-                <span className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {(selected.assigned_drivers || []).length} drivers
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="relative min-h-0 flex-1">
-          <StaticMap depot={selected} />
-          {!selected && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-[2px]">
-              <motion.div
-                animate={{ scale: [1, 1.06, 1] }}
-                transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
-              >
-                <MapPin className="h-12 w-12 opacity-10" />
-              </motion.div>
-              <div className="rounded-2xl border bg-background/95 px-5 py-3 text-center shadow-md">
-                <p className="font-medium text-sm">Select a depot</p>
-                <p className="mt-0.5 text-muted-foreground text-xs">Location will appear on the map</p>
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+            {syncMsg && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-lg bg-green-50 px-2.5 py-1 font-medium text-[10px] text-green-700"
+              >
+                ✓ {syncMsg}
+              </motion.div>
+            )}
+            <div className="relative">
+              <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search depots..."
+                className="h-7 pr-7 pl-8 text-xs"
+              />
+              <AnimatePresence>
+                {search && (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    onClick={() => setSearch("")}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
 
-      {/* COL 3 — Detail: desktop sidebar, mobile bottom sheet */}
-      {selected && (
-        <>
-          {/* Desktop: 3rd grid column */}
+          {/* Summary pills — same as scans */}
+          <div className="flex gap-1.5 overflow-x-auto border-b bg-muted/5 px-3 py-2">
+            {pills.map((p) => (
+              <motion.div
+                key={p.k}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.95 }}
+                className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 font-bold text-[10px] ring-1 opacity-80 ${p.c}`}
+              >
+                {p.e} {p.v}
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Cards list — same spacing as scans */}
+          <div className="flex-1 space-y-1.5 overflow-y-auto p-2.5">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 pt-16 text-muted-foreground">
+                <Building2 className="h-12 w-12 opacity-10" />
+                <div className="text-center">
+                  <p className="font-semibold text-sm">No depots found</p>
+                  <p className="mt-0.5 text-xs opacity-60">Click ⚡ Sync to import from Spoke</p>
+                </div>
+              </div>
+            ) : (
+              filtered.map((depot) => (
+                <DepotCard
+                  key={depot._id}
+                  depot={depot}
+                  tenantDepotId={tenantDepotId}
+                  tenants={tenants}
+                  isSelected={selected?._id === depot._id}
+                  onClick={() => setSelected(depot)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* COL 2 — Map */}
+        <div className="hidden flex-col overflow-hidden md:flex">
+          <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+              <MapPin className="h-3 w-3 text-primary" />
+            </div>
+            <span className="flex-1 truncate font-medium text-xs">
+              {selected?.address
+                ? `${selected.address}, ${selected.city}, ${selected.state}`
+                : selected
+                  ? "No address — add in detail panel"
+                  : "Select a depot"}
+            </span>
+            {selected && (
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {selected.start_time || "07:00"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Truck className="h-3 w-3" />
+                  {selected.vehicle_type || "van"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Navigation className="h-3 w-3" />
+                  {selected.avg_speed_mph || 35} mph
+                </span>
+                {(selected.assigned_drivers || []).length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {(selected.assigned_drivers || []).length} drivers
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="relative min-h-0 flex-1">
+            <StaticMap depot={selected} />
+            {!selected && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-[2px]">
+                <motion.div
+                  animate={{ scale: [1, 1.06, 1] }}
+                  transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
+                >
+                  <MapPin className="h-12 w-12 opacity-10" />
+                </motion.div>
+                <div className="rounded-2xl border bg-background/95 px-5 py-3 text-center shadow-md">
+                  <p className="font-medium text-sm">Select a depot</p>
+                  <p className="mt-0.5 text-muted-foreground text-xs">Location will appear on the map</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* COL 3 — Detail panel (desktop 3rd column) */}
+        {selected && (
           <div className="hidden min-w-0 flex-col overflow-hidden border-l md:flex">
             <DetailPanel key={selected._id} depot={selected} onSave={handleSave} drivers={drivers} tenants={tenants} />
           </div>
-          {/* Mobile: bottom sheet */}
-          <div
-            className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-2xl md:hidden"
-            style={{ height: "85vh", animation: "slideUp 0.25s ease-out" }}
-          >
-            <div className="flex items-center gap-3 border-b px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="flex items-center gap-1.5 font-semibold text-primary text-sm"
-              >
-                {"\u2190"} Back
-              </button>
-              <span className="truncate font-semibold text-sm">{selected.name}</span>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <DetailPanel
-                key={`m_${selected._id}`}
-                depot={selected}
-                onSave={handleSave}
-                drivers={drivers}
-                tenants={tenants}
-              />
-            </div>
+        )}
+      </div>
+
+      {/* Mobile bottom sheet */}
+      {selected && isMobile && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-2xl"
+          style={{ height: "85vh", animation: "slideUp 0.25s ease-out" }}
+        >
+          <div className="flex items-center gap-3 border-b px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="flex items-center gap-1.5 font-semibold text-primary text-sm"
+            >
+              ← Back
+            </button>
+            <span className="truncate font-semibold text-sm">{selected.name}</span>
           </div>
-        </>
+          <div className="flex-1 overflow-hidden">
+            <DetailPanel
+              key={`m_${selected._id}`}
+              depot={selected}
+              onSave={handleSave}
+              drivers={drivers}
+              tenants={tenants}
+            />
+          </div>
+        </div>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -1111,6 +1135,6 @@ export default function DepotsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

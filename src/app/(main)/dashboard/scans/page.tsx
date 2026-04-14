@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface Scan {
   _id: string;
@@ -583,13 +584,7 @@ export default function ScansPage() {
   const [calOpen, setCalOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
+  const isMobile = useIsMobile();
 
   const handleCheck = useCallback((id: string, c: boolean) => {
     setCheckedIds((prev) => {

@@ -756,6 +756,14 @@ export default function DepotsPage() {
     }
   }, []);
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
@@ -839,14 +847,18 @@ export default function DepotsPage() {
   return (
     <div
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "clamp(220px, 25vw, 280px) 1fr",
-        gridTemplateRows: "1fr",
-      }}
+      style={
+        isMobile
+          ? { display: "flex", flexDirection: "column" as const }
+          : {
+              display: "grid",
+              gridTemplateColumns: "clamp(220px, 25vw, 280px) 1fr",
+              gridTemplateRows: "1fr",
+            }
+      }
     >
       {/* COL 1 — List */}
-      <div className="flex min-w-0 flex-col overflow-hidden border-r">
+      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : "flex"}`}>
         <div className="flex items-center justify-between border-b px-3.5 py-3">
           <div>
             <h1 className="font-semibold text-sm">Depots</h1>
@@ -982,7 +994,7 @@ export default function DepotsPage() {
       </div>
 
       {/* COL 2 — Map */}
-      <div className={`flex flex-col overflow-hidden ${!selected ? "hidden sm:flex" : "flex"}`}>
+      <div className={`flex-col overflow-hidden ${isMobile ? "hidden" : "flex"}`}>
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
@@ -1044,8 +1056,17 @@ export default function DepotsPage() {
           </div>
           <div
             className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-2xl md:hidden"
-            style={{ height: "70vh", animation: "slideUp 0.25s ease-out" }}
+            style={{ height: "85vh", animation: "slideUp 0.25s ease-out" }}
           >
+            <div className="flex items-center justify-between border-b px-4 py-3 md:hidden">
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="flex items-center gap-2 font-medium text-primary text-sm"
+              >
+                {"\u2190"} Back to list
+              </button>
+            </div>
             <DetailPanel
               key={`m_${selected._id}`}
               depot={selected}

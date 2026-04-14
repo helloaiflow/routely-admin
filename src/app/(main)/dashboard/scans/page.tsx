@@ -583,6 +583,14 @@ export default function ScansPage() {
   const [calOpen, setCalOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   const handleCheck = useCallback((id: string, c: boolean) => {
     setCheckedIds((prev) => {
       const n = new Set(prev);
@@ -728,14 +736,18 @@ export default function ScansPage() {
   return (
     <div
       className="h-[calc(100vh-5rem)] overflow-hidden rounded-xl border bg-background shadow-sm"
-      style={{
-        display: "grid",
-        gridTemplateColumns: selected ? "clamp(260px, 28vw, 300px) 1fr 300px" : "clamp(260px, 28vw, 300px) 1fr",
-        gridTemplateRows: "1fr",
-      }}
+      style={
+        isMobile
+          ? { display: "flex", flexDirection: "column" as const }
+          : {
+              display: "grid",
+              gridTemplateColumns: selected ? "clamp(260px, 28vw, 300px) 1fr 300px" : "clamp(260px, 28vw, 300px) 1fr",
+              gridTemplateRows: "1fr",
+            }
+      }
     >
       {/* COL 1: Scan List — hidden on mobile when detail is open */}
-      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected ? "hidden sm:flex" : "flex"}`}>
+      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : "flex"}`}>
         <div className="space-y-2 border-b bg-muted/10 px-3.5 py-3">
           <div className="flex items-center justify-between">
             <div>

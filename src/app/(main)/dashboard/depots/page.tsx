@@ -847,13 +847,15 @@ export default function DepotsPage() {
           ? { display: "flex", flexDirection: "column" as const }
           : {
               display: "grid",
-              gridTemplateColumns: "clamp(220px, 25vw, 280px) 1fr",
+              gridTemplateColumns: selected ? "clamp(220px, 25vw, 260px) 1fr 360px" : "clamp(220px, 25vw, 260px) 1fr",
               gridTemplateRows: "1fr",
             }
       }
     >
       {/* COL 1 — List */}
-      <div className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : "flex"}`}>
+      <div
+        className={`flex min-w-0 flex-col overflow-hidden border-r ${selected && isMobile ? "hidden" : "flex"} md:flex`}
+      >
         <div className="flex items-center justify-between border-b px-3.5 py-3">
           <div>
             <h1 className="font-semibold text-sm">Depots</h1>
@@ -989,7 +991,7 @@ export default function DepotsPage() {
       </div>
 
       {/* COL 2 — Map */}
-      <div className={`flex-col overflow-hidden ${isMobile ? "hidden" : "flex"}`}>
+      <div className="hidden flex-col overflow-hidden md:flex">
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/10 px-4 py-2.5">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-3 w-3 text-primary" />
@@ -1046,29 +1048,34 @@ export default function DepotsPage() {
       {/* COL 3 — Detail: desktop sidebar, mobile bottom sheet */}
       {selected && (
         <>
-          <div className="hidden flex-col overflow-hidden border-l md:flex">
+          {/* Desktop: 3rd grid column */}
+          <div className="hidden min-w-0 flex-col overflow-hidden border-l md:flex">
             <DetailPanel key={selected._id} depot={selected} onSave={handleSave} drivers={drivers} tenants={tenants} />
           </div>
+          {/* Mobile: bottom sheet */}
           <div
             className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t bg-background shadow-2xl md:hidden"
             style={{ height: "85vh", animation: "slideUp 0.25s ease-out" }}
           >
-            <div className="flex items-center justify-between border-b px-4 py-3 md:hidden">
+            <div className="flex items-center gap-3 border-b px-4 py-3">
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="flex items-center gap-2 font-medium text-primary text-sm"
+                className="flex items-center gap-1.5 font-semibold text-primary text-sm"
               >
-                {"\u2190"} Back to list
+                {"\u2190"} Back
               </button>
+              <span className="truncate font-semibold text-sm">{selected.name}</span>
             </div>
-            <DetailPanel
-              key={`m_${selected._id}`}
-              depot={selected}
-              onSave={handleSave}
-              drivers={drivers}
-              tenants={tenants}
-            />
+            <div className="flex-1 overflow-hidden">
+              <DetailPanel
+                key={`m_${selected._id}`}
+                depot={selected}
+                onSave={handleSave}
+                drivers={drivers}
+                tenants={tenants}
+              />
+            </div>
           </div>
         </>
       )}

@@ -414,10 +414,7 @@ export default function DriversPage() {
             )}
           </div>
         </div>
-        <div
-          className={`flex flex-col overflow-hidden ${showDetail ? "flex" : "hidden md:flex"}`}
-          style={{ gridColumn: showDetail ? "1 / -1" : undefined }}
-        >
+        <div className={`flex flex-col overflow-hidden ${showDetail ? "flex" : "hidden md:flex"}`}>
           {!selected ? (
             <div className="flex h-full flex-col items-center justify-center gap-5 text-muted-foreground">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">

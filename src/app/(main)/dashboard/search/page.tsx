@@ -398,11 +398,11 @@ export default function SearchPage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] flex-col overflow-hidden">
-      <div className="flex flex-col gap-2 px-4 py-3 sm:px-6 sm:py-4">
+      <div className="flex flex-col gap-2 border-b bg-muted/10 px-3.5 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-semibold text-xl sm:text-2xl">Package Search</h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="font-bold text-sm">Package Search</h1>
+            <p className="text-[10px] text-muted-foreground">
               {booting
                 ? "Loading..."
                 : hasQuery
@@ -434,7 +434,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search stops, scans..."
-              className="h-10 pr-9 pl-9 text-base"
+              className="h-8 pr-8 pl-8 text-sm"
               autoFocus
             />
             <AnimatePresence>

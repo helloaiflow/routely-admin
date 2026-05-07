@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   AlertCircle, BadgeCheck, Building2, CreditCard,
   Package, RefreshCw, TrendingUp, Wallet,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ function KpiCard({
   label, value, sub, icon: Icon, accent,
 }: {
   label: string; value: string; sub?: string;
-  icon: React.ElementType; accent?: "green" | "red" | "blue" | "amber";
+  icon: LucideIcon; accent?: "green" | "red" | "blue" | "amber";
 }) {
   const colors = {
     green: "bg-green-50 text-green-600 border-green-200",

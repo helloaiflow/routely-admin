@@ -1,466 +1,624 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Text, Billboard } from "@react-three/drei";
+import { Text, Billboard, OrthographicCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { AGENTS, Agent, PROVIDER_COLORS, STATUS_COLORS } from "@/lib/virtual-office/agents";
+import type { ZoomCmd } from "./VirtualOfficeClient";
 
-interface ThreeOfficeSceneProps {
+interface Props {
   onAgentClick: (agent: Agent) => void;
   selectedAgentId: string | null;
   isDark: boolean;
+  zoomCmd: ZoomCmd;
 }
 
-// ── Gather Town color palette ─────────────────────────────────────────────
-const GT = {
-  floorBase:    { light: "#E8E0D0", dark: "#1a2035" },
-  floorGrid:    { light: "#D4C9B8", dark: "#1e2a42" },
-  wallColor:    { light: "#4A5568", dark: "#2d3748" },
-  wallTop:      { light: "#2D3748", dark: "#1a202c" },
+// ── Isometric camera controller ───────────────────────────────────────────
+const ISO_ANGLE = Math.PI / 6;       // 30°
+const ISO_Y_ANGLE = Math.PI / 4;     // 45° yaw
+const DEFAULT_ZOOM = 28;
 
-  rooms: [
-    { id: "main_hall",   label: "Operations Floor", x: -7,  z: -1,  w: 10, d: 10,
-      light: "#C8DFF0", dark: "#0f2035", border: { light: "#3B82F6", dark: "#2563eb" } },
-    { id: "reception",   label: "Reception",         x: -14, z:  5,  w:  5, d:  5,
-      light: "#D4EDD4", dark: "#0f2518", border: { light: "#22C55E", dark: "#16a34a" } },
-    { id: "lounge",      label: "Client Lounge",     x: -8,  z:  6,  w:  5, d:  5,
-      light: "#EDD4F0", dark: "#1f0f2d", border: { light: "#A855F7", dark: "#9333ea" } },
-    { id: "boss_cabin",  label: "Command Center",    x:  4,  z: -6,  w:  7, d:  6,
-      light: "#D0E8FF", dark: "#0a1628", border: { light: "#0EA5E9", dark: "#0284c7" } },
-    { id: "accounts",    label: "Finance & QA",      x:  4,  z:  1,  w:  7, d:  5,
-      light: "#D4F0E8", dark: "#0a2018", border: { light: "#10B981", dark: "#059669" } },
-    { id: "staff_room",  label: "Comms Hub",         x:  4,  z:  7,  w:  4, d:  4,
-      light: "#FFF0D0", dark: "#1f1800", border: { light: "#F59E0B", dark: "#d97706" } },
-    { id: "centre_head", label: "Analytics",         x:  4,  z: 11,  w:  4, d:  3,
-      light: "#FFD0D0", dark: "#200a0a", border: { light: "#EF4444", dark: "#dc2626" } },
-    { id: "counsellor",  label: "Support",           x:  9,  z:  7,  w:  4, d:  7,
-      light: "#D8F0D4", dark: "#0a1f08", border: { light: "#4ADE80", dark: "#22c55e" } },
-  ],
-};
+function IsoCamera({ zoomCmd }: { zoomCmd: ZoomCmd }) {
+  const { camera, gl } = useThree();
+  const zoom   = useRef(DEFAULT_ZOOM);
+  const panX   = useRef(0);
+  const panZ   = useRef(0);
+  const isDrag = useRef(false);
+  const isRightDrag = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
 
-const ROOM_WAYPOINTS: Record<string, [number, number][]> = {
-  main_hall:   [[-10,0],[-9,-1],[-8,1],[-7,-2],[-6,0],[-9,2],[-8,-3],[-7,1],[-10,-3],[-6,-2]],
-  reception:   [[-14,5],[-13,6],[-15,4],[-14,4],[-13,5]],
-  lounge:      [[-8,6],[-7,7],[-9,5],[-8,5],[-7,6]],
-  boss_cabin:  [[5,-6],[6,-5],[7,-7],[5,-5],[7,-6]],
-  accounts:    [[5,1],[6,2],[7,0],[5,3],[6,1],[7,2]],
-  staff_room:  [[4,7],[5,8],[6,7],[5,7],[4,8]],
-  centre_head: [[4,11],[5,11],[6,12],[5,12]],
-  counsellor:  [[9,7],[10,8],[11,7],[10,9],[9,8]],
-};
+  const applyCamera = useCallback(() => {
+    const cam = camera as THREE.OrthographicCamera;
+    cam.zoom = zoom.current;
+    // Isometric position: 45° yaw, 35.26° pitch
+    const dist = 30;
+    const cx = panX.current + dist * Math.cos(ISO_ANGLE) * Math.sin(ISO_Y_ANGLE);
+    const cy = dist * Math.sin(ISO_ANGLE) * 1.6;
+    const cz = panZ.current + dist * Math.cos(ISO_ANGLE) * Math.cos(ISO_Y_ANGLE);
+    cam.position.set(cx, cy, cz);
+    cam.lookAt(panX.current, 0, panZ.current);
+    cam.updateProjectionMatrix();
+  }, [camera]);
 
-// ── Desk ──────────────────────────────────────────────────────────────────
-function Desk({ position, isDark }: { position: [number, number, number]; isDark: boolean }) {
-  const deskCol  = isDark ? "#5a3e1a" : "#8B6914";
-  const legCol   = isDark ? "#3a2800" : "#6b4f10";
-  const monBack  = isDark ? "#111827" : "#1f2937";
-  const monScreen = isDark ? "#1d4ed8" : "#3b82f6";
-  const kbdCol   = isDark ? "#1f2937" : "#374151";
+  // Zoom cmd from UI buttons
+  useEffect(() => {
+    if (!zoomCmd) return;
+    if (zoomCmd === "in")    { zoom.current = Math.min(zoom.current * 1.25, 80); }
+    if (zoomCmd === "out")   { zoom.current = Math.max(zoom.current * 0.8, 8);   }
+    if (zoomCmd === "reset") { zoom.current = DEFAULT_ZOOM; panX.current = 0; panZ.current = 0; }
+    applyCamera();
+  }, [zoomCmd, applyCamera]);
 
+  useEffect(() => {
+    const canvas = gl.domElement;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.88;
+      zoom.current = Math.max(8, Math.min(80, zoom.current * factor));
+      applyCamera();
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDrag.current = true;
+      isRightDrag.current = e.button === 2;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDrag.current) return;
+      const dx = e.clientX - lastPos.current.x;
+      const dy = e.clientY - lastPos.current.y;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+
+      if (isRightDrag.current || e.buttons === 2) {
+        // Pan — move world in iso axes
+        const speed = 0.05 / (zoom.current / DEFAULT_ZOOM);
+        panX.current -= dx * speed;
+        panZ.current += dy * speed * 0.5;
+        applyCamera();
+      }
+    };
+
+    const onMouseUp = () => { isDrag.current = false; };
+    const onCtxMenu = (e: Event) => e.preventDefault();
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    canvas.addEventListener("contextmenu", onCtxMenu);
+
+    applyCamera();
+    return () => {
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      canvas.removeEventListener("contextmenu", onCtxMenu);
+    };
+  }, [gl, applyCamera]);
+
+  return null;
+}
+
+// ── Wood floor ────────────────────────────────────────────────────────────
+function WoodFloor({ x, z, w, d, color }: { x:number;z:number;w:number;d:number;color:string }) {
   return (
-    <group position={position}>
-      <mesh castShadow receiveShadow position={[0, 0.4, 0]}>
-        <boxGeometry args={[1.1, 0.06, 0.65]} />
-        <meshStandardMaterial color={deskCol} roughness={0.4} metalness={0.1} />
+    <mesh receiveShadow position={[x, 0, z]}>
+      <boxGeometry args={[w, 0.08, d]} />
+      <meshStandardMaterial color={color} roughness={0.7} metalness={0} />
+    </mesh>
+  );
+}
+
+// ── Wall with optional top color ──────────────────────────────────────────
+function Wall({ pos, size, color="#e8e0d0", topColor }: {
+  pos:[number,number,number]; size:[number,number,number]; color?:string; topColor?:string;
+}) {
+  const h = size[1];
+  return (
+    <group position={pos}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={size} />
+        <meshStandardMaterial color={color} roughness={0.8} />
       </mesh>
-      {([ [-0.48,0.2,-0.27],[0.48,0.2,-0.27],[-0.48,0.2,0.27],[0.48,0.2,0.27] ] as [number,number,number][]).map(([lx,ly,lz],i)=>(
+      {topColor && (
+        <mesh position={[0, h/2 + 0.02, 0]}>
+          <boxGeometry args={[size[0], 0.04, size[2]]} />
+          <meshStandardMaterial color={topColor} roughness={0.4} metalness={0.1} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+// ── Glass partition ───────────────────────────────────────────────────────
+function GlassWall({ pos, size }: { pos:[number,number,number]; size:[number,number,number] }) {
+  return (
+    <group position={pos}>
+      {/* Frame */}
+      <mesh castShadow>
+        <boxGeometry args={[size[0], size[1], size[2]]} />
+        <meshStandardMaterial color="#2d3748" roughness={0.3} metalness={0.6} />
+      </mesh>
+      {/* Glass */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[size[0] - 0.06, size[1] - 0.06, 0.04]} />
+        <meshStandardMaterial color="#a0c4ff" transparent opacity={0.25} roughness={0} metalness={0.1} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Desk (modern style) ───────────────────────────────────────────────────
+function Desk({ pos, rot=0 }: { pos:[number,number,number]; rot?:number }) {
+  return (
+    <group position={pos} rotation={[0,rot,0]}>
+      {/* Tabletop */}
+      <mesh castShadow receiveShadow position={[0,0.42,0]}>
+        <boxGeometry args={[1.1,0.05,0.6]} />
+        <meshStandardMaterial color="#e8d5a3" roughness={0.4} />
+      </mesh>
+      {/* Metal legs */}
+      {([[-0.48,0.2,-0.26],[0.48,0.2,-0.26],[-0.48,0.2,0.26],[0.48,0.2,0.26]] as [number,number,number][]).map(([lx,ly,lz],i)=>(
         <mesh key={i} position={[lx,ly,lz]}>
-          <boxGeometry args={[0.05,0.4,0.05]} />
-          <meshStandardMaterial color={legCol} roughness={0.6} />
+          <cylinderGeometry args={[0.025,0.025,0.4,8]} />
+          <meshStandardMaterial color="#1a202c" metalness={0.8} roughness={0.2} />
         </mesh>
       ))}
-      <mesh castShadow position={[0,0.72,-0.18]}>
-        <boxGeometry args={[0.55,0.36,0.03]} />
-        <meshStandardMaterial color={monBack} roughness={0.3} metalness={0.5} />
+      {/* Monitor */}
+      <mesh castShadow position={[0,0.76,-0.16]}>
+        <boxGeometry args={[0.55,0.34,0.03]} />
+        <meshStandardMaterial color="#1a202c" roughness={0.2} metalness={0.6} />
       </mesh>
-      <mesh position={[0,0.72,-0.17]}>
-        <boxGeometry args={[0.5,0.31,0.01]} />
-        <meshStandardMaterial color={monScreen} emissive={monScreen} emissiveIntensity={isDark?0.5:0.2} />
+      <mesh position={[0,0.76,-0.15]}>
+        <boxGeometry args={[0.5,0.29,0.01]} />
+        <meshStandardMaterial color="#2d6cdf" emissive="#1a56c0" emissiveIntensity={0.4} />
       </mesh>
-      <mesh position={[0,0.47,-0.18]}>
-        <boxGeometry args={[0.05,0.07,0.05]} />
-        <meshStandardMaterial color="#4B5563" metalness={0.6} />
+      <mesh position={[0,0.46,-0.16]}>
+        <cylinderGeometry args={[0.02,0.02,0.08,8]} />
+        <meshStandardMaterial color="#374151" metalness={0.8} />
       </mesh>
-      <mesh position={[0,0.44,0.05]}>
-        <boxGeometry args={[0.45,0.02,0.18]} />
-        <meshStandardMaterial color={kbdCol} roughness={0.8} />
+      {/* Keyboard */}
+      <mesh position={[0,0.45,0.08]}>
+        <boxGeometry args={[0.42,0.02,0.16]} />
+        <meshStandardMaterial color="#2d3748" roughness={0.9} />
       </mesh>
     </group>
   );
 }
 
 // ── Chair ─────────────────────────────────────────────────────────────────
-function Chair({ position, rotation=0, isDark }: { position:[number,number,number]; rotation?:number; isDark:boolean }) {
-  const col = isDark ? "#1e3a5f" : "#2563EB";
-  const col2 = isDark ? "#1e40af" : "#3B82F6";
+function Chair({ pos, rot=0, color="#4a3f8f" }: { pos:[number,number,number]; rot?:number; color?:string }) {
   return (
-    <group position={position} rotation={[0,rotation,0]}>
-      <mesh castShadow position={[0,0.26,0]}>
-        <boxGeometry args={[0.48,0.06,0.48]} />
-        <meshStandardMaterial color={col} roughness={0.5} />
+    <group position={pos} rotation={[0,rot,0]}>
+      <mesh castShadow position={[0,0.28,0]}>
+        <boxGeometry args={[0.44,0.06,0.44]} />
+        <meshStandardMaterial color={color} roughness={0.4} />
       </mesh>
-      <mesh castShadow position={[0,0.52,-0.21]}>
-        <boxGeometry args={[0.48,0.46,0.06]} />
-        <meshStandardMaterial color={col2} roughness={0.5} />
+      <mesh castShadow position={[0,0.52,-0.19]}>
+        <boxGeometry args={[0.44,0.42,0.06]} />
+        <meshStandardMaterial color={color} roughness={0.4} />
       </mesh>
-      <mesh position={[0,0.12,0]}>
-        <cylinderGeometry args={[0.035,0.035,0.24,8]} />
-        <meshStandardMaterial color="#374151" metalness={0.8} />
+      <mesh position={[0,0.14,0]}>
+        <cylinderGeometry args={[0.03,0.03,0.28,8]} />
+        <meshStandardMaterial color="#1a202c" metalness={0.8} />
       </mesh>
-    </group>
-  );
-}
-
-// ── Plant ─────────────────────────────────────────────────────────────────
-function Plant({ position }: { position:[number,number,number] }) {
-  return (
-    <group position={position}>
-      <mesh position={[0,0.15,0]}>
-        <cylinderGeometry args={[0.11,0.09,0.28,8]} />
-        <meshStandardMaterial color="#92400e" roughness={0.9} />
-      </mesh>
-      <mesh castShadow position={[0,0.42,0]}>
-        <sphereGeometry args={[0.2,8,8]} />
-        <meshStandardMaterial color="#15803d" roughness={0.7} />
-      </mesh>
-      <mesh castShadow position={[0.09,0.52,0.09]}>
-        <sphereGeometry args={[0.13,8,8]} />
-        <meshStandardMaterial color="#16a34a" roughness={0.7} />
+      {/* Wheels base */}
+      <mesh position={[0,0.04,0]} rotation={[Math.PI/2,0,0]}>
+        <torusGeometry args={[0.18,0.015,6,5]} />
+        <meshStandardMaterial color="#1a202c" metalness={0.6} />
       </mesh>
     </group>
   );
 }
 
 // ── Sofa ──────────────────────────────────────────────────────────────────
-function Sofa({ position, rotation=0, isDark }: { position:[number,number,number]; rotation?:number; isDark:boolean }) {
-  const col = isDark ? "#4c1d95" : "#7C3AED";
-  const col2 = isDark ? "#5b21b6" : "#8B5CF6";
+function Sofa({ pos, rot=0, color="#4a3f8f" }: { pos:[number,number,number]; rot?:number; color?:string }) {
+  const arm = "#5a4fa0";
   return (
-    <group position={position} rotation={[0,rotation,0]}>
-      <mesh castShadow position={[0,0.2,0]}>
-        <boxGeometry args={[1.1,0.28,0.5]} />
-        <meshStandardMaterial color={col} roughness={0.5} />
+    <group position={pos} rotation={[0,rot,0]}>
+      <mesh castShadow position={[0,0.22,0]}>
+        <boxGeometry args={[1.4,0.28,0.6]} />
+        <meshStandardMaterial color={color} roughness={0.4} />
       </mesh>
-      <mesh castShadow position={[0,0.42,-0.21]}>
-        <boxGeometry args={[1.1,0.36,0.07]} />
-        <meshStandardMaterial color={col2} roughness={0.5} />
+      <mesh castShadow position={[0,0.44,-0.28]}>
+        <boxGeometry args={[1.4,0.4,0.08]} />
+        <meshStandardMaterial color={arm} roughness={0.4} />
       </mesh>
-      {([-0.52,0.52] as number[]).map((ox,i)=>(
+      {([-0.66,0.66] as number[]).map((ox,i)=>(
         <mesh key={i} castShadow position={[ox,0.38,0]}>
-          <boxGeometry args={[0.08,0.32,0.5]} />
-          <meshStandardMaterial color={col2} roughness={0.5} />
+          <boxGeometry args={[0.09,0.34,0.6]} />
+          <meshStandardMaterial color={arm} roughness={0.4} />
+        </mesh>
+      ))}
+      {/* Cushion accents */}
+      {([-0.42,0,0.42] as number[]).map((ox,i)=>(
+        <mesh key={i} position={[ox,0.32,0.05]}>
+          <boxGeometry args={[0.36,0.1,0.5]} />
+          <meshStandardMaterial color="#f5a623" roughness={0.5} />
         </mesh>
       ))}
     </group>
   );
 }
 
-// ── Round Table ───────────────────────────────────────────────────────────
-function RoundTable({ position }: { position:[number,number,number] }) {
+// ── Coffee table ──────────────────────────────────────────────────────────
+function CoffeeTable({ pos }: { pos:[number,number,number] }) {
   return (
-    <group position={position}>
-      <mesh castShadow position={[0,0.38,0]}>
-        <cylinderGeometry args={[0.45,0.45,0.06,20]} />
-        <meshStandardMaterial color="#8B6914" roughness={0.4} />
+    <group position={pos}>
+      <mesh castShadow position={[0,0.3,0]}>
+        <boxGeometry args={[0.8,0.04,0.45]} />
+        <meshStandardMaterial color="#f5a623" roughness={0.3} metalness={0.1} />
       </mesh>
+      {([[-0.32,0.14,-0.18],[0.32,0.14,-0.18],[-0.32,0.14,0.18],[0.32,0.14,0.18]] as [number,number,number][]).map(([lx,ly,lz],i)=>(
+        <mesh key={i} position={[lx,ly,lz]}>
+          <boxGeometry args={[0.05,0.28,0.05]} />
+          <meshStandardMaterial color="#1a202c" metalness={0.7} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ── Plant ─────────────────────────────────────────────────────────────────
+function Plant({ pos, scale=1 }: { pos:[number,number,number]; scale?:number }) {
+  return (
+    <group position={pos} scale={scale}>
       <mesh position={[0,0.18,0]}>
-        <cylinderGeometry args={[0.04,0.04,0.36,8]} />
-        <meshStandardMaterial color="#4B5563" metalness={0.7} />
+        <cylinderGeometry args={[0.12,0.1,0.35,8]} />
+        <meshStandardMaterial color="#744210" roughness={0.9} />
+      </mesh>
+      <mesh castShadow position={[0,0.5,0]}>
+        <sphereGeometry args={[0.26,10,10]} />
+        <meshStandardMaterial color="#276749" roughness={0.7} />
+      </mesh>
+      <mesh castShadow position={[0.12,0.62,0.1]}>
+        <sphereGeometry args={[0.16,8,8]} />
+        <meshStandardMaterial color="#2f855a" roughness={0.7} />
+      </mesh>
+      <mesh castShadow position={[-0.1,0.58,-0.1]}>
+        <sphereGeometry args={[0.13,8,8]} />
+        <meshStandardMaterial color="#38a169" roughness={0.7} />
       </mesh>
     </group>
   );
 }
 
-// ── Room Floor Tile ───────────────────────────────────────────────────────
-function RoomTile({ room, isDark }: { room: typeof GT.rooms[0]; isDark: boolean }) {
-  const floorColor  = isDark ? room.dark  : room.light;
-  const borderColor = isDark ? room.border.dark : room.border.light;
+// ── Round meeting table ───────────────────────────────────────────────────
+function MeetingTable({ pos, r=0.9 }: { pos:[number,number,number]; r?:number }) {
   return (
-    <group position={[room.x, 0, room.z]}>
-      <mesh receiveShadow position={[0,-0.04,0]}>
-        <boxGeometry args={[room.w,0.08,room.d]} />
-        <meshStandardMaterial color={floorColor} roughness={0.9} />
+    <group position={pos}>
+      <mesh castShadow position={[0,0.42,0]}>
+        <cylinderGeometry args={[r,r,0.06,20]} />
+        <meshStandardMaterial color="#e8d5a3" roughness={0.4} />
       </mesh>
-      {/* Glowing border strips */}
-      {([
-        [-room.w/2, 0, 0,         0.06, room.d ],
-        [ room.w/2, 0, 0,         0.06, room.d ],
-        [0,         0, -room.d/2, room.w, 0.06 ],
-        [0,         0,  room.d/2, room.w, 0.06 ],
-      ] as [number,number,number,number,number][]).map(([bx,by,bz,bw,bd],i)=>(
-        <mesh key={i} position={[bx,0.01,bz]}>
-          <boxGeometry args={[bw,0.02,bd]} />
-          <meshStandardMaterial color={borderColor} emissive={borderColor} emissiveIntensity={isDark?0.7:0.3} transparent opacity={0.8} />
-        </mesh>
-      ))}
+      <mesh position={[0,0.2,0]}>
+        <cylinderGeometry args={[0.04,0.04,0.4,8]} />
+        <meshStandardMaterial color="#1a202c" metalness={0.7} />
+      </mesh>
+      <mesh position={[0,0.04,0]} rotation={[0,0,0]}>
+        <cylinderGeometry args={[r*0.6,r*0.6,0.04,8]} />
+        <meshStandardMaterial color="#1a202c" metalness={0.5} />
+      </mesh>
     </group>
   );
 }
 
-// ── Room Label ────────────────────────────────────────────────────────────
-function RoomLabel({ room, isDark }: { room: typeof GT.rooms[0]; isDark: boolean }) {
-  const color = isDark ? room.border.dark : room.border.light;
+// ── Whiteboard ────────────────────────────────────────────────────────────
+function Whiteboard({ pos, rot=0 }: { pos:[number,number,number]; rot?:number }) {
   return (
-    <Billboard position={[room.x, 1.5, room.z - room.d/2 + 0.3]}>
-      <Text fontSize={0.2} color={color} anchorX="center" anchorY="middle">
-        {room.label.toUpperCase()}
+    <group position={pos} rotation={[0,rot,0]}>
+      <mesh castShadow>
+        <boxGeometry args={[1.4,0.9,0.04]} />
+        <meshStandardMaterial color="#f7fafc" roughness={0.1} metalness={0} />
+      </mesh>
+      <mesh position={[0,0,0.03]}>
+        <boxGeometry args={[1.3,0.78,0.01]} />
+        <meshStandardMaterial color="#edf2f7" roughness={0.1} />
+      </mesh>
+      {/* Chart lines */}
+      <mesh position={[0.2,0.05,0.04]}>
+        <boxGeometry args={[0.6,0.02,0.01]} />
+        <meshStandardMaterial color="#4299e1" emissive="#4299e1" emissiveIntensity={0.3} />
+      </mesh>
+      <mesh position={[0.1,-0.1,0.04]} rotation={[0,0,0.3]}>
+        <boxGeometry args={[0.5,0.02,0.01]} />
+        <meshStandardMaterial color="#48bb78" emissive="#48bb78" emissiveIntensity={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Water cooler ──────────────────────────────────────────────────────────
+function WaterCooler({ pos }: { pos:[number,number,number] }) {
+  return (
+    <group position={pos}>
+      <mesh castShadow position={[0,0.4,0]}>
+        <boxGeometry args={[0.3,0.8,0.3]} />
+        <meshStandardMaterial color="#e2e8f0" roughness={0.3} metalness={0.3} />
+      </mesh>
+      <mesh position={[0,0.86,0]}>
+        <cylinderGeometry args={[0.11,0.11,0.3,12]} />
+        <meshStandardMaterial color="#bee3f8" transparent opacity={0.7} roughness={0} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Room label ────────────────────────────────────────────────────────────
+function RoomLabel({ pos, text, color }: { pos:[number,number,number]; text:string; color:string }) {
+  return (
+    <Billboard position={pos}>
+      <Text fontSize={0.22} color={color} anchorX="center" anchorY="middle"
+        outlineWidth={0.015} outlineColor="#ffffff">
+        {text}
       </Text>
     </Billboard>
   );
 }
 
+// ── OFFICE LAYOUT ─────────────────────────────────────────────────────────
+// Inspired by the reference images: warm wood floors, colored accent walls,
+// glass partitions, open plan with separate rooms
+function OfficeLayout({ isDark }: { isDark: boolean }) {
+  const woodLight   = "#d4a843";
+  const woodDark    = "#6b3d0f";
+  const wood        = isDark ? woodDark    : woodLight;
+  const wallLight   = "#f0ebe0";
+  const wallDark    = "#1a202c";
+  const wallColor   = isDark ? wallDark   : wallLight;
+  const accentOrange = "#f5a623";
+  const sofaColor   = "#4a3f8f";
+  const chairColor  = "#2b6cb0";
+
+  return (
+    <group>
+      {/* ── OUTER BOUNDARY WALLS ────────────────────────────────────── */}
+      {/* Back-left wall (orange accent) */}
+      <Wall pos={[-8.1,1.1,0]}    size={[0.18,2.2,12]} color={accentOrange} />
+      {/* Back-right wall */}
+      <Wall pos={[8.1,1.1,0]}     size={[0.18,2.2,12]} color={wallColor}   />
+      {/* Back wall */}
+      <Wall pos={[0,1.1,-6.1]}    size={[16.2,2.2,0.18]} color={accentOrange} />
+      {/* Front wall (open / low) */}
+      <Wall pos={[-6,0.5,6.1]}    size={[4,1,0.18]}   color={wallColor}   />
+      <Wall pos={[6,0.5,6.1]}     size={[4,1,0.18]}   color={wallColor}   />
+
+      {/* ── FLOORS ───────────────────────────────────────────────────── */}
+      {/* Main open plan */}
+      <WoodFloor x={0}    z={0}    w={16}   d={12}  color={wood} />
+      {/* Meeting room floor (different color) */}
+      <WoodFloor x={6.5}  z={-3.5} w={3}    d={5}   color={isDark?"#3d1f0a":"#c4955a"} />
+      {/* Reception floor */}
+      <WoodFloor x={-6.5} z={3.5}  w={3}    d={5}   color={isDark?"#1a2744":"#c8dff0"} />
+
+      {/* ── GLASS PARTITION — meeting room ───────────────────────────── */}
+      <GlassWall pos={[5,0.9,-1.2]}  size={[0.08,1.8,0.08]} />
+      <GlassWall pos={[5,0.9,-1.8]}  size={[0.08,1.8,4]}    />
+      <GlassWall pos={[5,0.9,-3.8]}  size={[3,1.8,0.08]}    />
+      <GlassWall pos={[8,0.9,-1.8]}  size={[0.08,1.8,4]}    />
+
+      {/* ── MEETING ROOM CONTENT ─────────────────────────────────────── */}
+      <MeetingTable pos={[6.5,-0.4,-3.5]} r={1.0} />
+      {([0,60,120,180,240,300] as number[]).map((deg,i)=>(
+        <Chair key={i}
+          pos={[6.5 + Math.sin(deg*Math.PI/180)*1.35, -0.4, -3.5 + Math.cos(deg*Math.PI/180)*1.35]}
+          rot={-deg*Math.PI/180}
+          color="#2d3748"
+        />
+      ))}
+      <Whiteboard pos={[7.9,1.2,-5.5]} rot={Math.PI/2} />
+      <RoomLabel pos={[6.5,2.2,-3.5]} text="MEETING ROOM" color={isDark?"#63b3ed":"#2b6cb0"} />
+
+      {/* ── RECEPTION / LOUNGE ───────────────────────────────────────── */}
+      <Wall pos={[-5,0.9,1.2]}   size={[0.08,1.8,0.08]} />
+      <Wall pos={[-5,1.0,2.5]}   size={[0.08,2.0,3]}    color={wallColor} />
+      <Wall pos={[-5,1.0,5.0]}   size={[3,2.0,0.08]}    color={wallColor} />
+      <Sofa       pos={[-6.5,-0.4,3.2]}   rot={Math.PI/2} color={sofaColor} />
+      <CoffeeTable pos={[-6.5,-0.4,4.2]} />
+      <Plant      pos={[-7.5,-0.4,2]}   scale={0.9} />
+      <Plant      pos={[-7.5,-0.4,5.5]} scale={0.8} />
+      <WaterCooler pos={[-5.5,-0.4,5.5]} />
+      <RoomLabel pos={[-6.5,2.2,3.8]} text="LOUNGE" color={isDark?"#9f7aea":"#6b46c1"} />
+
+      {/* ── MAIN WORKSTATION AREA ────────────────────────────────────── */}
+      {/* Row 1 */}
+      {([-4,-2,0,2] as number[]).map((x,i)=>(
+        <group key={i}>
+          <Desk  pos={[x,-0.4,-3]} rot={0} />
+          <Chair pos={[x,-0.4,-2.2]} rot={Math.PI} color={chairColor} />
+        </group>
+      ))}
+      {/* Row 2 */}
+      {([-4,-2,0,2] as number[]).map((x,i)=>(
+        <group key={i}>
+          <Desk  pos={[x,-0.4,0]}  rot={0} />
+          <Chair pos={[x,-0.4,0.8]} rot={Math.PI} color={chairColor} />
+        </group>
+      ))}
+      {/* Row 3 */}
+      {([-4,-2] as number[]).map((x,i)=>(
+        <group key={i}>
+          <Desk  pos={[x,-0.4,3]}  rot={0} />
+          <Chair pos={[x,-0.4,3.8]} rot={Math.PI} color={chairColor} />
+        </group>
+      ))}
+
+      {/* ── PLANTS scattered ─────────────────────────────────────────── */}
+      <Plant pos={[-7,-0.4,-5.5]} scale={1.1} />
+      <Plant pos={[3.5,-0.4,-5.5]}  scale={0.9} />
+      <Plant pos={[3.5,-0.4,5]}   scale={1.0} />
+      <Plant pos={[-3,-0.4,4.8]}  scale={0.85} />
+
+      {/* ── BOSS CABIN — top right ───────────────────────────────────── */}
+      <Wall pos={[5,1.0,-5.5]}   size={[6,2.0,0.08]} color={wallColor} />
+      <Desk       pos={[6.5,-0.4,-5.2]} rot={Math.PI} />
+      <Chair      pos={[6.5,-0.4,-4.6]} rot={0} color="#2d3748" />
+      <Chair      pos={[5.8,-0.4,-5.8]} rot={Math.PI*0.75} color="#718096" />
+      <Chair      pos={[7.2,-0.4,-5.8]} rot={Math.PI*0.25} color="#718096" />
+      <Plant      pos={[7.5,-0.4,-5.6]} scale={0.9} />
+    </group>
+  );
+}
+
+// ── Agent waypoints ───────────────────────────────────────────────────────
+const WAYPOINTS: Record<string, [number,number][]> = {
+  main_hall:   [[-4,0],[-2,0],[0,0],[2,0],[-4,-3],[-2,-3],[0,-3],[2,-3],[-3,3],[-1,3]],
+  reception:   [[-6.5,3],[-6.5,4],[-7,3.5],[-6,4.5]],
+  lounge:      [[-6.5,3.5],[-6,4],[-7,4.5],[-6.5,5]],
+  boss_cabin:  [[6.5,-5],[5.8,-5.5],[7,-4.8],[6.5,-4.5]],
+  accounts:    [[6,-3.5],[7,-3],[6.5,-4],[7,-4.5]],
+  staff_room:  [[4,7],[5,7],[4.5,8]],
+  centre_head: [[4,10],[5,11],[4.5,10.5]],
+  counsellor:  [[9,7],[10,7],[9.5,8],[10,9]],
+};
+
 // ── Agent Avatar ──────────────────────────────────────────────────────────
 function AgentAvatar({ agent, selected, onClick, isDark }: {
-  agent: Agent; selected: boolean; onClick: ()=>void; isDark: boolean;
+  agent:Agent; selected:boolean; onClick:()=>void; isDark:boolean;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const glowRef  = useRef<THREE.Mesh>(null);
-  const waypoints = ROOM_WAYPOINTS[agent.room] || [[0,0]];
-  const startPt   = waypoints[Math.floor(Math.random()*waypoints.length)];
-  const posRef    = useRef<[number,number]>([startPt[0], startPt[1]]);
-  const targetRef = useRef<[number,number]>([startPt[0], startPt[1]]);
-  const timerRef  = useRef(Math.random()*4);
-  const pc = PROVIDER_COLORS[agent.provider];
-  const sc = STATUS_COLORS[agent.status];
-  const labelColor = isDark ? "#ffffff" : "#1f2937";
-  const taskColor  = isDark ? pc.glow : pc.primary;
+  const gRef   = useRef<THREE.Group>(null);
+  const glowR  = useRef<THREE.Mesh>(null);
+  const wpts   = WAYPOINTS[agent.room] || [[0,0]];
+  const sp     = wpts[Math.floor(Math.random()*wpts.length)];
+  const pos    = useRef<[number,number]>([sp[0], sp[1]]);
+  const tgt    = useRef<[number,number]>([sp[0], sp[1]]);
+  const timer  = useRef(Math.random()*3);
+  const pc     = PROVIDER_COLORS[agent.provider];
+  const sc     = STATUS_COLORS[agent.status];
 
-  useFrame((_,delta)=>{
-    if (!groupRef.current) return;
-    timerRef.current -= delta;
-    if (timerRef.current<=0) {
-      const pts = ROOM_WAYPOINTS[agent.room]||[[0,0]];
-      const next = pts[Math.floor(Math.random()*pts.length)];
-      targetRef.current = [next[0], next[1]];
-      timerRef.current = 2.5 + Math.random()*4;
+  useFrame((_,dt)=>{
+    if (!gRef.current) return;
+    timer.current -= dt;
+    if (timer.current <= 0) {
+      const pts = WAYPOINTS[agent.room] || [[0,0]];
+      const n   = pts[Math.floor(Math.random()*pts.length)];
+      tgt.current = [n[0], n[1]];
+      timer.current = 2 + Math.random()*4;
     }
-    const speed = 1.6;
-    const dx = targetRef.current[0]-posRef.current[0];
-    const dz = targetRef.current[1]-posRef.current[1];
-    const dist = Math.sqrt(dx*dx+dz*dz);
-    if (dist>0.05) {
-      posRef.current[0]+=(dx/dist)*speed*delta;
-      posRef.current[1]+=(dz/dist)*speed*delta;
-      groupRef.current.rotation.y = Math.atan2(dx,dz);
+    const dx = tgt.current[0]-pos.current[0];
+    const dz = tgt.current[1]-pos.current[1];
+    const d  = Math.sqrt(dx*dx+dz*dz);
+    if (d > 0.05) {
+      const spd = 1.4;
+      pos.current[0] += (dx/d)*spd*dt;
+      pos.current[1] += (dz/d)*spd*dt;
+      gRef.current.rotation.y = Math.atan2(dx,dz);
     }
-    groupRef.current.position.x = posRef.current[0];
-    groupRef.current.position.z = posRef.current[1];
-    groupRef.current.position.y = Math.sin(Date.now()*0.003+agent.id.charCodeAt(0))*0.035;
-    if (glowRef.current) {
-      const mat = glowRef.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.35+Math.sin(Date.now()*0.004)*0.25;
-      glowRef.current.scale.setScalar(1+Math.sin(Date.now()*0.003)*0.1);
+    gRef.current.position.set(pos.current[0], Math.sin(Date.now()*0.003+agent.id.charCodeAt(0))*0.03, pos.current[1]);
+    if (glowR.current) {
+      const m = glowR.current.material as THREE.MeshStandardMaterial;
+      m.emissiveIntensity = 0.4+Math.sin(Date.now()*0.004)*0.25;
     }
   });
 
   return (
-    <group ref={groupRef} onClick={e=>{e.stopPropagation();onClick();}}>
-      {/* Shadow on floor */}
-      <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.005,0]} scale={[1,0.65,1]}>
+    <group ref={gRef} onClick={e=>{e.stopPropagation();onClick();}}>
+      {/* Floor shadow */}
+      <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.01,0]} scale={[1,0.6,1]}>
         <circleGeometry args={[0.22,16]} />
-        <meshStandardMaterial color="#000000" transparent opacity={isDark?0.25:0.12} />
+        <meshStandardMaterial color="#000" transparent opacity={isDark?0.2:0.1} />
       </mesh>
-
       {/* Glow ring */}
-      <mesh ref={glowRef} rotation={[-Math.PI/2,0,0]} position={[0,0.01,0]}>
-        <ringGeometry args={[0.24,0.34,32]} />
-        <meshStandardMaterial color={pc.primary} emissive={pc.primary} emissiveIntensity={0.5} transparent opacity={0.65} side={THREE.DoubleSide} />
+      <mesh ref={glowR} rotation={[-Math.PI/2,0,0]} position={[0,0.02,0]}>
+        <ringGeometry args={[0.23,0.32,32]} />
+        <meshStandardMaterial color={pc.primary} emissive={pc.primary} emissiveIntensity={0.5} transparent opacity={0.7} side={THREE.DoubleSide} />
       </mesh>
-
       {/* Body */}
       <mesh castShadow position={[0,0.44,0]}>
-        <capsuleGeometry args={[0.17,0.32,8,16]} />
-        <meshStandardMaterial color={pc.primary} roughness={0.25} metalness={0.2} emissive={pc.primary} emissiveIntensity={selected?0.45:0.08} />
+        <capsuleGeometry args={[0.16,0.3,8,16]} />
+        <meshStandardMaterial color={pc.primary} roughness={0.2} metalness={0.2} emissive={pc.primary} emissiveIntensity={selected?0.5:0.07} />
       </mesh>
-
       {/* Head */}
-      <mesh castShadow position={[0,0.88,0]}>
+      <mesh castShadow position={[0,0.86,0]}>
         <sphereGeometry args={[0.19,16,16]} />
-        <meshStandardMaterial color={pc.glow} roughness={0.2} metalness={0.25} emissive={pc.glow} emissiveIntensity={0.15} />
+        <meshStandardMaterial color={pc.glow} roughness={0.15} metalness={0.2} emissive={pc.glow} emissiveIntensity={0.12} />
       </mesh>
-
       {/* Eyes */}
-      {([-0.065,0.065] as number[]).map((ex,i)=>(
-        <mesh key={i} position={[ex,0.91,0.16]}>
-          <sphereGeometry args={[0.03,8,8]} />
-          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.9} />
+      {([-0.06,0.06] as number[]).map((ex,i)=>(
+        <mesh key={i} position={[ex,0.9,0.16]}>
+          <sphereGeometry args={[0.028,8,8]} />
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={1} />
         </mesh>
       ))}
-
-      {/* Status dot */}
-      <mesh position={[0.17,0.99,0]}>
-        <sphereGeometry args={[0.055,8,8]} />
+      {/* Status */}
+      <mesh position={[0.16,0.98,0]}>
+        <sphereGeometry args={[0.05,8,8]} />
         <meshStandardMaterial color={sc} emissive={sc} emissiveIntensity={1.2} />
       </mesh>
-
       {/* Selected ring */}
       {selected&&(
-        <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.02,0]}>
-          <ringGeometry args={[0.36,0.44,32]} />
-          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.9} transparent opacity={0.9} side={THREE.DoubleSide} />
+        <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.03,0]}>
+          <ringGeometry args={[0.35,0.42,32]} />
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={1} transparent opacity={0.95} side={THREE.DoubleSide} />
         </mesh>
       )}
-
       {/* Name */}
-      <Billboard position={[0,1.3,0]}>
-        <Text fontSize={0.17} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={isDark?0:0.03} outlineColor="#ffffff">
+      <Billboard position={[0,1.28,0]}>
+        <Text fontSize={0.17} color={isDark?"#ffffff":"#1a202c"} anchorX="center" anchorY="middle"
+          outlineWidth={0.02} outlineColor={isDark?"#000":"#fff"}>
           {agent.name}
         </Text>
       </Billboard>
-
-      {/* Task bubble */}
-      <Billboard position={[0,1.58,0]}>
-        <Text fontSize={0.10} color={taskColor} anchorX="center" anchorY="middle" maxWidth={2.2} outlineWidth={isDark?0:0.02} outlineColor="#ffffff">
-          {agent.currentTask.slice(0,34)+(agent.currentTask.length>34?"…":"")}
+      {/* Task */}
+      <Billboard position={[0,1.55,0]}>
+        <Text fontSize={0.09} color={pc.primary} anchorX="center" anchorY="middle" maxWidth={2.5}
+          outlineWidth={0.015} outlineColor={isDark?"#000":"#fff"}>
+          {agent.currentTask.slice(0,38)+(agent.currentTask.length>38?"…":"")}
         </Text>
       </Billboard>
     </group>
   );
 }
 
-// ── Furniture layout ──────────────────────────────────────────────────────
-function Furniture({ isDark }: { isDark: boolean }) {
-  return (
-    <group>
-      {/* Main Hall — 3 rows of desks */}
-      {([ [-11,0,-3],[-9,0,-3],[-7,0,-3],[-11,0,0],[-9,0,0],[-7,0,0],[-11,0,3],[-9,0,3],[-7,0,3] ] as [number,number,number][]).map((p,i)=>(
-        <Desk key={`d${i}`} position={p} isDark={isDark} />
-      ))}
-      {([ [-11,0,-2],[-9,0,-2],[-7,0,-2],[-11,0,1],[-9,0,1],[-7,0,1],[-11,0,4],[-9,0,4],[-7,0,4] ] as [number,number,number][]).map((p,i)=>(
-        <Chair key={`cm${i}`} position={p} rotation={Math.PI} isDark={isDark} />
-      ))}
-
-      {/* Reception */}
-      <Desk position={[-13,0,5]} isDark={isDark} />
-      <Chair position={[-13,0,6]} rotation={Math.PI} isDark={isDark} />
-      <Sofa position={[-15,0,5]} rotation={Math.PI/2} isDark={isDark} />
-      <Plant position={[-15,0,3.5]} />
-
-      {/* Lounge */}
-      <RoundTable position={[-8,0,6]} />
-      <Sofa position={[-8,0,7.5]} rotation={Math.PI} isDark={isDark} />
-      <Sofa position={[-8,0,4.8]} isDark={isDark} />
-
-      {/* Command Center */}
-      <Desk position={[5,0,-6]}  isDark={isDark} />
-      <Desk position={[7.5,0,-6]} isDark={isDark} />
-      <Chair position={[5,0,-5]}   rotation={Math.PI} isDark={isDark} />
-      <Chair position={[7.5,0,-5]} rotation={Math.PI} isDark={isDark} />
-      <Plant position={[8.5,0,-8]} />
-      <Plant position={[3.5,0,-8]} />
-
-      {/* Finance & QA */}
-      <Desk position={[5,0,1]}   isDark={isDark} />
-      <Desk position={[7.5,0,1]} isDark={isDark} />
-      <Chair position={[5,0,2]}   rotation={Math.PI} isDark={isDark} />
-      <Chair position={[7.5,0,2]} rotation={Math.PI} isDark={isDark} />
-
-      {/* Comms Hub */}
-      <Desk position={[5,0,7]} isDark={isDark} />
-      <Chair position={[5,0,8]} rotation={Math.PI} isDark={isDark} />
-
-      {/* Support */}
-      <Desk position={[10,0,8]} isDark={isDark} />
-      <Chair position={[10,0,9]} rotation={Math.PI} isDark={isDark} />
-      <Sofa position={[9.5,0,7]} rotation={-Math.PI/2} isDark={isDark} />
-
-      {/* Plants */}
-      <Plant position={[-6,0,-6.5]} />
-      <Plant position={[2.5,0,-4]}  />
-      <Plant position={[2.5,0,4]}   />
-      <Plant position={[13,0,4]}    />
-      <Plant position={[-17,0,2]}   />
-    </group>
-  );
-}
-
-// ── Walls ─────────────────────────────────────────────────────────────────
-function Walls({ isDark }: { isDark: boolean }) {
-  const c = isDark ? GT.wallColor.dark : GT.wallColor.light;
-  const h = 1.9; const t = 0.18;
-  return (
-    <group>
-      {([
-        [-9,h/2,-8,  24,h,t],
-        [-9,h/2, 12, 24,h,t],
-        [-21,h/2,2,  t,h,20],
-        [14, h/2,2,  t,h,20],
-        [-3, h/2,-2, t,h,12],
-        [7.8,h/2,0,  t,h,8 ],
-        [5.5,h/2,-3, 4,h,t  ],
-      ] as [number,number,number,number,number,number][]).map(([x,y,z,w,wh,d],i)=>(
-        <mesh key={i} position={[x,y,z]} castShadow receiveShadow>
-          <boxGeometry args={[w,wh,d]} />
-          <meshStandardMaterial color={c} roughness={0.9} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-// ── Scene Inner ───────────────────────────────────────────────────────────
-function SceneInner({ onAgentClick, selectedAgentId, isDark }: ThreeOfficeSceneProps) {
-  const { camera } = useThree();
-  useEffect(()=>{ camera.position.set(12,16,18); camera.lookAt(0,0,2); },[camera]);
-
-  const ambColor  = isDark ? "#1a3a6a" : "#d0e8ff";
-  const ambInt    = isDark ? 0.45 : 1.0;
-  const dirInt    = isDark ? 1.2  : 1.8;
-  const floorCol  = isDark ? GT.floorBase.dark : GT.floorBase.light;
-  const gridCol1  = isDark ? "#1e2a42" : "#C8BEA8";
-  const gridCol2  = isDark ? "#151e30" : "#D8D0C0";
-
+// ── Scene ─────────────────────────────────────────────────────────────────
+function Scene({ onAgentClick, selectedAgentId, isDark, zoomCmd }: Props) {
   return (
     <>
-      <ambientLight intensity={ambInt} color={ambColor} />
-      <directionalLight castShadow position={[10,20,10]} intensity={dirInt} color="#ffffff"
-        shadow-mapSize={[2048,2048]} shadow-camera-far={60}
-        shadow-camera-left={-22} shadow-camera-right={22}
-        shadow-camera-top={22}   shadow-camera-bottom={-22}
+      <IsoCamera zoomCmd={zoomCmd} />
+
+      {/* Lighting — warm office feel */}
+      <ambientLight intensity={isDark?0.5:1.1} color={isDark?"#c8d8ff":"#fff8f0"} />
+      <directionalLight castShadow position={[8,18,12]} intensity={isDark?1.0:2.2} color={isDark?"#ffffff":"#fff8e8"}
+        shadow-mapSize={[2048,2048]} shadow-camera-far={50}
+        shadow-camera-left={-18} shadow-camera-right={18}
+        shadow-camera-top={18}   shadow-camera-bottom={-18}
       />
-      <pointLight position={[-10,5,-5]} intensity={0.5} color="#3B82F6" />
-      <pointLight position={[8,5,8]}   intensity={0.4} color="#10B981" />
-      <pointLight position={[-5,5,8]}  intensity={0.3} color="#A855F7" />
+      <pointLight position={[-8,6,-6]} intensity={isDark?0.6:0.8} color="#f5a623" />
+      <pointLight position={[8,4,5]}  intensity={isDark?0.4:0.5} color="#4299e1" />
+      <pointLight position={[0,8,0]}  intensity={isDark?0.3:0.4} color="#a0aec0" />
 
-      {/* Main floor */}
-      <mesh receiveShadow rotation={[-Math.PI/2,0,0]} position={[0,-0.1,2]}>
-        <planeGeometry args={[44,32]} />
-        <meshStandardMaterial color={floorCol} roughness={0.95} />
-      </mesh>
-      <gridHelper args={[44,44,gridCol1,gridCol2]} position={[0,-0.09,2]} />
-
-      {/* Rooms */}
-      {GT.rooms.map(r=><RoomTile key={r.id} room={r} isDark={isDark} />)}
-      {GT.rooms.map(r=><RoomLabel key={`l${r.id}`} room={r} isDark={isDark} />)}
-
-      {/* Walls */}
-      <Walls isDark={isDark} />
-
-      {/* Furniture */}
-      <Furniture isDark={isDark} />
+      {/* Office */}
+      <OfficeLayout isDark={isDark} />
 
       {/* Agents */}
       {AGENTS.map(a=>(
-        <AgentAvatar key={a.id} agent={a} selected={selectedAgentId===a.id} onClick={()=>onAgentClick(a)} isDark={isDark} />
+        <AgentAvatar key={a.id} agent={a} selected={selectedAgentId===a.id}
+          onClick={()=>onAgentClick(a)} isDark={isDark} />
       ))}
-
-      <OrbitControls enablePan enableZoom enableRotate
-        minDistance={6} maxDistance={32}
-        maxPolarAngle={Math.PI/2.1}
-        target={[0,0,2]}
-        mouseButtons={{ LEFT:THREE.MOUSE.ROTATE, MIDDLE:THREE.MOUSE.DOLLY, RIGHT:THREE.MOUSE.PAN }}
-      />
     </>
   );
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
-export function ThreeOfficeScene({ onAgentClick, selectedAgentId, isDark }: ThreeOfficeSceneProps) {
-  const bg = isDark ? "#060c1a" : "#f0ebe0";
+export function ThreeOfficeScene({ onAgentClick, selectedAgentId, isDark, zoomCmd }: Props) {
   return (
-    <Canvas shadows camera={{ position:[12,16,18], fov:45 }} gl={{ antialias:true, alpha:false }} style={{ background: bg }}>
-      <SceneInner onAgentClick={onAgentClick} selectedAgentId={selectedAgentId} isDark={isDark} />
+    <Canvas
+      shadows
+      gl={{ antialias: true, alpha: true }}
+      style={{ background: "transparent" }}
+      camera={undefined}
+    >
+      <OrthographicCamera makeDefault position={[20,28,20]} zoom={DEFAULT_ZOOM} near={0.1} far={200} />
+      <Scene
+        onAgentClick={onAgentClick}
+        selectedAgentId={selectedAgentId}
+        isDark={isDark}
+        zoomCmd={zoomCmd}
+      />
     </Canvas>
   );
 }

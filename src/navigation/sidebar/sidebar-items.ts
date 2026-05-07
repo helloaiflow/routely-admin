@@ -28,6 +28,7 @@ export interface NavSubItem {
   icon?: LucideIcon;
   comingSoon?: boolean;
   newTab?: boolean;
+  isNew?: boolean;   // ← agregar esta línea
 }
 
 export interface NavMainItem {

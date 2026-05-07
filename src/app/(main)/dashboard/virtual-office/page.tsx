@@ -16,8 +16,10 @@ const KPIS = [
 
 export default function VirtualOfficePage() {
   return (
-    <div className="flex flex-col h-full">
-      {/* KPI cards — outside the canvas */}
+    // Escape the layout padding with -m-6 and use full viewport height minus header (48px)
+    <div className="-m-6 flex flex-col" style={{ height: "calc(100dvh - 48px)" }}>
+
+      {/* KPI bar */}
       <div className="grid grid-cols-4 gap-3 px-6 pt-4 pb-3 shrink-0">
         {KPIS.map(c => (
           <div key={c.label} className={`flex items-center gap-3 p-3 rounded-xl border ${c.bg} ${c.border}`}>
@@ -32,8 +34,8 @@ export default function VirtualOfficePage() {
         ))}
       </div>
 
-      {/* Canvas — takes all remaining space, no title */}
-      <div className="flex-1 min-h-0 px-6 pb-6">
+      {/* Canvas — takes all remaining height */}
+      <div className="flex-1 min-h-0 px-6 pb-6 overflow-hidden">
         <VirtualOfficeClient />
       </div>
     </div>

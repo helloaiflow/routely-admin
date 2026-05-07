@@ -136,17 +136,20 @@ function Wall({ pos, size, color="#e8e0d0", topColor }: {
 
 // ── Glass partition ───────────────────────────────────────────────────────
 function GlassWall({ pos, size }: { pos:[number,number,number]; size:[number,number,number] }) {
+  const isWide = size[0] > size[2];
   return (
     <group position={pos}>
-      {/* Frame */}
       <mesh castShadow>
         <boxGeometry args={[size[0], size[1], size[2]]} />
-        <meshStandardMaterial color="#2d3748" roughness={0.3} metalness={0.6} />
+        <meshStandardMaterial color="#a0aec0" roughness={0.2} metalness={0.7} />
       </mesh>
-      {/* Glass */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[size[0] - 0.06, size[1] - 0.06, 0.04]} />
-        <meshStandardMaterial color="#a0c4ff" transparent opacity={0.25} roughness={0} metalness={0.1} />
+      <mesh>
+        <boxGeometry args={[
+          isWide ? size[0] - 0.06 : 0.04,
+          size[1] - 0.06,
+          isWide ? 0.04 : size[2] - 0.06,
+        ]} />
+        <meshStandardMaterial color="#bee3f8" transparent opacity={0.28} roughness={0} />
       </mesh>
     </group>
   );
@@ -311,22 +314,24 @@ function MeetingTable({ pos, r=0.9 }: { pos:[number,number,number]; r?:number })
 function Whiteboard({ pos, rot=0 }: { pos:[number,number,number]; rot?:number }) {
   return (
     <group position={pos} rotation={[0,rot,0]}>
-      <mesh castShadow>
-        <boxGeometry args={[1.4,0.9,0.04]} />
-        <meshStandardMaterial color="#f7fafc" roughness={0.1} metalness={0} />
+      {/* Frame */}
+      <mesh castShadow position={[0,0,0]}>
+        <boxGeometry args={[1.4,0.9,0.06]} />
+        <meshStandardMaterial color="#718096" roughness={0.4} metalness={0.3} />
       </mesh>
-      <mesh position={[0,0,0.03]}>
-        <boxGeometry args={[1.3,0.78,0.01]} />
-        <meshStandardMaterial color="#edf2f7" roughness={0.1} />
+      {/* White board surface */}
+      <mesh position={[0,0,0.04]}>
+        <boxGeometry args={[1.28,0.78,0.01]} />
+        <meshStandardMaterial color="#f7fafc" roughness={0.05} emissive="#ffffff" emissiveIntensity={0.05} />
       </mesh>
-      {/* Chart lines */}
-      <mesh position={[0.2,0.05,0.04]}>
-        <boxGeometry args={[0.6,0.02,0.01]} />
-        <meshStandardMaterial color="#4299e1" emissive="#4299e1" emissiveIntensity={0.3} />
+      {/* Chart bar */}
+      <mesh position={[0.1,0.05,0.055]}>
+        <boxGeometry args={[0.5,0.03,0.005]} />
+        <meshStandardMaterial color="#4299e1" emissive="#4299e1" emissiveIntensity={0.6} />
       </mesh>
-      <mesh position={[0.1,-0.1,0.04]} rotation={[0,0,0.3]}>
-        <boxGeometry args={[0.5,0.02,0.01]} />
-        <meshStandardMaterial color="#48bb78" emissive="#48bb78" emissiveIntensity={0.3} />
+      <mesh position={[-0.1,-0.08,0.055]} rotation={[0,0,0.25]}>
+        <boxGeometry args={[0.4,0.02,0.005]} />
+        <meshStandardMaterial color="#48bb78" emissive="#48bb78" emissiveIntensity={0.6} />
       </mesh>
     </group>
   );

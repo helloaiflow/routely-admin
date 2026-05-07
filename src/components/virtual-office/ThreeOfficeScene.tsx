@@ -257,8 +257,8 @@ function AgentAvatar({ agent, selected, onClick, isDark }: {
   return (
     <group ref={groupRef} onClick={e=>{e.stopPropagation();onClick();}}>
       {/* Shadow on floor */}
-      <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.005,0]}>
-        <ellipseGeometry args={[0.22,0.15,16]} />
+      <mesh rotation={[-Math.PI/2,0,0]} position={[0,0.005,0]} scale={[1,0.65,1]}>
+        <circleGeometry args={[0.22,16]} />
         <meshStandardMaterial color="#000000" transparent opacity={isDark?0.25:0.12} />
       </mesh>
 

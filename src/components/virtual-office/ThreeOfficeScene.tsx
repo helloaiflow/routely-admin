@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Billboard, OrthographicCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { AGENTS, Agent, PROVIDER_COLORS, STATUS_COLORS } from "@/lib/virtual-office/agents";
-import type { ZoomCmd } from "./VirtualOfficeClient";
+type ZoomCmd = "in" | "out" | "reset" | null;
 
 interface Props {
   onAgentClick: (agent: Agent) => void;

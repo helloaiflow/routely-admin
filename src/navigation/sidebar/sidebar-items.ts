@@ -114,6 +114,7 @@ export const sidebarItems: NavGroup[] = [
         icon: Bot,
         subItems: [
           { title: "Agents", url: "/dashboard/agents", icon: Bot },
+          { title: "Virtual Office", url: "/dashboard/virtual-office", icon: Building2, isNew: true },
           { title: "Flows", url: "/dashboard/flows", icon: GitBranch },
           { title: "Knowledge Base", url: "/dashboard/knowledge", icon: BookOpen },
           { title: "Dictionary", url: "/dashboard/dictionary", icon: BookMarked },

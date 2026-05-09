@@ -3,6 +3,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isPublicRoute = createRouteMatcher([
   "/login(.*)",
+  "/sign-in(.*)",
   "/unauthorized(.*)",
   "/api/webhooks(.*)",
 ]);
@@ -14,9 +15,9 @@ export default clerkMiddleware(async (auth, req) => {
   // Public routes — allow
   if (isPublicRoute(req)) return;
 
-  // Not signed in → Clerk login
+  // Not signed in → sign-in page
   if (!userId) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return NextResponse.redirect(new URL("/sign-in", req.url));
   }
 
   // ── Role check — must be "admin" ─────────────────────────────────────────

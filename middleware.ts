@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
@@ -10,24 +10,25 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Public routes — allow always
+  // Public routes — always allow
   if (isPublicRoute(req)) return;
 
   const { userId, sessionClaims } = await auth();
 
-  // Not signed in → Clerk handles redirect to sign-in automatically
+  // Not signed in → redirect to sign-in
   if (!userId) {
-    await auth.protect();
-    return;
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname);
+    return NextResponse.redirect(signInUrl);
   }
 
-  // ── Role check — must be "admin" ─────────────────────────────────────────
+  // Signed in but not admin → unauthorized
   const role = (sessionClaims?.publicMetadata as Record<string, unknown>)?.role as string | undefined;
-
   if (role !== "admin") {
-    console.warn(`[admin-middleware] Access denied — userId=${userId} role=${role ?? "none"}`);
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
+
+  // Admin → allow
 });
 
 export const config = {

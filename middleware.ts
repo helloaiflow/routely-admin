@@ -2,22 +2,23 @@ import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isPublicRoute = createRouteMatcher([
-  "/login(.*)",
   "/sign-in(.*)",
+  "/register(.*)",
+  "/verify(.*)",
   "/unauthorized(.*)",
   "/api/webhooks(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, sessionClaims } = await auth();
-  const path = req.nextUrl.pathname;
-
-  // Public routes — allow
+  // Public routes — allow always
   if (isPublicRoute(req)) return;
 
-  // Not signed in → sign-in page
+  const { userId, sessionClaims } = await auth();
+
+  // Not signed in → Clerk handles redirect to sign-in automatically
   if (!userId) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+    await auth.protect();
+    return;
   }
 
   // ── Role check — must be "admin" ─────────────────────────────────────────

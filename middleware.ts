@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+// ── Public routes — no auth required ─────────────────────────────────────────
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/register(.*)",
@@ -9,8 +10,24 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)",
 ]);
 
+// ── Dispatcher-only routes ────────────────────────────────────────────────────
+const isDispatcherRoute = createRouteMatcher([
+  "/dashboard/package-scans(.*)",
+  "/dashboard/routes(.*)",
+  "/dashboard/drivers(.*)",
+  "/dashboard/spoke-stops(.*)",
+  "/dashboard/spoke-plans(.*)",
+  "/dashboard/spoke-depots(.*)",
+  "/dashboard/spoke-drivers(.*)",
+  "/settings(.*)",
+]);
+
+// Roles allowed in admin portal
+const ADMIN_ROLES = ["routely_admin", "dispatcher"] as const;
+type AdminRole = typeof ADMIN_ROLES[number];
+
 export default clerkMiddleware(async (auth, req) => {
-  // Public routes — always allow
+  // Always allow public routes
   if (isPublicRoute(req)) return;
 
   const { userId, sessionClaims } = await auth();
@@ -22,13 +39,21 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Signed in but not admin → unauthorized
   const role = (sessionClaims?.publicMetadata as Record<string, unknown>)?.role as string | undefined;
-  if (role !== "admin") {
+
+  // Role not allowed in admin portal → unauthorized
+  if (!role || !ADMIN_ROLES.includes(role as AdminRole)) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
-  // Admin → allow
+  // Dispatcher trying to access non-dispatcher route → unauthorized
+  if (role === "dispatcher" && !isDispatcherRoute(req)) {
+    // Allow /dashboard/default as entry point, redirect to their allowed area
+    if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/dashboard/default") {
+      return NextResponse.redirect(new URL("/dashboard/package-scans", req.url));
+    }
+    return NextResponse.redirect(new URL("/unauthorized", req.url));
+  }
 });
 
 export const config = {

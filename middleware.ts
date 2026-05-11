@@ -39,7 +39,7 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  const role = (sessionClaims?.publicMetadata as Record<string, unknown>)?.role as string | undefined;
+  const role = (sessionClaims?.metadata as Record<string, unknown>)?.role as string | undefined;
 
   // Role not allowed in admin portal → unauthorized
   if (!role || !ADMIN_ROLES.includes(role as AdminRole)) {

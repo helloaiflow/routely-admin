@@ -22,7 +22,6 @@ import {
   ZoomIn,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -370,7 +369,7 @@ function KpiCard({
 }: {
   label: string;
   value: number | string;
-  icon: React.ElementType;
+  icon: React.FC<React.SVGProps<SVGSVGElement>>;
   color: string;
 }) {
   return (

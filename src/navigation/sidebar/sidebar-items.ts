@@ -16,6 +16,7 @@ import {
   Package,
   Plug,
   Route,
+  ScanLine,
   Search,
   Settings2,
   Users,
@@ -28,7 +29,7 @@ export interface NavSubItem {
   icon?: LucideIcon;
   comingSoon?: boolean;
   newTab?: boolean;
-  isNew?: boolean;   // ← agregar esta línea
+  isNew?: boolean; // ← agregar esta línea
 }
 
 export interface NavMainItem {
@@ -58,6 +59,7 @@ export const sidebarItems: NavGroup[] = [
     label: "Operations",
     items: [
       { title: "Package Scans", url: "/dashboard/scans", icon: Package },
+      { title: "Scan Logs", url: "/dashboard/scan-logs", icon: ScanLine, isNew: true },
       { title: "Package Search", url: "/dashboard/search", icon: Search },
       { title: "Spoke Stops", url: "/dashboard/stops", icon: MapPin },
       { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },

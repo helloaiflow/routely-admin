@@ -53,6 +53,7 @@ export interface NavGroup {
   id: number;
   label?: string;
   items: NavMainItem[];
+  defaultOpen?: boolean; // whether this group section is expanded by default
 }
 
 export const sidebarItems: NavGroup[] = [
@@ -60,6 +61,7 @@ export const sidebarItems: NavGroup[] = [
   {
     id: 1,
     label: "Overview",
+    defaultOpen: true,
     items: [
       { title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard },
       { title: "Activity", url: "/dashboard/activity", icon: Activity, comingSoon: true },
@@ -70,6 +72,7 @@ export const sidebarItems: NavGroup[] = [
   {
     id: 2,
     label: "Scans & Packages",
+    defaultOpen: true,
     items: [
       { title: "Scan Logs", url: "/dashboard/scan-logs", icon: ScanLine, isNew: true },
       { title: "Package Scans", url: "/dashboard/scans", icon: Package },

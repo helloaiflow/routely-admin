@@ -148,6 +148,15 @@ export function NavMain({ items, quickActions = [] }: NavMainProps) {
   const isSubmenuOpen = (subItems?: NavMainItem["subItems"]) =>
     subItems?.some((sub) => path.startsWith(sub.url)) ?? false;
 
+  // Group section open if: defaultOpen=true OR current path lives inside it
+  const isGroupOpen = (group: NavGroup) => {
+    if (group.defaultOpen) return true;
+    return group.items.some((item) => {
+      if (item.subItems) return item.subItems.some((sub) => path.startsWith(sub.url));
+      return path.startsWith(item.url);
+    });
+  };
+
   return (
     <>
       {/* Quick Create */}
@@ -183,40 +192,56 @@ export function NavMain({ items, quickActions = [] }: NavMainProps) {
         </SidebarGroupContent>
       </SidebarGroup>
 
-      {/* Nav groups */}
+      {/* Nav groups — each section label is a collapsible toggle */}
       {items.map((group) => (
-        <SidebarGroup key={group.id}>
-          {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-          <SidebarGroupContent className="flex flex-col gap-2">
-            <SidebarMenu>
-              {group.items.map((item) => {
-                if (state === "collapsed" && !isMobile) {
-                  if (!item.subItems) {
+        <Collapsible key={group.id} defaultOpen={isGroupOpen(group)} className="group/section">
+          <SidebarGroup>
+            {group.label && (
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="flex cursor-pointer select-none items-center justify-between transition-colors hover:text-sidebar-foreground">
+                  <span>{group.label}</span>
+                  <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]/section:rotate-90" />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+            )}
+            <CollapsibleContent>
+              <SidebarGroupContent className="flex flex-col gap-2">
+                <SidebarMenu>
+                  {group.items.map((item) => {
+                    if (state === "collapsed" && !isMobile) {
+                      if (!item.subItems) {
+                        return (
+                          <SidebarMenuItem key={item.title}>
+                            <SidebarMenuButton
+                              asChild
+                              aria-disabled={item.comingSoon}
+                              tooltip={item.title}
+                              isActive={isItemActive(item.url)}
+                            >
+                              <Link prefetch={false} href={item.url} target={item.newTab ? "_blank" : undefined}>
+                                {item.icon && <item.icon />}
+                                <span>{item.title}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      }
+                      return <NavItemCollapsed key={item.title} item={item} isActive={isItemActive} />;
+                    }
                     return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          aria-disabled={item.comingSoon}
-                          tooltip={item.title}
-                          isActive={isItemActive(item.url)}
-                        >
-                          <Link prefetch={false} href={item.url} target={item.newTab ? "_blank" : undefined}>
-                            {item.icon && <item.icon />}
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
+                      <NavItemExpanded
+                        key={item.title}
+                        item={item}
+                        isActive={isItemActive}
+                        isSubmenuOpen={isSubmenuOpen}
+                      />
                     );
-                  }
-                  return <NavItemCollapsed key={item.title} item={item} isActive={isItemActive} />;
-                }
-                return (
-                  <NavItemExpanded key={item.title} item={item} isActive={isItemActive} isSubmenuOpen={isSubmenuOpen} />
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
       ))}
     </>
   );

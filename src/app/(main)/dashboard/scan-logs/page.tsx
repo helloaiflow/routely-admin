@@ -59,6 +59,9 @@ type ScanStatus =
   | "success"
   | "error"
   | string;
+type SortField = "created_at" | "full_name" | "status" | "client_location" | "scanned_by" | "route";
+type SortDir = "asc" | "desc";
+type DatePreset = "all" | "today" | "yesterday" | "7d" | "30d" | "custom";
 
 interface ScanLog {
   _id: string;
@@ -105,9 +108,6 @@ interface Tenant {
   company_name?: string;
 }
 
-type SortField = "created_at" | "full_name" | "status" | "client_location" | "scanned_by" | "route";
-type SortDir = "asc" | "desc";
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(d?: string) {
   if (!d) return "—";
@@ -122,7 +122,6 @@ function fmtTime(d?: string) {
   if (!d) return "";
   return new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" });
 }
-
 function normalizeStatus(s: ScanStatus): "success" | "error" | "processing" | "pending" {
   const u = String(s).toUpperCase();
   if (u === "SUCCESS") return "success";
@@ -130,11 +129,36 @@ function normalizeStatus(s: ScanStatus): "success" | "error" | "processing" | "p
   if (u === "PROCESSING" || u === "SPOKE_OK") return "processing";
   return "pending";
 }
-
 function buildMapsUrl(scan: ScanLog) {
   const parts = [scan.address, scan.city, scan.state, scan.zipcode].filter(Boolean).join(" ");
   if (!parts.trim()) return "";
   return `https://maps.google.com/?q=${encodeURIComponent(parts)}`;
+}
+function getDateRange(preset: DatePreset, start?: string, end?: string): { from?: Date; to?: Date } {
+  const now = new Date();
+  const sod = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  if (preset === "today") return { from: sod(now), to: now };
+  if (preset === "yesterday") {
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    return { from: sod(y), to: new Date(y.setHours(23, 59, 59, 999)) };
+  }
+  if (preset === "7d") {
+    const f = new Date(now);
+    f.setDate(f.getDate() - 7);
+    return { from: f, to: now };
+  }
+  if (preset === "30d") {
+    const f = new Date(now);
+    f.setDate(f.getDate() - 30);
+    return { from: f, to: now };
+  }
+  if (preset === "custom" && start) return { from: new Date(start), to: end ? new Date(`${end}T23:59:59`) : now };
+  return {};
 }
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
@@ -260,6 +284,7 @@ function SortHeader({
 }
 
 // ── Desktop Table Row ─────────────────────────────────────────────────────────
+// Column order: Status | Label | Recipient | Address | Route | Tenant | Location | Stop ID | By | Date
 function ScanRow({
   scan,
   selected,
@@ -281,12 +306,10 @@ function ScanRow({
         selected && "bg-primary/5 hover:bg-primary/5",
       )}
     >
-      {/* Status */}
       <td className="py-3 pl-4 pr-2">
         <StatusBadge status={scan.status} />
       </td>
 
-      {/* Label thumbnail */}
       <td className="w-12 px-1 py-3">
         {scan.image_url ? (
           <ImagePreview url={scan.image_url} name={scan.full_name} rx={scan.rx_pharma_id} />
@@ -297,7 +320,6 @@ function ScanRow({
         )}
       </td>
 
-      {/* Recipient */}
       <td className="px-3 py-3">
         <p className="truncate font-semibold text-xs capitalize leading-tight">
           {scan.full_name?.toLowerCase() || "—"}
@@ -311,7 +333,6 @@ function ScanRow({
         )}
       </td>
 
-      {/* Address — street + city/state below */}
       <td className="px-3 py-3">
         <p className="truncate text-[11px] leading-tight">{scan.address || "—"}</p>
         {(scan.city || scan.state) && (
@@ -330,6 +351,13 @@ function ScanRow({
         )}
       </td>
 
+      {/* Tenant — right of Route */}
+      {tenantName !== undefined && (
+        <td className="px-3 py-3">
+          <span className="truncate text-[11px] text-muted-foreground">{tenantName || `T${scan.tenant_id}`}</span>
+        </td>
+      )}
+
       {/* Location */}
       <td className="px-3 py-3">
         {scan.client_location ? (
@@ -341,14 +369,6 @@ function ScanRow({
         )}
       </td>
 
-      {/* Tenant */}
-      {tenantName !== undefined && (
-        <td className="px-3 py-3">
-          <span className="text-[11px] text-muted-foreground">{tenantName || `T${scan.tenant_id}`}</span>
-        </td>
-      )}
-
-      {/* Stop ID */}
       <td className="px-3 py-3">
         {scan.stop_id ? (
           <a
@@ -363,7 +383,6 @@ function ScanRow({
         )}
       </td>
 
-      {/* By */}
       <td className="px-3 py-3">
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <User className="h-2.5 w-2.5 shrink-0 opacity-50" />
@@ -371,7 +390,6 @@ function ScanRow({
         </span>
       </td>
 
-      {/* Date */}
       <td className="py-3 pl-3 pr-4 text-right">
         <p className="font-medium text-[11px] tabular-nums">{fmtDate(scan.created_at || scan.started_at)}</p>
         <p className="text-[10px] text-muted-foreground tabular-nums">{fmtTime(scan.created_at || scan.started_at)}</p>
@@ -548,7 +566,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
         transition={{ duration: 0.18 }}
         className="flex h-full flex-col overflow-hidden"
       >
-        {/* Header */}
         <div
           className={cn(
             "flex items-start justify-between gap-2 border-b px-4 py-3",
@@ -575,7 +592,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
           </Button>
         </div>
 
-        {/* Image */}
         {scan.image_url && (
           <div className="mx-4 mt-3 overflow-hidden rounded-xl border">
             {/* biome-ignore lint/performance/noImgElement: telegram CDN */}
@@ -583,7 +599,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
           </div>
         )}
 
-        {/* Actions */}
         <div className="space-y-2 border-b px-4 py-3">
           <Button
             className="w-full gap-2"
@@ -647,7 +662,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {norm === "error" && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
@@ -669,14 +683,12 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
               )}
             </div>
           )}
-
           <Section title="Patient">
             <Row label="Name" value={scan.full_name} />
             <Row label="Phone" value={scan.phone} />
             <Row label="Rx #" value={scan.rx_pharma_id} mono />
             <Row label="Barcode" value={scan.barcode_value} mono />
           </Section>
-
           <Section title="Address">
             <Row label="Street" value={scan.address} />
             <Row label="City / State" value={[scan.city, scan.state].filter(Boolean).join(", ")} />
@@ -685,7 +697,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
             <Row label="Route" value={scan.route} />
             <Row label="Gate code" value={scan.gate_code} />
           </Section>
-
           <Section title="Stop">
             <Row label="Stop ID" value={scan.stop_id} mono />
             <Row label="Spoke delivery" value={scan.spoke_delivery_id} mono />
@@ -694,7 +705,6 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
             <Row label="VIP" value={scan.package_vip ? "Yes ⭐" : undefined} />
             <Row label="New client" value={scan.new_client ? "Yes" : undefined} />
           </Section>
-
           <Section title="Scan info">
             <Row label="Scanned by" value={scan.scanned_by} />
             <Row label="Scan ID" value={String(scan.rtscan_id || "")} mono />
@@ -766,7 +776,6 @@ function Row({ label, value, mono = false }: { label: string; value?: string | n
   );
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({
   label,
   value,
@@ -809,6 +818,10 @@ export default function ScanLogsPage() {
   const [selected, setSelected] = useState<ScanLog | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [tenantFilter, setTenantFilter] = useState("all");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
@@ -821,9 +834,9 @@ export default function ScanLogsPage() {
       if (!silent) setLoading(true);
       try {
         const params = new URLSearchParams({
-          tenant_id: "1",
           limit: String(LIMIT),
           page: String(page),
+          ...(tenantFilter !== "all" && { tenant_id: tenantFilter }),
           ...(statusFilter !== "all" && { status: statusFilter }),
           ...(search && { search }),
         });
@@ -877,7 +890,7 @@ export default function ScanLogsPage() {
         setLoading(false);
       }
     },
-    [page, statusFilter, search],
+    [page, statusFilter, search, tenantFilter],
   );
 
   const fetchTenants = useCallback(async () => {
@@ -904,9 +917,8 @@ export default function ScanLogsPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, search]);
+  }, [statusFilter, search, tenantFilter, datePreset, dateStart, dateEnd]);
 
-  // Tenant lookup map
   const tenantMap = useMemo(() => {
     const m = new Map<number, string>();
     for (const t of tenants) m.set(t.tenant_id, t.company_name || `Tenant ${t.tenant_id}`);
@@ -915,7 +927,6 @@ export default function ScanLogsPage() {
 
   const hasMultipleTenants = useMemo(() => new Set(data.map((s) => s.tenant_id).filter(Boolean)).size > 1, [data]);
 
-  // Stats computed from current page data
   const stats = useMemo(
     () => ({
       total: data.length,
@@ -928,37 +939,42 @@ export default function ScanLogsPage() {
     [data],
   );
 
-  // Client-side sort
-  const sorted = useMemo(
-    () =>
-      [...data].sort((a, b) => {
-        let av: string | number = "",
-          bv: string | number = "";
-        if (sortField === "created_at") {
-          av = new Date(a.created_at || a.started_at || "").getTime();
-          bv = new Date(b.created_at || b.started_at || "").getTime();
-        } else if (sortField === "full_name") {
-          av = a.full_name?.toLowerCase() || "";
-          bv = b.full_name?.toLowerCase() || "";
-        } else if (sortField === "status") {
-          av = normalizeStatus(a.status);
-          bv = normalizeStatus(b.status);
-        } else if (sortField === "client_location") {
-          av = a.client_location || "";
-          bv = b.client_location || "";
-        } else if (sortField === "scanned_by") {
-          av = a.scanned_by || "";
-          bv = b.scanned_by || "";
-        } else if (sortField === "route") {
-          av = a.route || "";
-          bv = b.route || "";
-        }
-        if (av < bv) return sortDir === "asc" ? -1 : 1;
-        if (av > bv) return sortDir === "asc" ? 1 : -1;
-        return 0;
-      }),
-    [data, sortField, sortDir],
-  );
+  // Client-side date filter + sort
+  const sorted = useMemo(() => {
+    const { from, to } = getDateRange(datePreset, dateStart, dateEnd);
+    const base = from
+      ? data.filter((s) => {
+          const d = new Date(s.created_at || s.started_at || "");
+          return d >= from && (!to || d <= to);
+        })
+      : data;
+    return [...base].sort((a, b) => {
+      let av: string | number = "",
+        bv: string | number = "";
+      if (sortField === "created_at") {
+        av = new Date(a.created_at || a.started_at || "").getTime();
+        bv = new Date(b.created_at || b.started_at || "").getTime();
+      } else if (sortField === "full_name") {
+        av = a.full_name?.toLowerCase() || "";
+        bv = b.full_name?.toLowerCase() || "";
+      } else if (sortField === "status") {
+        av = normalizeStatus(a.status);
+        bv = normalizeStatus(b.status);
+      } else if (sortField === "client_location") {
+        av = a.client_location || "";
+        bv = b.client_location || "";
+      } else if (sortField === "scanned_by") {
+        av = a.scanned_by || "";
+        bv = b.scanned_by || "";
+      } else if (sortField === "route") {
+        av = a.route || "";
+        bv = b.route || "";
+      }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, sortField, sortDir, datePreset, dateStart, dateEnd]);
 
   const handleSort = (f: SortField) => {
     if (sortField === f) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -977,10 +993,10 @@ export default function ScanLogsPage() {
       "Rx",
       "Address",
       "Route",
+      "Tenant",
       "Location",
       "Stop ID",
       "Scanned By",
-      "Tenant",
       "Date (ET)",
     ];
     const rows = sorted.map((s) => [
@@ -991,10 +1007,10 @@ export default function ScanLogsPage() {
       s.rx_pharma_id,
       s.address,
       s.route,
+      tenantMap.get(s.tenant_id ?? 0) ?? "",
       s.client_location,
       s.stop_id,
       s.scanned_by,
-      tenantMap.get(s.tenant_id ?? 0) ?? "",
       s.created_at ? new Date(s.created_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : "",
     ]);
     const csv = [h, ...rows].map((r) => r.map((c) => `"${c ?? ""}"`).join(",")).join("\n");
@@ -1004,6 +1020,7 @@ export default function ScanLogsPage() {
     }).click();
   };
 
+  const hasDateFilter = datePreset !== "all";
   const showPanel = !!selected;
 
   return (
@@ -1013,10 +1030,10 @@ export default function ScanLogsPage() {
         "md:flex-row",
       )}
     >
-      {/* ── Main ─────────────────────────────────────────────────────────── */}
       <div className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", showPanel && "hidden md:flex")}>
         {/* Header */}
         <div className="space-y-3 border-b bg-background px-4 py-3">
+          {/* Title */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="flex items-center gap-2 font-bold text-sm">
@@ -1078,7 +1095,7 @@ export default function ScanLogsPage() {
             />
           </div>
 
-          {/* Search + filter */}
+          {/* Filters — Row 1: search + status */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -1112,6 +1129,85 @@ export default function ScanLogsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Filters — Row 2: tenant + date */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Tenant filter */}
+            {tenants.length > 0 && (
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="h-8 w-[140px] text-xs">
+                  <SelectValue placeholder="All tenants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tenants</SelectItem>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
+                      {t.company_name || `Tenant ${t.tenant_id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {/* Date preset */}
+            <Select
+              value={datePreset}
+              onValueChange={(v) => {
+                setDatePreset(v as DatePreset);
+                if (v !== "custom") {
+                  setDateStart("");
+                  setDateEnd("");
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="All dates" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="custom">Custom range…</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Custom date range */}
+            {datePreset === "custom" && (
+              <>
+                <Input
+                  type="date"
+                  value={dateStart}
+                  onChange={(e) => setDateStart(e.target.value)}
+                  className="h-8 w-[130px] text-xs"
+                />
+                <span className="text-[11px] text-muted-foreground">to</span>
+                <Input
+                  type="date"
+                  value={dateEnd}
+                  onChange={(e) => setDateEnd(e.target.value)}
+                  className="h-8 w-[130px] text-xs"
+                />
+              </>
+            )}
+
+            {/* Clear date/tenant filters */}
+            {(tenantFilter !== "all" || hasDateFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTenantFilter("all");
+                  setDatePreset("all");
+                  setDateStart("");
+                  setDateEnd("");
+                }}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-2.5 w-2.5" /> Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -1135,15 +1231,25 @@ export default function ScanLogsPage() {
               <table className="hidden w-full text-sm md:table">
                 <colgroup>
                   <col className="w-[110px]" />
+                  {/* Status */}
                   <col className="w-12" />
-                  <col className="w-[160px]" />
-                  <col className="w-[180px]" />
+                  {/* Label */}
+                  <col className="w-[165px]" />
+                  {/* Recipient */}
+                  <col className="w-[175px]" />
+                  {/* Address */}
                   <col className="w-[90px]" />
+                  {/* Route */}
+                  {hasMultipleTenants && <col className="w-[110px]" />}
+                  {/* Tenant */}
                   <col className="w-[80px]" />
-                  {hasMultipleTenants && <col className="w-[100px]" />}
+                  {/* Location */}
                   <col className="w-[100px]" />
+                  {/* Stop ID */}
                   <col className="w-[70px]" />
+                  {/* By */}
                   <col className="w-[110px]" />
+                  {/* Date */}
                 </colgroup>
                 <thead className="sticky top-0 z-10 border-b bg-background text-left">
                   <tr>
@@ -1177,6 +1283,11 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="px-3"
                     />
+                    {hasMultipleTenants && (
+                      <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
+                        Tenant
+                      </th>
+                    )}
                     <SortHeader
                       field="client_location"
                       label="Location"
@@ -1185,11 +1296,6 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="px-3"
                     />
-                    {hasMultipleTenants && (
-                      <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
-                        Tenant
-                      </th>
-                    )}
                     <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Stop ID
                     </th>

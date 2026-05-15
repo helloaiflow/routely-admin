@@ -263,14 +263,17 @@ function ScanRow({ scan, selected, onClick }: { scan: ScanLog; selected: boolean
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
       className={cn(
-        "group cursor-pointer border-border/30 border-b transition-colors hover:bg-muted/30",
+        "group cursor-pointer border-border/40 border-b transition-colors hover:bg-muted/25",
         selected && "bg-primary/5 hover:bg-primary/5",
       )}
     >
-      <td className="py-3 pr-3 pl-4">
+      {/* Status — fixed width */}
+      <td className="w-[100px] py-3 pr-2 pl-4">
         <StatusBadge status={scan.status} />
       </td>
-      <td className="px-2 py-3">
+
+      {/* Label thumbnail — fixed width */}
+      <td className="w-12 px-1 py-3">
         {scan.image_url ? (
           <ImagePreview url={scan.image_url} name={scan.full_name} rx={scan.rx_pharma_id} />
         ) : (
@@ -279,53 +282,70 @@ function ScanRow({ scan, selected, onClick }: { scan: ScanLog; selected: boolean
           </div>
         )}
       </td>
-      <td className="min-w-[150px] px-2 py-3">
-        <p className="font-semibold text-xs capitalize leading-tight">{scan.full_name?.toLowerCase() || "—"}</p>
+
+      {/* Recipient — name + rx + phone */}
+      <td className="min-w-[160px] max-w-[200px] px-3 py-3">
+        <p className="truncate font-semibold text-xs capitalize leading-tight">
+          {scan.full_name?.toLowerCase() || "—"}
+        </p>
         <p className="font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
         {scan.phone && (
-          <p className="mt-0.5 flex items-center gap-0.5 text-[10px] text-muted-foreground/70">
+          <p className="mt-0.5 flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
             <Phone className="h-2 w-2" />
             {scan.phone}
           </p>
         )}
       </td>
-      <td className="max-w-[180px] px-2 py-3">
+
+      {/* Address — street only */}
+      <td className="max-w-[160px] px-3 py-3">
         <p className="truncate text-[11px] text-muted-foreground">
-          {scan.full_address || [scan.address, scan.city, scan.state].filter(Boolean).join(", ") || "—"}
+          {scan.address || scan.full_address?.split(",")[0] || "—"}
         </p>
+        {(scan.city || scan.state) && (
+          <p className="text-[10px] text-muted-foreground/50">{[scan.city, scan.state].filter(Boolean).join(", ")}</p>
+        )}
       </td>
-      <td className="px-2 py-3">
+
+      {/* Location badge */}
+      <td className="w-[90px] px-3 py-3">
+        {scan.client_location ? (
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            {scan.client_location}
+          </span>
+        ) : (
+          <span className="text-[10px] text-muted-foreground/30">—</span>
+        )}
+      </td>
+
+      {/* Stop ID — compact */}
+      <td className="w-[100px] px-3 py-3">
         {scan.stop_id ? (
           <a
             href={`/dashboard/stops?search=${scan.stop_id}`}
             onClick={(e) => e.stopPropagation()}
             className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
           >
-            {scan.stop_id.slice(0, 10)}…
-            <ExternalLink className="h-2.5 w-2.5" />
+            {scan.stop_id.slice(0, 8)}…
+            <ExternalLink className="h-2 w-2" />
           </a>
         ) : (
-          <span className="text-[10px] text-muted-foreground/40">—</span>
+          <span className="text-[10px] text-muted-foreground/30">—</span>
         )}
       </td>
-      <td className="px-2 py-3">
-        {scan.client_location ? (
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-medium text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {scan.client_location}
-          </span>
-        ) : (
-          <span className="text-[10px] text-muted-foreground/40">—</span>
-        )}
-      </td>
-      <td className="px-2 py-3">
+
+      {/* Scanned by */}
+      <td className="w-[90px] px-3 py-3">
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <User className="h-2.5 w-2.5 shrink-0" />
+          <User className="h-2.5 w-2.5 shrink-0 opacity-50" />
           {scan.scanned_by?.split(" ")[0] || "IVY"}
         </span>
       </td>
-      <td className="px-2 py-3 pr-4 text-right">
+
+      {/* Date/time — right aligned */}
+      <td className="w-[110px] px-3 py-3 pr-4 text-right">
         <p className="font-medium text-[11px] tabular-nums">{fmtDate(scan.created_at || scan.started_at)}</p>
-        <p className="text-[10px] text-muted-foreground">{fmtTime(scan.created_at || scan.started_at)}</p>
+        <p className="text-[10px] text-muted-foreground tabular-nums">{fmtTime(scan.created_at || scan.started_at)}</p>
       </td>
     </motion.tr>
   );
@@ -334,11 +354,12 @@ function ScanRow({ scan, selected, onClick }: { scan: ScanLog; selected: boolean
 // ── Mobile Card ───────────────────────────────────────────────────────────────
 function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
   return (
-    <motion.div
+    <motion.button
+      type="button"
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
-      className="flex cursor-pointer items-start gap-3 border-border/30 border-b px-4 py-3 transition-colors active:bg-muted/40"
+      className="flex w-full cursor-pointer items-start gap-3 border-border/30 border-b px-4 py-3 text-left transition-colors active:bg-muted/40"
     >
       {/* Label thumbnail */}
       <div className="shrink-0 pt-0.5">
@@ -392,7 +413,7 @@ function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
       </div>
 
       <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
-    </motion.div>
+    </motion.button>
   );
 }
 
@@ -893,7 +914,7 @@ export default function ScanLogsPage() {
             <>
               {/* Desktop table */}
               <table className="hidden w-full text-sm md:table">
-                <thead className="sticky top-0 z-10 border-b bg-muted/40 text-left">
+                <thead className="sticky top-0 z-10 border-b bg-muted/30 text-left">
                   <tr>
                     <SortHeader
                       field="status"
@@ -901,9 +922,9 @@ export default function ScanLogsPage() {
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="pr-3 pl-4"
+                      className="w-[100px] pr-2 pl-4"
                     />
-                    <th className="px-2 py-2 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
+                    <th className="w-12 px-1 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Label
                     </th>
                     <SortHeader
@@ -912,13 +933,10 @@ export default function ScanLogsPage() {
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="px-2"
+                      className="px-3"
                     />
-                    <th className="px-2 py-2 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
+                    <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Address
-                    </th>
-                    <th className="px-2 py-2 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
-                      Stop ID
                     </th>
                     <SortHeader
                       field="client_location"
@@ -926,23 +944,26 @@ export default function ScanLogsPage() {
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="px-2"
+                      className="w-[90px] px-3"
                     />
+                    <th className="w-[100px] px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
+                      Stop ID
+                    </th>
                     <SortHeader
                       field="scanned_by"
                       label="By"
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="px-2"
+                      className="w-[90px] px-3"
                     />
                     <SortHeader
                       field="created_at"
-                      label="Date/Time ET"
+                      label="Date/Time"
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="px-2 pr-4 text-right"
+                      className="w-[110px] px-3 pr-4 text-right"
                     />
                   </tr>
                 </thead>

@@ -1421,8 +1421,8 @@ export default function ScanLogsPage() {
             </div>
           </div>
 
-          {/* Stat row — compact, not hero-metric cards */}
-          <div className="grid grid-cols-4 gap-1">
+          {/* Stat row — 2x2 on mobile, 4-col on desktop */}
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
             <StatCard
               label="Total"
               value={stats.total}
@@ -1453,9 +1453,10 @@ export default function ScanLogsPage() {
             />
           </div>
 
-          {/* Filters */}
+          {/* Filters — search full width, then date, then status/tenant */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="relative w-full min-w-0 flex-1 lg:w-44 lg:flex-none lg:shrink-0">
+            {/* Search — full width on mobile */}
+            <div className="relative w-full min-w-0 lg:w-44 lg:flex-none lg:shrink-0">
               <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search…"
@@ -1473,33 +1474,7 @@ export default function ScanLogsPage() {
                 </button>
               )}
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-11 w-[118px] gap-1 text-xs sm:h-8">
-                <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-                <SelectItem value="error">Error</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
-              </SelectContent>
-            </Select>
-            {tenants.length > 0 && (
-              <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-11 w-[118px] text-xs sm:h-8">
-                  <SelectValue placeholder="All tenants" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All tenants</SelectItem>
-                  {tenants.map((t) => (
-                    <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
-                      {t.company_name || `T${t.tenant_id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            {/* Date — first after search */}
             <Select
               value={datePreset}
               onValueChange={(v) => {
@@ -1510,7 +1485,7 @@ export default function ScanLogsPage() {
                 }
               }}
             >
-              <SelectTrigger className="h-11 w-[118px] text-xs sm:h-8">
+              <SelectTrigger className="h-11 w-[130px] text-xs sm:h-8">
                 <SelectValue placeholder="All dates" />
               </SelectTrigger>
               <SelectContent>
@@ -1538,6 +1513,35 @@ export default function ScanLogsPage() {
                   className="h-11 w-[122px] text-xs sm:h-8"
                 />
               </>
+            )}
+            {/* Status */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-11 w-[118px] gap-1 text-xs sm:h-8">
+                <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Tenant */}
+            {tenants.length > 0 && (
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="h-11 w-[118px] text-xs sm:h-8">
+                  <SelectValue placeholder="All tenants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tenants</SelectItem>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
+                      {t.company_name || `T${t.tenant_id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             {(tenantFilter !== "all" || hasDateFilter || search) && (
               <button

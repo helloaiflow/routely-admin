@@ -1074,36 +1074,37 @@ export default function ScanLogsPage() {
               value={stats.success}
               icon={CheckCircle2}
               accent="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
-              onClick={() => setStatusFilter("SUCCESS")}
-              active={statusFilter === "SUCCESS"}
+              onClick={() => setStatusFilter("success")}
+              active={statusFilter === "success"}
             />
             <StatCard
               label="Errors"
               value={stats.error}
               icon={AlertTriangle}
               accent="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
-              onClick={() => setStatusFilter("ERROR")}
-              active={statusFilter === "ERROR"}
+              onClick={() => setStatusFilter("error")}
+              active={statusFilter === "error"}
             />
             <StatCard
               label="In progress"
               value={stats.processing}
               icon={Clock}
               accent="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800"
-              onClick={() => setStatusFilter("PROCESSING")}
-              active={statusFilter === "PROCESSING"}
+              onClick={() => setStatusFilter("processing")}
+              active={statusFilter === "processing"}
             />
           </div>
 
-          {/* Filters — Row 1: search + status */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          {/* All filters — single compact row */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Search — compact fixed width */}
+            <div className="relative w-44 shrink-0">
+              <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Name, Rx, address, stop ID…"
+                placeholder="Search…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 pr-7 pl-8 text-xs"
+                className="h-8 pr-7 pl-7 text-xs"
               />
               {search && (
                 <button
@@ -1115,34 +1116,33 @@ export default function ScanLogsPage() {
                 </button>
               )}
             </div>
+
+            {/* Status */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-[130px] gap-1 text-xs sm:w-40">
+              <SelectTrigger className="h-8 w-[118px] gap-1 text-xs">
                 <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="SUCCESS">✅ Success</SelectItem>
-                <SelectItem value="ERROR">❌ Error</SelectItem>
-                <SelectItem value="PROCESSING">🔵 Processing</SelectItem>
-                <SelectItem value="SPOKE_OK">🔵 Spoke OK</SelectItem>
+                <SelectItem value="success">✅ Success</SelectItem>
+                <SelectItem value="error">❌ Error</SelectItem>
+                <SelectItem value="processing">🔵 Processing</SelectItem>
+                <SelectItem value="spoke_ok">🔵 Spoke OK</SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
-          {/* Filters — Row 2: tenant + date */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Tenant filter */}
+            {/* Tenant */}
             {tenants.length > 0 && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectTrigger className="h-8 w-[118px] text-xs">
                   <SelectValue placeholder="All tenants" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All tenants</SelectItem>
                   {tenants.map((t) => (
                     <SelectItem key={t.tenant_id} value={String(t.tenant_id)}>
-                      {t.company_name || `Tenant ${t.tenant_id}`}
+                      {t.company_name || `T${t.tenant_id}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1160,7 +1160,7 @@ export default function ScanLogsPage() {
                 }
               }}
             >
-              <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectTrigger className="h-8 w-[118px] text-xs">
                 <SelectValue placeholder="All dates" />
               </SelectTrigger>
               <SelectContent>
@@ -1169,7 +1169,7 @@ export default function ScanLogsPage() {
                 <SelectItem value="yesterday">Yesterday</SelectItem>
                 <SelectItem value="7d">Last 7 days</SelectItem>
                 <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="custom">Custom range…</SelectItem>
+                <SelectItem value="custom">Custom…</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1180,29 +1180,30 @@ export default function ScanLogsPage() {
                   type="date"
                   value={dateStart}
                   onChange={(e) => setDateStart(e.target.value)}
-                  className="h-8 w-[130px] text-xs"
+                  className="h-8 w-[122px] text-xs"
                 />
-                <span className="text-[11px] text-muted-foreground">to</span>
+                <span className="text-[11px] text-muted-foreground">–</span>
                 <Input
                   type="date"
                   value={dateEnd}
                   onChange={(e) => setDateEnd(e.target.value)}
-                  className="h-8 w-[130px] text-xs"
+                  className="h-8 w-[122px] text-xs"
                 />
               </>
             )}
 
-            {/* Clear date/tenant filters */}
-            {(tenantFilter !== "all" || hasDateFilter) && (
+            {/* Clear */}
+            {(tenantFilter !== "all" || hasDateFilter || search) && (
               <button
                 type="button"
                 onClick={() => {
+                  setSearch("");
                   setTenantFilter("all");
                   setDatePreset("all");
                   setDateStart("");
                   setDateEnd("");
                 }}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="flex h-8 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <X className="h-2.5 w-2.5" /> Clear
               </button>

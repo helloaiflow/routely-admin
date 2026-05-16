@@ -101,6 +101,7 @@ interface ScanLog {
   new_client?: boolean;
   package_vip?: boolean;
   tenant_id?: number;
+  original_rtscan_id?: number | null;
 }
 
 interface Tenant {
@@ -699,8 +700,10 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
             <Row label="New client" value={scan.new_client ? "Yes" : undefined} />
           </Section>
           <Section title="Scan info">
-            <Row label="Scanned by" value={scan.scanned_by} />
             <Row label="Scan ID" value={String(scan.rtscan_id || "")} mono />
+            {scan.original_rtscan_id && <Row label="Repost of" value={String(scan.original_rtscan_id)} mono />}
+            <Row label="Source" value={scan.source} />
+            <Row label="Scanned by" value={scan.scanned_by} />
             <Row label="Stage" value={scan.stage?.replace(/_/g, " ")} />
             <Row
               label="Processing time"
@@ -873,6 +876,7 @@ export default function ScanLogsPage() {
           new_client: d.new_client as boolean,
           package_vip: d.package_vip as boolean,
           tenant_id: d.tenant_id as number,
+          original_rtscan_id: (d.original_rtscan_id as number) ?? null,
         }));
         setData(shaped);
         setTotal(json.total ?? shaped.length);

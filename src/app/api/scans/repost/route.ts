@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       tenant_id: scan.tenant_id ?? 1,
       client_id: scan.client_id ?? 1,
       source: "manual_repost",
-      original_rtscan_id: scan.rtscan_id,
+      original_rtscan_id: scan.rtscan_id ?? null, // reference to the original scan that triggered this repost
       full_name: scan.full_name ?? "",
       phone: scan.phone ?? "",
       address: scan.address ?? "",

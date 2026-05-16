@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -269,7 +269,7 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
 
   if (norm === "success")
     return (
-      <span className="relative inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-emerald-200 shadow-sm">
+      <span className="relative inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 font-semibold text-[10px] text-white">
         <CheckCircle2 className="h-2.5 w-2.5" /> Success
         {/* Yellow pulsating dot if reposted */}
         {isReposted && (
@@ -284,7 +284,7 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
   if (norm === "error")
     return (
       // Pulsating red button style (Magic UI inspired)
-      <span className="relative inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-red-200 shadow-sm">
+      <span className="relative inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 font-semibold text-[10px] text-white">
         <span
           className="absolute inset-0 animate-ping rounded-full bg-red-500 opacity-30"
           style={{ animationDuration: "1.5s" }}
@@ -301,7 +301,7 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
     );
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-blue-200 shadow-sm">
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500 px-2.5 py-1 font-semibold text-[10px] text-white">
       <Clock className="h-2.5 w-2.5" /> Processing
     </span>
   );
@@ -413,9 +413,7 @@ function ScanRow({
   tenantName?: string;
 }) {
   return (
-    <motion.tr
-      initial={{ opacity: 0, y: 3 }}
-      animate={{ opacity: 1, y: 0 }}
+    <tr
       onClick={onClick}
       className={cn(
         "cursor-pointer border-border/40 border-b transition-colors hover:bg-muted/25",
@@ -430,7 +428,7 @@ function ScanRow({
           <ImagePreview url={scan.image_url} name={scan.full_name} rx={scan.rx_pharma_id} />
         ) : (
           <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/40 border-dashed bg-muted/20">
-            <Camera className="h-3.5 w-3.5 text-muted-foreground/30" />
+            <Camera className="h-3.5 w-3.5 text-muted-foreground/55" />
           </div>
         )}
       </td>
@@ -450,7 +448,7 @@ function ScanRow({
             {scan.route}
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/20">—</span>
+          <span className="text-[10px] text-muted-foreground/45">—</span>
         )}
       </td>
       {tenantName !== undefined && (
@@ -462,7 +460,7 @@ function ScanRow({
         {scan.client_location ? (
           <span className="text-[11px] text-muted-foreground/80">{scan.client_location}</span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/20">—</span>
+          <span className="text-[10px] text-muted-foreground/45">—</span>
         )}
       </td>
       <td className="px-3 py-2">
@@ -475,7 +473,7 @@ function ScanRow({
             {scan.stop_id.slice(0, 8)}…
           </a>
         ) : (
-          <span className="text-[10px] text-muted-foreground/20">—</span>
+          <span className="text-[10px] text-muted-foreground/45">—</span>
         )}
       </td>
       <td className="px-3 py-2">
@@ -487,17 +485,15 @@ function ScanRow({
           {fmtTime(scan.created_at || scan.started_at)}
         </p>
       </td>
-    </motion.tr>
+    </tr>
   );
 }
 
 // ── Mobile Card ───────────────────────────────────────────────────────────────
 function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
   return (
-    <motion.button
+    <button
       type="button"
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
       className="flex w-full cursor-pointer items-start gap-3 border-border/30 border-b px-4 py-3 text-left transition-colors active:bg-muted/40"
     >
@@ -506,7 +502,7 @@ function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
           <ImagePreview url={scan.image_url} name={scan.full_name} rx={scan.rx_pharma_id} />
         ) : (
           <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/40 border-dashed bg-muted/20">
-            <Camera className="h-3.5 w-3.5 text-muted-foreground/30" />
+            <Camera className="h-3.5 w-3.5 text-muted-foreground/55" />
           </div>
         )}
       </div>
@@ -545,11 +541,14 @@ function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
           )}
         </div>
         {normalizeStatus(scan.status) === "error" && scan.error_stage && (
-          <p className="mt-1 truncate text-[10px] text-red-500">⚠ {scan.error_stage.replace(/_/g, " ")}</p>
+          <p className="mt-1 flex items-center gap-1 truncate text-[10px] text-red-500">
+            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+            {scan.error_stage.replace(/_/g, " ")}
+          </p>
         )}
       </div>
-      <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
-    </motion.button>
+      <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/55" />
+    </button>
   );
 }
 
@@ -793,7 +792,7 @@ function DetailPanel({
       });
       if (res.ok && data.success) onRepostDone();
     } catch {
-      setRepostResult({ success: false, error: "Network error — could not reach server" });
+      setRepostResult({ success: false, error: "Network error: could not reach server" });
     } finally {
       setRepostLoading(false);
     }
@@ -833,7 +832,7 @@ function DetailPanel({
         });
         if (res.ok && data.success) onRepostDone();
       } catch {
-        setRepostResult({ success: false, error: "Network error — could not reach server" });
+        setRepostResult({ success: false, error: "Network error: could not reach server" });
       } finally {
         setCameraLoading(false);
         if (fileRef.current) fileRef.current.value = "";
@@ -1002,7 +1001,7 @@ function DetailPanel({
               {isReposted && scan.reposted_at && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
                   <p className="font-medium text-[11px] text-amber-700 dark:text-amber-400">
-                    🔄 Reposted {fmtDate(scan.reposted_at)} at {fmtTime(scan.reposted_at)}
+                    Reposted {fmtDate(scan.reposted_at)} at {fmtTime(scan.reposted_at)}
                     {scan.reposted_to_rtscan_id && (
                       <span className="ml-1 font-mono">→ #{scan.reposted_to_rtscan_id}</span>
                     )}
@@ -1027,8 +1026,8 @@ function DetailPanel({
                 <Row label="Stop ID" value={scan.stop_id} mono />
                 <Row label="Spoke delivery" value={scan.spoke_delivery_id} mono />
                 <Row label="Type" value={scan.type} />
-                <Row label="Cold chain" value={scan.is_cold ? "Yes ❄️" : undefined} />
-                <Row label="VIP" value={scan.package_vip ? "Yes ⭐" : undefined} />
+                <Row label="Cold chain" value={scan.is_cold ? "Yes" : undefined} />
+                <Row label="VIP" value={scan.package_vip ? "Yes" : undefined} />
                 <Row label="New client" value={scan.new_client ? "Yes" : undefined} />
               </Section>
               <Section title="Scan info">
@@ -1387,12 +1386,12 @@ export default function ScanLogsPage() {
         <div className="space-y-3 border-b bg-background px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="flex items-center gap-2 font-bold text-sm">
-                <ScanLine className="h-4 w-4 text-primary" />
+              <h1 className="flex items-center gap-2 font-semibold text-lg tracking-tight">
+                <ScanLine className="h-5 w-5 text-primary" />
                 Scan logs
               </h1>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                IVY label scan history — {total.toLocaleString()} records · live
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                IVY label scan history, {total.toLocaleString()} records · live
               </p>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1643,26 +1642,22 @@ export default function ScanLogsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <AnimatePresence>
-                    {sorted.map((scan) => (
-                      <ScanRow
-                        key={scan._id}
-                        scan={scan}
-                        selected={selected?._id === scan._id}
-                        onClick={() => setSelected(selected?._id === scan._id ? null : scan)}
-                        tenantName={showTenantCol ? (tenantMap.get(scan.tenant_id ?? 0) ?? "—") : undefined}
-                      />
-                    ))}
-                  </AnimatePresence>
+                  {sorted.map((scan) => (
+                    <ScanRow
+                      key={scan._id}
+                      scan={scan}
+                      selected={selected?._id === scan._id}
+                      onClick={() => setSelected(selected?._id === scan._id ? null : scan)}
+                      tenantName={showTenantCol ? (tenantMap.get(scan.tenant_id ?? 0) ?? "—") : undefined}
+                    />
+                  ))}
                 </tbody>
               </table>
 
               <div className="divide-y md:hidden">
-                <AnimatePresence>
-                  {sorted.map((scan) => (
-                    <MobileCard key={scan._id} scan={scan} onClick={() => setSelected(scan)} />
-                  ))}
-                </AnimatePresence>
+                {sorted.map((scan) => (
+                  <MobileCard key={scan._id} scan={scan} onClick={() => setSelected(scan)} />
+                ))}
               </div>
             </>
           )}
@@ -1697,18 +1692,16 @@ export default function ScanLogsPage() {
         )}
       </div>
 
-      <AnimatePresence>
-        {selected && (
-          <div
-            className={cn(
-              "overflow-hidden border-l",
-              "fixed inset-0 z-50 bg-background md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
-            )}
-          >
-            <DetailPanel scan={selected} onClose={() => setSelected(null)} onRepostDone={() => fetchData(true)} />
-          </div>
-        )}
-      </AnimatePresence>
+      {selected && (
+        <div
+          className={cn(
+            "overflow-hidden border-l",
+            "fixed inset-0 z-50 bg-background md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
+          )}
+        >
+          <DetailPanel scan={selected} onClose={() => setSelected(null)} onRepostDone={() => fetchData(true)} />
+        </div>
+      )}
     </div>
   );
 }

@@ -48,6 +48,95 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+// ── SSE hook — real-time scan updates via MongoDB Change Streams ──────────────
+function useScanStream(tenantId: string, onScan: (shaped: ScanLog) => void) {
+  const cbRef = useRef(onScan);
+  cbRef.current = onScan;
+
+  useEffect(() => {
+    let es: EventSource;
+    let retry: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+
+    function shapeDoc(d: Record<string, unknown>): ScanLog {
+      return {
+        _id: String(d._id),
+        rtscan_id: d.rtscan_id as number,
+        stop_id: (d.stop_id as string) || "",
+        status: (d.status as string) || "pending",
+        stage: d.stage as string,
+        full_name: d.full_name as string,
+        phone: d.phone as string,
+        address: d.address as string,
+        city: d.city as string,
+        state: d.state as string,
+        zipcode: d.zipcode as string,
+        full_address: d.full_address as string,
+        rx_pharma_id: d.rx_pharma_id as string,
+        barcode_value: d.barcode_value as string,
+        client_location: d.client_location as string,
+        route: d.route as string,
+        type: d.type as string,
+        scanned_by: d.scanned_by as string,
+        source: d.source as string,
+        image_url: d.image_url as string,
+        spoke_delivery_id: d.spoke_delivery_id as string,
+        collect_payment: d.collect_payment as boolean,
+        collect_amount: d.collect_amount as number,
+        signature_required: d.signature_required as boolean,
+        error_message: (d.error_message as string) || null,
+        validation_errors: d.validation_errors as string[],
+        error_stage: d.error_stage as string,
+        processing_time_ms: d.processing_time_ms as number,
+        started_at: d.started_at as string,
+        completed_at: d.completed_at as string,
+        created_at: d.created_at as string,
+        updated_at: d.updated_at as string,
+        is_cold: d.is_cold as boolean,
+        gate_code: d.gate_code as string,
+        new_client: d.new_client as boolean,
+        package_vip: d.package_vip as boolean,
+        tenant_id: d.tenant_id as number,
+        original_rtscan_id: (d.original_rtscan_id as number) ?? null,
+        sub_status: (d.sub_status as string) ?? null,
+        reposted_at: (d.reposted_at as string) ?? null,
+        reposted_to_rtscan_id: (d.reposted_to_rtscan_id as number) ?? null,
+      };
+    }
+
+    function connect() {
+      es = new EventSource(`/api/scans/stream?tenant_id=${tenantId}`);
+
+      es.addEventListener("connected", () => {
+        attempts = 0;
+      });
+
+      es.addEventListener("scan", (e: MessageEvent) => {
+        try {
+          const { doc } = JSON.parse(e.data) as { op: string; doc: Record<string, unknown> };
+          cbRef.current(shapeDoc(doc));
+        } catch {
+          /* malformed */
+        }
+      });
+
+      es.addEventListener("error", () => {
+        es.close();
+        // Exponential backoff: 1s → 2s → 4s → … → 30s max
+        const delay = Math.min(1000 * 2 ** attempts, 30_000);
+        attempts++;
+        retry = setTimeout(connect, delay);
+      });
+    }
+
+    connect();
+    return () => {
+      clearTimeout(retry);
+      es?.close();
+    };
+  }, [tenantId]);
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ScanStatus =
   | "SUCCESS"
@@ -185,7 +274,7 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
         <CheckCircle2 className="h-2.5 w-2.5" /> Success
         {/* Yellow pulsating dot if reposted */}
         {isReposted && (
-          <span className="absolute -right-1 -top-1 flex h-3 w-3">
+          <span className="absolute -top-1 -right-1 flex h-3 w-3">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
             <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-400" />
           </span>
@@ -198,13 +287,13 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
       // Pulsating red button style (Magic UI inspired)
       <span className="relative inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-red-200 shadow-sm">
         <span
-          className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-30"
+          className="absolute inset-0 animate-ping rounded-full bg-red-500 opacity-30"
           style={{ animationDuration: "1.5s" }}
         />
         <AlertTriangle className="relative h-2.5 w-2.5" />
         <span className="relative">Error</span>
         {isReposted && (
-          <span className="absolute -right-1 -top-1 flex h-3 w-3">
+          <span className="absolute -top-1 -right-1 flex h-3 w-3">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
             <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-400" />
           </span>
@@ -334,7 +423,7 @@ function ScanRow({
         selected && "bg-primary/5 hover:bg-primary/5",
       )}
     >
-      <td className="py-3 pl-4 pr-2">
+      <td className="py-3 pr-2 pl-4">
         <StatusBadge status={scan.status} subStatus={scan.sub_status} />
       </td>
       <td className="w-12 px-1 py-3">
@@ -406,7 +495,7 @@ function ScanRow({
           {scan.scanned_by?.split(" ")[0] || "IVY"}
         </span>
       </td>
-      <td className="py-3 pl-3 pr-4 text-right">
+      <td className="py-3 pr-4 pl-3 text-right">
         <p className="font-medium text-[11px] tabular-nums">{fmtDate(scan.created_at || scan.started_at)}</p>
         <p className="text-[10px] text-muted-foreground tabular-nums">{fmtTime(scan.created_at || scan.started_at)}</p>
       </td>
@@ -630,7 +719,7 @@ function EditForm({
           <Input value={fields.phone} onChange={f("phone")} className="h-7 text-xs" />
         </Field>
         <Field label="Rx #">
-          <Input value={fields.rx_pharma_id} onChange={f("rx_pharma_id")} className="h-7 text-xs font-mono" />
+          <Input value={fields.rx_pharma_id} onChange={f("rx_pharma_id")} className="h-7 font-mono text-xs" />
         </Field>
         <Field label="Address">
           <Input value={fields.address} onChange={f("address")} className="h-7 text-xs" />
@@ -789,7 +878,7 @@ function DetailPanel({
               <StatusBadge status={scan.status} subStatus={scan.sub_status} />
               <span className="font-mono text-[10px] text-muted-foreground">#{scan.rtscan_id}</span>
               {isReposted && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-[10px] text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
                   Reposted
                 </span>
               )}
@@ -924,7 +1013,7 @@ function DetailPanel({
               )}
               {isReposted && scan.reposted_at && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                  <p className="font-medium text-[11px] text-amber-700 dark:text-amber-400">
                     🔄 Reposted {fmtDate(scan.reposted_at)} at {fmtTime(scan.reposted_at)}
                     {scan.reposted_to_rtscan_id && (
                       <span className="ml-1 font-mono">→ #{scan.reposted_to_rtscan_id}</span>
@@ -1052,7 +1141,7 @@ function StatCard({
       onClick={onClick}
       className={cn(
         "flex flex-col gap-1 rounded-xl border p-3 text-left transition-all hover:shadow-sm",
-        active ? "ring-2 ring-current/20 border-current" : "border-border/60",
+        active ? "border-current ring-2 ring-current/20" : "border-border/60",
         accent,
       )}
     >
@@ -1164,7 +1253,7 @@ export default function ScanLogsPage() {
     }
   }, []);
 
-  // Auto-refresh every 30 seconds
+  // Initial load
   const isFirst = useRef(true);
   useEffect(() => {
     if (isFirst.current) {
@@ -1174,8 +1263,24 @@ export default function ScanLogsPage() {
     } else fetchData(true);
   }, [fetchData, fetchTenants]);
 
+  // ── SSE — real-time updates, replaces polling interval ──────────────────
+  useScanStream(tenantFilter === "all" ? "1" : tenantFilter, (incoming) => {
+    setData((prev) => {
+      const idx = prev.findIndex((s) => s._id === incoming._id);
+      if (idx >= 0) {
+        // update existing row in-place
+        const next = [...prev];
+        next[idx] = incoming;
+        return next;
+      }
+      // prepend new scan
+      return [incoming, ...prev];
+    });
+  });
+
+  // fallback: 60s poll to catch anything SSE missed (network blip, reconnect gap)
   useEffect(() => {
-    const interval = setInterval(() => fetchData(true), 30_000);
+    const interval = setInterval(() => fetchData(true), 60_000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -1302,7 +1407,7 @@ export default function ScanLogsPage() {
                 Scan logs
               </h1>
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                IVY label scan history — {total.toLocaleString()} records · auto-refresh 30s
+                IVY label scan history — {total.toLocaleString()} records · live
               </p>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1498,7 +1603,7 @@ export default function ScanLogsPage() {
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="pl-4 pr-2"
+                      className="pr-2 pl-4"
                     />
                     <th className="px-1 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Label

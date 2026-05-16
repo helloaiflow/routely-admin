@@ -18,6 +18,7 @@ import {
   Filter,
   Loader2,
   MapPin,
+  Package,
   Pencil,
   Phone,
   RefreshCw,
@@ -47,11 +48,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 
 // ── SSE hook — real-time scan updates via MongoDB Change Streams ──────────────
-function useScanStream(tenantId: string, onScan: (shaped: ScanLog) => void, onStatus?: (connected: boolean) => void) {
+function useScanStream(tenantId: string, onScan: (shaped: ScanLog) => void) {
   const cbRef = useRef(onScan);
   cbRef.current = onScan;
-  const statusRef = useRef(onStatus);
-  statusRef.current = onStatus;
 
   useEffect(() => {
     let es: EventSource;
@@ -109,7 +108,6 @@ function useScanStream(tenantId: string, onScan: (shaped: ScanLog) => void, onSt
 
       es.addEventListener("connected", () => {
         attempts = 0;
-        statusRef.current?.(true);
       });
 
       es.addEventListener("scan", (e: MessageEvent) => {
@@ -123,8 +121,7 @@ function useScanStream(tenantId: string, onScan: (shaped: ScanLog) => void, onSt
 
       es.addEventListener("error", () => {
         es.close();
-        statusRef.current?.(false);
-        // Exponential backoff: 1s, 2s, 4s … 30s max
+        // Exponential backoff: 1s → 2s → 4s → … → 30s max
         const delay = Math.min(1000 * 2 ** attempts, 30_000);
         attempts++;
         retry = setTimeout(connect, delay);
@@ -270,36 +267,41 @@ function StatusBadge({ status, subStatus }: { status: ScanStatus; subStatus?: st
   const norm = normalizeStatus(status);
   const isReposted = subStatus === "reposted";
 
-  const repostDot = isReposted && (
-    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
-    </span>
-  );
-
   if (norm === "success")
     return (
-      <span className="relative inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 font-medium text-[10px] text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <span className="relative inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 font-semibold text-[10px] text-white">
         <CheckCircle2 className="h-2.5 w-2.5" /> Success
-        {repostDot}
+        {/* Yellow pulsating dot if reposted */}
+        {isReposted && (
+          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-400" />
+          </span>
+        )}
       </span>
     );
 
   if (norm === "error")
     return (
-      <span className="relative inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-red-50 px-2 py-0.5 font-medium text-[10px] text-red-700 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300">
+      // Pulsating red button style (Magic UI inspired)
+      <span className="relative inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-1 font-semibold text-[10px] text-white">
         <span
-          className="absolute inset-0 animate-ping rounded-full bg-red-400/40"
+          className="absolute inset-0 animate-ping rounded-full bg-red-500 opacity-30"
           style={{ animationDuration: "1.5s" }}
         />
         <AlertTriangle className="relative h-2.5 w-2.5" />
         <span className="relative">Error</span>
-        {repostDot}
+        {isReposted && (
+          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-400" />
+          </span>
+        )}
       </span>
     );
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 font-medium text-[10px] text-primary">
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500 px-2.5 py-1 font-semibold text-[10px] text-white">
       <Clock className="h-2.5 w-2.5" /> Processing
     </span>
   );
@@ -377,7 +379,7 @@ function SortHeader({
     <th
       onClick={() => onSort(field)}
       className={cn(
-        "cursor-pointer select-none py-2.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide transition-colors hover:text-foreground",
+        "cursor-pointer select-none py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest transition-colors hover:text-foreground",
         active && "text-foreground",
         className,
       )}
@@ -414,8 +416,8 @@ function ScanRow({
     <tr
       onClick={onClick}
       className={cn(
-        "cursor-pointer border-border/30 border-b transition-colors",
-        selected ? "border-l-2 border-l-primary bg-primary/5 hover:bg-primary/5" : "even:bg-muted/30 hover:bg-muted/25",
+        "cursor-pointer border-border/40 border-b transition-colors hover:bg-muted/25",
+        selected && "bg-primary/5 hover:bg-primary/5",
       )}
     >
       <td className="py-2 pr-2 pl-4">
@@ -442,7 +444,7 @@ function ScanRow({
       </td>
       <td className="px-3 py-2">
         {scan.route ? (
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/80">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-[10px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
             {scan.route}
           </span>
         ) : (
@@ -534,7 +536,9 @@ function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
               {scan.client_location}
             </span>
           )}
-          {scan.route && <span className="font-mono text-[10px] text-muted-foreground/80">{scan.route}</span>}
+          {scan.route && (
+            <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400">{scan.route}</span>
+          )}
         </div>
         {normalizeStatus(scan.status) === "error" && scan.error_stage && (
           <p className="mt-1 flex items-center gap-1 truncate text-[10px] text-red-500">
@@ -693,7 +697,7 @@ function EditForm({
 
   return (
     <div className="space-y-3 p-4">
-      <p className="font-medium text-[11px] text-muted-foreground/70">Edit before repost</p>
+      <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-widest">Edit before repost</p>
       <div className="space-y-2">
         <Field label="Full name">
           <Input value={fields.full_name} onChange={f("full_name")} className="h-7 text-xs" />
@@ -851,9 +855,9 @@ function DetailPanel({
         <div
           className={cn(
             "flex items-start justify-between gap-2 border-b px-4 py-3",
-            norm === "success" && "bg-emerald-500/6",
-            norm === "error" && "bg-red-500/6",
-            norm === "processing" && "bg-primary/6",
+            norm === "success" && "bg-emerald-100 dark:bg-emerald-900/40",
+            norm === "error" && "bg-red-100 dark:bg-red-900/40",
+            norm === "processing" && "bg-blue-100 dark:bg-blue-900/40",
           )}
         >
           <div className="min-w-0 flex-1">
@@ -1083,7 +1087,7 @@ function DetailPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <p className="mb-1.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide">{title}</p>
+      <p className="mb-1.5 font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-widest">{title}</p>
       <div className="divide-y overflow-hidden rounded-xl border bg-card">{children}</div>
     </section>
   );
@@ -1121,8 +1125,8 @@ function StatCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
-        active ? "border-primary/30 bg-primary/8" : "border-border/50 bg-card",
+        "flex items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-all hover:bg-muted/40",
+        active ? "border-foreground/20 bg-muted/60" : "border-border/50 bg-card",
       )}
     >
       <div className="flex items-center gap-2">
@@ -1151,7 +1155,6 @@ export default function ScanLogsPage() {
   const [pages, setPages] = useState(1);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [live, setLive] = useState(false);
   const LIMIT = 50;
 
   const fetchData = useCallback(
@@ -1245,23 +1248,19 @@ export default function ScanLogsPage() {
   }, [fetchData, fetchTenants]);
 
   // ── SSE — real-time updates, replaces polling interval ──────────────────
-  useScanStream(
-    tenantFilter === "all" ? "1" : tenantFilter,
-    (incoming) => {
-      setData((prev) => {
-        const idx = prev.findIndex((s) => s._id === incoming._id);
-        if (idx >= 0) {
-          // update existing row in-place
-          const next = [...prev];
-          next[idx] = incoming;
-          return next;
-        }
-        // prepend new scan
-        return [incoming, ...prev];
-      });
-    },
-    setLive,
-  );
+  useScanStream(tenantFilter === "all" ? "1" : tenantFilter, (incoming) => {
+    setData((prev) => {
+      const idx = prev.findIndex((s) => s._id === incoming._id);
+      if (idx >= 0) {
+        // update existing row in-place
+        const next = [...prev];
+        next[idx] = incoming;
+        return next;
+      }
+      // prepend new scan
+      return [incoming, ...prev];
+    });
+  });
 
   // fallback: 60s poll to catch anything SSE missed (network blip, reconnect gap)
   useEffect(() => {
@@ -1378,7 +1377,7 @@ export default function ScanLogsPage() {
   return (
     <div
       className={cn(
-        "flex h-[calc(100vh-4.5rem)] flex-col overflow-hidden rounded-xl border border-l-2 border-l-primary/40 bg-background shadow-sm",
+        "flex h-[calc(100vh-4.5rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm",
         "md:flex-row",
       )}
     >
@@ -1387,23 +1386,12 @@ export default function ScanLogsPage() {
         <div className="space-y-3 border-b bg-background px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="flex items-center gap-2 font-semibold text-base text-foreground">
-                <ScanLine className="h-4 w-4 text-primary" />
+              <h1 className="flex items-center gap-2 font-semibold text-lg tracking-tight">
+                <ScanLine className="h-5 w-5 text-primary" />
                 Scan logs
               </h1>
-              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="relative flex h-1.5 w-1.5">
-                  {live && (
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-                  )}
-                  <span
-                    className={cn(
-                      "relative inline-flex h-1.5 w-1.5 rounded-full",
-                      live ? "bg-emerald-500" : "bg-muted-foreground/40",
-                    )}
-                  />
-                </span>
-                IVY · {total.toLocaleString()} records · {live ? "live" : "reconnecting"}
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                IVY label scan history, {total.toLocaleString()} records · live
               </p>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1426,7 +1414,7 @@ export default function ScanLogsPage() {
             <StatCard
               label="Total"
               value={stats.total}
-              dot="bg-muted-foreground/40"
+              dot="bg-slate-400"
               onClick={() => setStatusFilter("all")}
               active={statusFilter === "all"}
             />
@@ -1447,7 +1435,7 @@ export default function ScanLogsPage() {
             <StatCard
               label="Processing"
               value={stats.processing}
-              dot="bg-primary"
+              dot="bg-blue-500"
               onClick={() => setStatusFilter("processing")}
               active={statusFilter === "processing"}
             />
@@ -1567,10 +1555,10 @@ export default function ScanLogsPage() {
               ))}
             </div>
           ) : sorted.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 pt-24">
-              <ScanLine className="h-8 w-8 text-muted-foreground/20" />
-              <p className="font-medium text-foreground/40 text-sm">No scan logs</p>
-              <p className="text-[11px] text-muted-foreground/55">Adjust the filters to widen the search</p>
+            <div className="flex flex-col items-center gap-3 pt-20 text-muted-foreground">
+              <Package className="h-12 w-12 opacity-10" />
+              <p className="font-medium text-sm">No scan logs found</p>
+              <p className="text-xs opacity-60">Try adjusting your filters</p>
             </div>
           ) : (
             <>
@@ -1597,7 +1585,7 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="pr-2 pl-4"
                     />
-                    <th className="px-1 py-2.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide">
+                    <th className="px-1 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Label
                     </th>
                     <SortHeader
@@ -1608,7 +1596,7 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="px-3"
                     />
-                    <th className="px-3 py-2.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide">
+                    <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Address
                     </th>
                     <SortHeader
@@ -1620,7 +1608,7 @@ export default function ScanLogsPage() {
                       className="px-3"
                     />
                     {showTenantCol && (
-                      <th className="px-3 py-2.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide">
+                      <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                         Tenant
                       </th>
                     )}
@@ -1632,7 +1620,7 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="px-3"
                     />
-                    <th className="px-3 py-2.5 font-medium text-[10px] text-muted-foreground/60 tracking-wide">
+                    <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                       Stop ID
                     </th>
                     <SortHeader
@@ -1707,8 +1695,8 @@ export default function ScanLogsPage() {
       {selected && (
         <div
           className={cn(
-            "overflow-hidden border-border border-l bg-card",
-            "fixed inset-0 z-50 md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
+            "overflow-hidden border-l",
+            "fixed inset-0 z-50 bg-background md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
           )}
         >
           <DetailPanel scan={selected} onClose={() => setSelected(null)} onRepostDone={() => fetchData(true)} />

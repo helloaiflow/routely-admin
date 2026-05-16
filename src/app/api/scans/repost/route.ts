@@ -15,7 +15,17 @@ const API_KEY = process.env.ROUTELY_API_KEY ?? "routely_api_secret_2026";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { rtscan_id } = body as { rtscan_id?: number };
+    const { rtscan_id, full_name, phone, address, city, state, zipcode, rx_pharma_id, client_location } = body as {
+      rtscan_id?: number;
+      full_name?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zipcode?: string;
+      rx_pharma_id?: string;
+      client_location?: string;
+    };
 
     if (!rtscan_id) {
       return NextResponse.json({ success: false, error: "rtscan_id is required" }, { status: 400 });
@@ -41,19 +51,21 @@ export async function POST(req: NextRequest) {
         id: body.reposted_by_id ?? "admin",
         source_detail: "Manual repost via admin panel",
       },
-      ...(scan.client_location && { pickup: { location_id: scan.client_location } }),
+      ...((client_location ?? scan.client_location) && {
+        pickup: { location_id: client_location ?? scan.client_location },
+      }),
       recipient: {
-        name: scan.full_name ?? "",
-        phone: scan.phone ?? "",
-        street: scan.address ?? "",
-        city: scan.city ?? "",
-        state: scan.state ?? "",
-        zip: scan.zipcode ?? "",
+        name: full_name ?? scan.full_name ?? "",
+        phone: phone ?? scan.phone ?? "",
+        street: address ?? scan.address ?? "",
+        city: city ?? scan.city ?? "",
+        state: state ?? scan.state ?? "",
+        zip: zipcode ?? scan.zipcode ?? "",
         dob: scan.dob ?? "",
       },
       package: {
         type: scan.type ?? "rx",
-        rx_number: scan.rx_pharma_id ?? "",
+        rx_number: rx_pharma_id ?? scan.rx_pharma_id ?? "",
         rx_creation_date: scan.rx_creation_date ?? null,
         dp_note: scan.dp_note ?? null,
         notes: scan.dp_note ?? null,

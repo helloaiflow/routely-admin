@@ -562,9 +562,9 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
         <div
           className={cn(
             "flex items-start justify-between gap-2 border-b px-4 py-3",
-            norm === "success" && "bg-emerald-50/60 dark:bg-emerald-950/20",
-            norm === "error" && "bg-red-50/60 dark:bg-red-950/20",
-            norm === "processing" && "bg-blue-50/40 dark:bg-blue-950/10",
+            norm === "success" && "bg-emerald-100 dark:bg-emerald-900/40",
+            norm === "error" && "bg-red-100 dark:bg-red-900/40",
+            norm === "processing" && "bg-blue-100 dark:bg-blue-900/40",
           )}
         >
           <div className="min-w-0 flex-1">

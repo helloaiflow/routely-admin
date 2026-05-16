@@ -122,12 +122,11 @@ function fmtTime(d?: string) {
   if (!d) return "";
   return new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" });
 }
-function normalizeStatus(s: ScanStatus): "success" | "error" | "processing" | "pending" {
+function normalizeStatus(s: ScanStatus): "success" | "error" | "processing" {
   const u = String(s).toUpperCase();
-  if (u === "SUCCESS") return "success";
+  if (u === "SUCCESS" || u === "SPOKE_OK") return "success"; // SPOKE_OK = stop ya creado = success
   if (u === "ERROR") return "error";
-  if (u === "PROCESSING" || u === "SPOKE_OK") return "processing";
-  return "pending";
+  return "processing"; // solo PROCESSING real
 }
 function buildMapsUrl(scan: ScanLog) {
   const parts = [scan.address, scan.city, scan.state, scan.zipcode].filter(Boolean).join(" ");
@@ -176,16 +175,10 @@ function StatusBadge({ status }: { status: ScanStatus }) {
         <AlertTriangle className="h-2.5 w-2.5" /> Error
       </span>
     );
-  if (norm === "processing")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-blue-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-blue-200 shadow-sm">
-        <Clock className="h-2.5 w-2.5" />
-        {String(status).toUpperCase() === "SPOKE_OK" ? "Spoke OK" : "Processing"}
-      </span>
-    );
+  // processing — solo scans realmente en vuelo
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-400 px-2.5 py-1 font-semibold text-[10px] text-white">
-      <Clock className="h-2.5 w-2.5" /> Pending
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500 px-2.5 py-1 font-semibold text-[10px] text-white shadow-blue-200 shadow-sm">
+      <Clock className="h-2.5 w-2.5" /> Processing
     </span>
   );
 }
@@ -571,7 +564,7 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
             "flex items-start justify-between gap-2 border-b px-4 py-3",
             norm === "success" && "bg-emerald-50/60 dark:bg-emerald-950/20",
             norm === "error" && "bg-red-50/60 dark:bg-red-950/20",
-            (norm === "processing" || norm === "pending") && "bg-blue-50/40 dark:bg-blue-950/10",
+            norm === "processing" && "bg-blue-50/40 dark:bg-blue-950/10",
           )}
         >
           <div className="min-w-0 flex-1">
@@ -819,7 +812,7 @@ export default function ScanLogsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tenantFilter, setTenantFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [datePreset, setDatePreset] = useState<DatePreset>("today"); // default: today
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [page, setPage] = useState(1);
@@ -925,19 +918,8 @@ export default function ScanLogsPage() {
     return m;
   }, [tenants]);
 
-  const hasMultipleTenants = useMemo(() => new Set(data.map((s) => s.tenant_id).filter(Boolean)).size > 1, [data]);
-
-  const stats = useMemo(
-    () => ({
-      total: data.length,
-      success: data.filter((s) => normalizeStatus(s.status) === "success").length,
-      error: data.filter((s) => normalizeStatus(s.status) === "error").length,
-      processing: data.filter(
-        (s) => normalizeStatus(s.status) === "processing" || normalizeStatus(s.status) === "pending",
-      ).length,
-    }),
-    [data],
-  );
+  // Tenant siempre visible si hay datos de tenants
+  const showTenantCol = tenants.length > 0;
 
   // Client-side date filter + sort
   const sorted = useMemo(() => {
@@ -975,6 +957,17 @@ export default function ScanLogsPage() {
       return 0;
     });
   }, [data, sortField, sortDir, datePreset, dateStart, dateEnd]);
+
+  // Stats basadas en el grid filtrado y ordenado
+  const stats = useMemo(
+    () => ({
+      total: sorted.length,
+      success: sorted.filter((s) => normalizeStatus(s.status) === "success").length,
+      error: sorted.filter((s) => normalizeStatus(s.status) === "error").length,
+      processing: sorted.filter((s) => normalizeStatus(s.status) === "processing").length,
+    }),
+    [sorted],
+  );
 
   const handleSort = (f: SortField) => {
     if (sortField === f) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -1086,7 +1079,7 @@ export default function ScanLogsPage() {
               active={statusFilter === "error"}
             />
             <StatCard
-              label="In progress"
+              label="Processing"
               value={stats.processing}
               icon={Clock}
               accent="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800"
@@ -1241,7 +1234,7 @@ export default function ScanLogsPage() {
                   {/* Address */}
                   <col className="w-[90px]" />
                   {/* Route */}
-                  {hasMultipleTenants && <col className="w-[110px]" />}
+                  {showTenantCol && <col className="w-[110px]" />}
                   {/* Tenant */}
                   <col className="w-[80px]" />
                   {/* Location */}
@@ -1284,7 +1277,7 @@ export default function ScanLogsPage() {
                       onSort={handleSort}
                       className="px-3"
                     />
-                    {hasMultipleTenants && (
+                    {showTenantCol && (
                       <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                         Tenant
                       </th>
@@ -1326,7 +1319,7 @@ export default function ScanLogsPage() {
                         scan={scan}
                         selected={selected?._id === scan._id}
                         onClick={() => setSelected(selected?._id === scan._id ? null : scan)}
-                        tenantName={hasMultipleTenants ? (tenantMap.get(scan.tenant_id ?? 0) ?? "") : undefined}
+                        tenantName={showTenantCol ? (tenantMap.get(scan.tenant_id ?? 0) ?? "—") : undefined}
                       />
                     ))}
                   </AnimatePresence>

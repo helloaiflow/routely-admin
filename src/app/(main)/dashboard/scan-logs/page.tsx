@@ -452,7 +452,7 @@ function ScanRow({
         )}
       </td>
       {tenantName !== undefined && (
-        <td className="px-3 py-2">
+        <td className="hidden px-3 py-2 lg:table-cell">
           <span className="truncate text-[11px] text-muted-foreground/60">{tenantName || `T${scan.tenant_id}`}</span>
         </td>
       )}
@@ -476,7 +476,7 @@ function ScanRow({
           <span className="text-[10px] text-muted-foreground/45">—</span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td className="hidden px-3 py-2 lg:table-cell">
         <span className="text-[11px] text-muted-foreground/60">{scan.scanned_by?.split(" ")[0] || "IVY"}</span>
       </td>
       <td className="py-2 pr-4 pl-3 text-right">
@@ -851,6 +851,8 @@ function DetailPanel({
         transition={{ duration: 0.18 }}
         className="flex h-full flex-col overflow-hidden"
       >
+        {/* Drag handle — tablet bottom sheet only */}
+        <div className="mx-auto mt-2 mb-1 hidden h-1 w-10 self-center rounded-full bg-border/60 md:block lg:hidden" />
         {/* Header */}
         <div
           className={cn(
@@ -878,7 +880,13 @@ function DetailPanel({
               </p>
             )}
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 lg:h-9 lg:w-9"
+            onClick={onClose}
+            aria-label="Close detail panel"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -1125,15 +1133,15 @@ function StatCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-all hover:bg-muted/40",
-        active ? "border-foreground/20 bg-muted/60" : "border-border/50 bg-card",
+        "flex min-w-0 items-center justify-between gap-1.5 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/40",
+        active ? "border-[#0167FF]/25 bg-[#0167FF]/6 text-[#0167FF]" : "border-border/50 bg-card text-foreground",
       )}
     >
-      <div className="flex items-center gap-2">
-        <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dot)} />
+        <span className="truncate text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <span className={cn("font-semibold text-sm tabular-nums", active && "text-foreground")}>{value}</span>
+      <span className={cn("shrink-0 font-semibold text-sm tabular-nums", active && "text-[#0167FF]")}>{value}</span>
     </button>
   );
 }
@@ -1384,25 +1392,29 @@ export default function ScanLogsPage() {
       <div className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", showPanel && "hidden md:flex")}>
         {/* Header */}
         <div className="space-y-3 border-b bg-background px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
               <h1 className="flex items-center gap-2 font-semibold text-lg tracking-tight">
-                <ScanLine className="h-5 w-5 text-primary" />
+                <ScanLine className="h-5 w-5 shrink-0 text-primary" />
                 Scan logs
               </h1>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                IVY label scan history, {total.toLocaleString()} records · live
+              <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="truncate">IVY · {total.toLocaleString()} records · live</span>
               </p>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => fetchData(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-8 sm:w-8"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
               </button>
-              <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={exportCsv}>
+              <Button size="sm" variant="outline" className="h-11 gap-1 text-xs sm:h-8" onClick={exportCsv}>
                 <Download className="h-3 w-3" />
                 <span className="hidden sm:inline">Export</span>
               </Button>
@@ -1410,7 +1422,7 @@ export default function ScanLogsPage() {
           </div>
 
           {/* Stat row — compact, not hero-metric cards */}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-4 gap-1">
             <StatCard
               label="Total"
               value={stats.total}
@@ -1443,13 +1455,13 @@ export default function ScanLogsPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="relative w-44 shrink-0">
+            <div className="relative w-full min-w-0 flex-1 lg:w-44 lg:flex-none lg:shrink-0">
               <Search className="absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 pr-7 pl-7 text-xs"
+                className="h-11 pr-7 pl-7 text-xs sm:h-8"
               />
               {search && (
                 <button
@@ -1462,7 +1474,7 @@ export default function ScanLogsPage() {
               )}
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-[118px] gap-1 text-xs">
+              <SelectTrigger className="h-11 w-[118px] gap-1 text-xs sm:h-8">
                 <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
                 <SelectValue />
               </SelectTrigger>
@@ -1475,7 +1487,7 @@ export default function ScanLogsPage() {
             </Select>
             {tenants.length > 0 && (
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="h-8 w-[118px] text-xs">
+                <SelectTrigger className="h-11 w-[118px] text-xs sm:h-8">
                   <SelectValue placeholder="All tenants" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1498,7 +1510,7 @@ export default function ScanLogsPage() {
                 }
               }}
             >
-              <SelectTrigger className="h-8 w-[118px] text-xs">
+              <SelectTrigger className="h-11 w-[118px] text-xs sm:h-8">
                 <SelectValue placeholder="All dates" />
               </SelectTrigger>
               <SelectContent>
@@ -1516,14 +1528,14 @@ export default function ScanLogsPage() {
                   type="date"
                   value={dateStart}
                   onChange={(e) => setDateStart(e.target.value)}
-                  className="h-8 w-[122px] text-xs"
+                  className="h-11 w-[122px] text-xs sm:h-8"
                 />
                 <span className="text-[11px] text-muted-foreground">–</span>
                 <Input
                   type="date"
                   value={dateEnd}
                   onChange={(e) => setDateEnd(e.target.value)}
-                  className="h-8 w-[122px] text-xs"
+                  className="h-11 w-[122px] text-xs sm:h-8"
                 />
               </>
             )}
@@ -1537,7 +1549,7 @@ export default function ScanLogsPage() {
                   setDateStart("");
                   setDateEnd("");
                 }}
-                className="flex h-8 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="flex h-11 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground sm:h-8"
               >
                 <X className="h-2.5 w-2.5" /> Clear
               </button>
@@ -1608,7 +1620,7 @@ export default function ScanLogsPage() {
                       className="px-3"
                     />
                     {showTenantCol && (
-                      <th className="px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
+                      <th className="hidden px-3 py-2.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest lg:table-cell">
                         Tenant
                       </th>
                     )}
@@ -1629,7 +1641,7 @@ export default function ScanLogsPage() {
                       current={sortField}
                       dir={sortDir}
                       onSort={handleSort}
-                      className="px-3"
+                      className="hidden px-3 lg:table-cell"
                     />
                     <SortHeader
                       field="created_at"
@@ -1672,18 +1684,20 @@ export default function ScanLogsPage() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-7 w-7"
+                className="h-10 w-10 sm:h-7 sm:w-7"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
+                aria-label="Previous page"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-7 w-7"
+                className="h-10 w-10 sm:h-7 sm:w-7"
                 disabled={page >= pages}
                 onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
@@ -1695,8 +1709,13 @@ export default function ScanLogsPage() {
       {selected && (
         <div
           className={cn(
-            "overflow-hidden border-l",
-            "fixed inset-0 z-50 bg-background md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
+            "overflow-hidden bg-background",
+            // mobile: full screen overlay
+            "fixed inset-0 z-50 md:inset-auto",
+            // tablet: bottom sheet
+            "md:fixed md:top-auto md:right-0 md:bottom-0 md:left-0 md:z-50 md:h-[72vh] md:rounded-t-2xl md:border-t md:shadow-2xl",
+            // desktop: right sidebar
+            "lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:w-[320px] lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none",
           )}
         >
           <DetailPanel scan={selected} onClose={() => setSelected(null)} onRepostDone={() => fetchData(true)} />

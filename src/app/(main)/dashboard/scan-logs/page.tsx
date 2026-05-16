@@ -454,6 +454,88 @@ function MobileCard({ scan, onClick }: { scan: ScanLog; onClick: () => void }) {
   );
 }
 
+// ── Repost Result Modal ──────────────────────────────────────────────────────
+interface RepostResult {
+  success: boolean;
+  new_rtscan_id?: number;
+  stop_id?: string;
+  route?: string;
+  recipient_name?: string;
+  address?: string;
+  error?: string;
+}
+
+function RepostResultDialog({ result, onClose }: { result: RepostResult | null; onClose: () => void }) {
+  if (!result) return null;
+  return (
+    <Dialog open={!!result} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm gap-0 overflow-hidden p-0">
+        <div
+          className={cn(
+            "px-5 py-4 border-b",
+            result.success ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-red-50 dark:bg-red-950/30",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            {result.success ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+            )}
+            <h3
+              className={cn(
+                "font-bold text-base",
+                result.success ? "text-emerald-800 dark:text-emerald-300" : "text-red-800 dark:text-red-300",
+              )}
+            >
+              {result.success ? "Repost successful" : "Repost failed"}
+            </h3>
+          </div>
+        </div>
+        <div className="space-y-3 p-5">
+          {result.success ? (
+            <>
+              <div className="divide-y overflow-hidden rounded-lg border bg-muted/20">
+                {result.new_rtscan_id && <ResultRow label="New scan ID" value={String(result.new_rtscan_id)} mono />}
+                {result.stop_id && <ResultRow label="Stop ID" value={result.stop_id} mono />}
+                {result.route && <ResultRow label="Route" value={result.route} />}
+                {result.recipient_name && <ResultRow label="Recipient" value={result.recipient_name} />}
+                {result.address && <ResultRow label="Address" value={result.address} />}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The original scan has been marked as reposted. The new scan is now being processed.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+                <p className="text-[12px] text-red-700 leading-relaxed dark:text-red-400">
+                  {result.error ?? "Unknown error"}
+                </p>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The repost failed. The original scan was not modified. Try correcting the data before retrying.
+              </p>
+            </>
+          )}
+          <Button size="sm" className="w-full" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ResultRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-2">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={cn("font-medium text-[11px]", mono && "font-mono text-[10px]")}>{value}</span>
+    </div>
+  );
+}
+
 // ── Repost Confirm ────────────────────────────────────────────────────────────
 function RepostDialog({
   open,
@@ -491,16 +573,26 @@ function RepostDialog({
 }
 
 // ── Detail Panel ──────────────────────────────────────────────────────────────
-function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) {
+function DetailPanel({
+  scan,
+  onClose,
+  onRepostDone,
+}: {
+  scan: ScanLog;
+  onClose: () => void;
+  onRepostDone: () => void;
+}) {
   const norm = normalizeStatus(scan.status);
   const [repostLoading, setRepostLoading] = useState(false);
   const [showWarn, setShowWarn] = useState(false);
+  const [repostResult, setRepostResult] = useState<RepostResult | null>(null);
   const [cameraLoading, setCameraLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const mapsUrl = buildMapsUrl(scan);
 
   const executeRepost = async () => {
     setRepostLoading(true);
+    setShowWarn(false);
     try {
       const res = await fetch("/api/scans/repost", {
         method: "POST",
@@ -508,14 +600,22 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
         body: JSON.stringify({ rtscan_id: scan.rtscan_id }),
       });
       const data = await res.json();
-      if (res.ok && data.success)
-        toast.success("Repost submitted", { description: `New scan ID: ${data.new_rtscan_id}` });
-      else toast.error("Repost failed", { description: data.error ?? "Unknown error" });
+      // Show result modal
+      setRepostResult({
+        success: res.ok && data.success,
+        new_rtscan_id: data.new_rtscan_id,
+        stop_id: data.stop_id,
+        route: data.route,
+        recipient_name: data.recipient_name,
+        address: data.address,
+        error: data.error,
+      });
+      // Refresh grid if success
+      if (res.ok && data.success) onRepostDone();
     } catch {
-      toast.error("Repost failed", { description: "Network error" });
+      setRepostResult({ success: false, error: "Network error — could not reach server" });
     } finally {
       setRepostLoading(false);
-      setShowWarn(false);
     }
   };
 
@@ -537,11 +637,18 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
           }),
         });
         const data = await res.json();
-        if (res.ok && data.success)
-          toast.success("Photo repost submitted", { description: `Scan ID: ${data.new_rtscan_id}` });
-        else toast.error("Photo repost failed", { description: data.error ?? "Unknown error" });
+        setRepostResult({
+          success: res.ok && data.success,
+          new_rtscan_id: data.new_rtscan_id,
+          stop_id: data.stop_id,
+          route: data.route,
+          recipient_name: data.recipient_name,
+          address: data.address,
+          error: data.error,
+        });
+        if (res.ok && data.success) onRepostDone();
       } catch {
-        toast.error("Photo repost failed");
+        setRepostResult({ success: false, error: "Network error — could not reach server" });
       } finally {
         setCameraLoading(false);
         if (fileRef.current) fileRef.current.value = "";
@@ -738,6 +845,9 @@ function DetailPanel({ scan, onClose }: { scan: ScanLog; onClose: () => void }) 
             </Button>
           </div>
         )}
+        {/* Result modal */}
+        <RepostResultDialog result={repostResult} onClose={() => setRepostResult(null)} />
+
         <RepostDialog
           open={showWarn}
           onConfirm={executeRepost}
@@ -1381,7 +1491,7 @@ export default function ScanLogsPage() {
               "fixed inset-0 z-50 bg-background md:relative md:inset-auto md:z-auto md:w-[320px] md:shrink-0",
             )}
           >
-            <DetailPanel scan={selected} onClose={() => setSelected(null)} />
+            <DetailPanel scan={selected} onClose={() => setSelected(null)} onRepostDone={() => fetchData(true)} />
           </div>
         )}
       </AnimatePresence>

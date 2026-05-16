@@ -25,7 +25,6 @@ import {
   RotateCcw,
   ScanLine,
   Search,
-  User,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -423,10 +422,10 @@ function ScanRow({
         selected && "bg-primary/5 hover:bg-primary/5",
       )}
     >
-      <td className="py-3 pr-2 pl-4">
+      <td className="py-2 pr-2 pl-4">
         <StatusBadge status={scan.status} subStatus={scan.sub_status} />
       </td>
-      <td className="w-12 px-1 py-3">
+      <td className="w-10 px-1 py-2">
         {scan.image_url ? (
           <ImagePreview url={scan.image_url} name={scan.full_name} rx={scan.rx_pharma_id} />
         ) : (
@@ -435,69 +434,58 @@ function ScanRow({
           </div>
         )}
       </td>
-      <td className="px-3 py-3">
-        <p className="truncate font-semibold text-xs capitalize leading-tight">
-          {scan.full_name?.toLowerCase() || "—"}
-        </p>
-        <p className="font-mono text-[10px] text-muted-foreground">{scan.rx_pharma_id || "No Rx"}</p>
-        {scan.phone && (
-          <p className="mt-0.5 flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
-            <Phone className="h-2 w-2" />
-            {scan.phone}
-          </p>
-        )}
+      <td className="px-3 py-2">
+        <p className="truncate font-medium text-xs capitalize leading-tight">{scan.full_name?.toLowerCase() || "—"}</p>
+        <p className="font-mono text-[10px] text-muted-foreground/70">{scan.rx_pharma_id || ""}</p>
       </td>
-      <td className="px-3 py-3">
-        <p className="truncate text-[11px] leading-tight">{scan.address || "—"}</p>
+      <td className="px-3 py-2">
+        <p className="truncate text-[11px] text-foreground/80 leading-tight">{scan.address || "—"}</p>
         {(scan.city || scan.state) && (
-          <p className="text-[10px] text-muted-foreground/60">{[scan.city, scan.state].filter(Boolean).join(", ")}</p>
+          <p className="text-[10px] text-muted-foreground/50">{[scan.city, scan.state].filter(Boolean).join(", ")}</p>
         )}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         {scan.route ? (
-          <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 font-medium text-[10px] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-[10px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
             {scan.route}
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/30">—</span>
+          <span className="text-[10px] text-muted-foreground/20">—</span>
         )}
       </td>
       {tenantName !== undefined && (
-        <td className="px-3 py-3">
-          <span className="truncate text-[11px] text-muted-foreground">{tenantName || `T${scan.tenant_id}`}</span>
+        <td className="px-3 py-2">
+          <span className="truncate text-[11px] text-muted-foreground/60">{tenantName || `T${scan.tenant_id}`}</span>
         </td>
       )}
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         {scan.client_location ? (
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {scan.client_location}
-          </span>
+          <span className="text-[11px] text-muted-foreground/80">{scan.client_location}</span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/30">—</span>
+          <span className="text-[10px] text-muted-foreground/20">—</span>
         )}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         {scan.stop_id ? (
           <a
             href={`/dashboard/stops?search=${scan.stop_id}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+            className="inline-flex items-center gap-0.5 font-mono text-[10px] text-primary/70 hover:text-primary hover:underline"
           >
-            {scan.stop_id.slice(0, 8)}…<ExternalLink className="h-2 w-2" />
+            {scan.stop_id.slice(0, 8)}…
           </a>
         ) : (
-          <span className="text-[10px] text-muted-foreground/30">—</span>
+          <span className="text-[10px] text-muted-foreground/20">—</span>
         )}
       </td>
-      <td className="px-3 py-3">
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <User className="h-2.5 w-2.5 shrink-0 opacity-50" />
-          {scan.scanned_by?.split(" ")[0] || "IVY"}
-        </span>
+      <td className="px-3 py-2">
+        <span className="text-[11px] text-muted-foreground/60">{scan.scanned_by?.split(" ")[0] || "IVY"}</span>
       </td>
-      <td className="py-3 pr-4 pl-3 text-right">
+      <td className="py-2 pr-4 pl-3 text-right">
         <p className="font-medium text-[11px] tabular-nums">{fmtDate(scan.created_at || scan.started_at)}</p>
-        <p className="text-[10px] text-muted-foreground tabular-nums">{fmtTime(scan.created_at || scan.started_at)}</p>
+        <p className="text-[10px] text-muted-foreground/50 tabular-nums">
+          {fmtTime(scan.created_at || scan.started_at)}
+        </p>
       </td>
     </motion.tr>
   );
@@ -1123,15 +1111,13 @@ function Row({ label, value, mono = false }: { label: string; value?: string | n
 function StatCard({
   label,
   value,
-  icon: Icon,
-  accent,
+  dot,
   onClick,
   active,
 }: {
   label: string;
   value: number | string;
-  icon: React.FC<React.SVGProps<SVGSVGElement>>;
-  accent: string;
+  dot: string; // color dot instead of big colored card
   onClick?: () => void;
   active?: boolean;
 }) {
@@ -1140,16 +1126,15 @@ function StatCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col gap-1 rounded-xl border p-3 text-left transition-all hover:shadow-sm",
-        active ? "border-current ring-2 ring-current/20" : "border-border/60",
-        accent,
+        "flex items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-all hover:bg-muted/40",
+        active ? "border-foreground/20 bg-muted/60" : "border-border/50 bg-card",
       )}
     >
-      <div className="flex items-center justify-between">
-        <p className="font-medium text-[10px] uppercase tracking-wider opacity-70">{label}</p>
-        <Icon className="h-3.5 w-3.5 opacity-50" />
+      <div className="flex items-center gap-2">
+        <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+        <span className="text-[11px] text-muted-foreground">{label}</span>
       </div>
-      <p className="font-black text-2xl tabular-nums leading-none">{value}</p>
+      <span className={cn("font-semibold text-sm tabular-nums", active && "text-foreground")}>{value}</span>
     </button>
   );
 }
@@ -1425,37 +1410,33 @@ export default function ScanLogsPage() {
             </div>
           </div>
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* Stat row — compact, not hero-metric cards */}
+          <div className="grid grid-cols-4 gap-1.5">
             <StatCard
               label="Total"
               value={stats.total}
-              icon={ScanLine}
-              accent="bg-card text-slate-700 dark:text-slate-300 border-border"
+              dot="bg-slate-400"
               onClick={() => setStatusFilter("all")}
               active={statusFilter === "all"}
             />
             <StatCard
               label="Success"
               value={stats.success}
-              icon={CheckCircle2}
-              accent="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+              dot="bg-emerald-500"
               onClick={() => setStatusFilter("success")}
               active={statusFilter === "success"}
             />
             <StatCard
               label="Errors"
               value={stats.error}
-              icon={AlertTriangle}
-              accent="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+              dot="bg-red-500"
               onClick={() => setStatusFilter("error")}
               active={statusFilter === "error"}
             />
             <StatCard
               label="Processing"
               value={stats.processing}
-              icon={Clock}
-              accent="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800"
+              dot="bg-blue-500"
               onClick={() => setStatusFilter("processing")}
               active={statusFilter === "processing"}
             />
@@ -1488,9 +1469,9 @@ export default function ScanLogsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="success">✅ Success</SelectItem>
-                <SelectItem value="error">❌ Error</SelectItem>
-                <SelectItem value="processing">🔵 Processing</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
               </SelectContent>
             </Select>
             {tenants.length > 0 && (

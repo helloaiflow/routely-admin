@@ -26,6 +26,16 @@ const isDispatcherRoute = createRouteMatcher([
 const ADMIN_ROLES = ["routely_admin", "dispatcher"] as const;
 type AdminRole = typeof ADMIN_ROLES[number];
 
+// ── CEO safety-net allowlist (member-system Phase 2 rollout, 2026-06-11) ──
+// Hard guarantee: these clerk_user_ids can NEVER be locked out by bad/missing
+// Clerk publicMetadata. Checked BEFORE any role logic. Env-overridable
+// (comma-separated clerk_user_ids).
+// ⚠ PENDING REMOVAL once Phase 2 is verified stable in production.
+const CEO_ALLOWLIST = (process.env.CEO_CLERK_USER_ALLOWLIST ?? "user_3CUV90FSFpBYL4MBOYoPL9rnWLH")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 export default clerkMiddleware(async (auth, req) => {
   // Always allow public routes
   if (isPublicRoute(req)) return;
@@ -38,6 +48,9 @@ export default clerkMiddleware(async (auth, req) => {
     signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname);
     return NextResponse.redirect(signInUrl);
   }
+
+  // CEO safety net: allowlisted ids bypass ALL role gating (anti-lockout).
+  if (CEO_ALLOWLIST.includes(userId)) return;
 
   const role = (sessionClaims?.metadata as Record<string, unknown>)?.role as string | undefined;
 

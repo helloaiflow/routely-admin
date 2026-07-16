@@ -32,6 +32,13 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  /* Semantic status colors (aligned with routely-client) */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -50,6 +57,25 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* ── Typography scale — ported from routely-client for a consistent look ──
+ *   .type-page-title / .type-section-title / .type-card-title / .type-desc
+ *   .type-label (10px eyebrow) / .type-caption (11px) / .type-body-sm (13px)
+ *   .type-id (mono tracking numbers / stop_ids) */
+@layer utilities {
+  .type-page-title    { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.025em; }
+  @media (min-width: 768px) { .type-page-title { font-size: 1.5rem; } }
+  .type-section-title { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.02em; }
+  .type-card-title    { font-size: 1rem; font-weight: 600; }
+  .type-desc          { font-size: 0.875rem; color: var(--muted-foreground); }
+  .type-label   { font-size: 10px; line-height: 1.35; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .type-caption { font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
+  .type-body-sm { font-size: 13px; line-height: 1.45; }
+  .type-id {
+    font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 /* Default theme styles (used when no data-theme-preset is set or when 'default' is selected).
 These serve as the fallback; there is no separate default.css file. */
 :root {
@@ -58,8 +84,18 @@ These serve as the fallback; there is no separate default.css file. */
   --card-foreground: oklch(0.16 0.006 264.4);
   --popover: oklch(0.995 0.002 264.4);
   --popover-foreground: oklch(0.16 0.006 264.4);
-  --primary: oklch(0.488 0.243 264.376);
-  --primary-foreground: oklch(0.97 0.014 254.604);
+  /* ── Routely brand: #0167FF (aligned with routely-client) ── */
+  --primary: oklch(0.5654 0.2396 260.72); /* #0167FF EXACT — keep in sync with routely-client */
+  --primary-foreground: oklch(1 0 0);
+  --primary-glow: color-mix(in srgb, var(--primary) 30%, transparent);
+  --primary-glow-strong: color-mix(in srgb, var(--primary) 55%, transparent);
+  /* ── Semantic status tokens (aligned with client): success/warning/info ── */
+  --success: oklch(0.596 0.145 163.225); /* emerald-600 */
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.769 0.153 74.5); /* amber-500 */
+  --warning-foreground: oklch(0.28 0.07 60);
+  --info: oklch(0.5654 0.2396 260.72); /* brand blue */
+  --info-foreground: oklch(1 0 0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.963 0.002 197.1);
@@ -98,7 +134,14 @@ These serve as the fallback; there is no separate default.css file. */
   --card-foreground: oklch(0.987 0.002 197.1);
   --popover: oklch(0.218 0.008 223.9);
   --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.424 0.199 265.638);
+  /* Routely brand + semantic tokens (aligned with client, dark-safe) */
+  --success: oklch(0.7 0.15 162);
+  --success-foreground: oklch(0.14 0.02 160);
+  --warning: oklch(0.82 0.15 78);
+  --warning-foreground: oklch(0.24 0.05 60);
+  --info: oklch(0.62 0.21 259);
+  --info-foreground: oklch(1 0 0);
+  --primary: oklch(0.5654 0.2396 260.72);
   --primary-foreground: oklch(0.97 0.014 254.604);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);

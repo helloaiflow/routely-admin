@@ -1,33 +1,36 @@
 import {
-  Activity,
-  BookMarked,
-  BookOpen,
+  BarChart3,
   Bot,
+  BookOpen,
   Building2,
   Car,
   Code2,
+  CreditCard,
+  DollarSign,
   FileSearch,
-  Fingerprint,
   GitBranch,
   Home,
   KeyRound,
+  Layers,
   LayoutDashboard,
   type LucideIcon,
+  Map as MapIcon,
   MapPin,
   MapPinned,
   Navigation,
   Package,
   PackageSearch,
   Plug,
+  Radio,
   Route,
   ScanLine,
   Send,
   Settings2,
   Terminal,
   Users,
+  Warehouse,
   Webhook,
   Wrench,
-  Zap,
 } from "lucide-react";
 
 export interface NavSubItem {
@@ -56,6 +59,13 @@ export interface NavGroup {
   defaultOpen?: boolean; // whether this group section is expanded by default
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Routely Admin — "control tower" for our OWNED logistics network.
+// The nav is organized around the model we control (tenants, plans, depots,
+// zones, drivers, routes, dispatch) — NOT around Spoke. Spoke lives under
+// Dev Tools → Integrations as a temporary outbound sink we're phasing out.
+// Pages that don't exist yet are marked `comingSoon` so they render without 404.
+// ─────────────────────────────────────────────────────────────────────────────
 export const sidebarItems: NavGroup[] = [
   // ── 1. Overview ────────────────────────────────────────────────────────────
   {
@@ -64,56 +74,61 @@ export const sidebarItems: NavGroup[] = [
     defaultOpen: true,
     items: [
       { title: "Dashboard", url: "/dashboard/default", icon: LayoutDashboard },
-      { title: "Activity", url: "/dashboard/activity", icon: Activity, comingSoon: true },
+      { title: "Live Map", url: "/dashboard/live-map", icon: MapIcon, comingSoon: true },
+      { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
     ],
   },
 
-  // ── 2. Scans & Packages ────────────────────────────────────────────────────
+  // ── 2. Operations ──────────────────────────────────────────────────────────
   {
     id: 2,
-    label: "Scans & Packages",
+    label: "Operations",
     defaultOpen: true,
     items: [
-      { title: "Scan Logs", url: "/dashboard/scan-logs", icon: ScanLine, isNew: true },
+      { title: "Stops", url: "/dashboard/stops", icon: MapPin },
+      { title: "Dispatch", url: "/dashboard/dispatch", icon: Radio, comingSoon: true },
+      { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },
       { title: "Package Scans", url: "/dashboard/scans", icon: Package },
-      { title: "Package Search", url: "/dashboard/search", icon: PackageSearch },
+      { title: "Scan Logs", url: "/dashboard/scan-logs", icon: ScanLine },
+      { title: "Search", url: "/dashboard/search", icon: PackageSearch },
     ],
   },
 
-  // ── 3. Dispatch & Routes ───────────────────────────────────────────────────
+  // ── 3. Fleet ───────────────────────────────────────────────────────────────
   {
     id: 3,
-    label: "Dispatch & Routes",
+    label: "Fleet",
     items: [
-      { title: "Spoke Stops", url: "/dashboard/stops", icon: MapPin },
-      { title: "Routes", url: "/dashboard/routes", icon: Navigation, comingSoon: true },
-      { title: "Spoke Plans", url: "/dashboard/plans", icon: Route },
-      { title: "Spoke Depots", url: "/dashboard/depots", icon: Building2 },
       { title: "Drivers", url: "/dashboard/drivers", icon: Car },
+      { title: "Depots", url: "/dashboard/depots", icon: Warehouse },
+      { title: "Zones", url: "/dashboard/zones", icon: MapPinned, comingSoon: true },
     ],
   },
 
-  // ── 4. CRM ─────────────────────────────────────────────────────────────────
+  // ── 4. Customers ───────────────────────────────────────────────────────────
   {
     id: 4,
-    label: "CRM",
+    label: "Customers",
     items: [
-      {
-        title: "People",
-        url: "/dashboard/recipients",
-        icon: Users,
-        subItems: [
-          { title: "Recipients", url: "/dashboard/recipients", icon: Users },
-          { title: "Clients", url: "/dashboard/clients", icon: Building2 },
-          { title: "Drivers", url: "/dashboard/drivers", icon: Car },
-        ],
-      },
+      { title: "Tenants", url: "/dashboard/tenants", icon: Building2 },
+      { title: "Plans", url: "/dashboard/plans", icon: Layers },
+      { title: "Recipients", url: "/dashboard/recipients", icon: Users },
     ],
   },
 
-  // ── 5. Locations & Config ──────────────────────────────────────────────────
+  // ── 5. Finance ─────────────────────────────────────────────────────────────
   {
     id: 5,
+    label: "Finance",
+    items: [
+      { title: "Billing", url: "/dashboard/finance", icon: DollarSign },
+      { title: "Payments", url: "/dashboard/payments", icon: CreditCard, comingSoon: true },
+    ],
+  },
+
+  // ── 6. Locations & Config ──────────────────────────────────────────────────
+  {
+    id: 6,
     label: "Locations & Config",
     items: [
       {
@@ -127,19 +142,13 @@ export const sidebarItems: NavGroup[] = [
           { title: "Client Locations", url: "/dashboard/client-locations", icon: MapPinned },
         ],
       },
-      {
-        title: "Account",
-        url: "/dashboard/tenants",
-        icon: Fingerprint,
-        subItems: [{ title: "Tenants", url: "/dashboard/tenants", icon: Fingerprint }],
-      },
     ],
   },
 
-  // ── 6. AI Center ───────────────────────────────────────────────────────────
+  // ── 7. AI & Automation ─────────────────────────────────────────────────────
   {
-    id: 6,
-    label: "AI Center",
+    id: 7,
+    label: "AI & Automation",
     items: [
       {
         title: "AI Tools",
@@ -150,15 +159,14 @@ export const sidebarItems: NavGroup[] = [
           { title: "Virtual Office", url: "/dashboard/virtual-office", icon: Building2, isNew: true },
           { title: "Flows", url: "/dashboard/flows", icon: GitBranch },
           { title: "Knowledge Base", url: "/dashboard/knowledge", icon: BookOpen },
-          { title: "Dictionary", url: "/dashboard/dictionary", icon: BookMarked },
         ],
       },
     ],
   },
 
-  // ── 7. Dev Tools ───────────────────────────────────────────────────────────
+  // ── 8. Dev Tools ───────────────────────────────────────────────────────────
   {
-    id: 7,
+    id: 8,
     label: "Dev Tools",
     items: [
       {
@@ -166,19 +174,19 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/api-keys",
         icon: Code2,
         subItems: [
-          { title: "API Keys", url: "/dashboard/api-keys", icon: KeyRound },
-          { title: "Webhooks", url: "/dashboard/webhooks", icon: Webhook },
+          { title: "API Keys", url: "/dashboard/api-keys", icon: KeyRound, comingSoon: true },
+          { title: "Webhooks", url: "/dashboard/webhooks", icon: Webhook, comingSoon: true },
           { title: "API Logs", url: "/dashboard/api-logs", icon: FileSearch, comingSoon: true },
         ],
       },
       {
-        title: "Bots & Automation",
-        url: "/dashboard/bots",
-        icon: Zap,
+        title: "Automation",
+        url: "/dashboard/bots/ivy",
+        icon: ScanLine,
         subItems: [
-          { title: "Scan Bot (IVY)", url: "/dashboard/bots/ivy", icon: ScanLine },
-          { title: "Telegram Bots", url: "/dashboard/bots/telegram", icon: Send },
-          { title: "n8n Workflows", url: "/dashboard/bots/workflows", icon: GitBranch },
+          { title: "Scan Bot (IVY)", url: "/dashboard/bots/ivy", icon: ScanLine, comingSoon: true },
+          { title: "Telegram Bots", url: "/dashboard/bots/telegram", icon: Send, comingSoon: true },
+          { title: "n8n Workflows", url: "/dashboard/bots/workflows", icon: GitBranch, comingSoon: true },
         ],
       },
       {
@@ -187,16 +195,16 @@ export const sidebarItems: NavGroup[] = [
         icon: Plug,
         subItems: [
           { title: "Connected Apps", url: "/dashboard/integrations", icon: Plug },
-          { title: "Spoke / Circuit", url: "/dashboard/integrations/spoke", icon: Route },
+          { title: "Spoke / Circuit", url: "/dashboard/integrations/spoke", icon: Route, comingSoon: true },
         ],
       },
       { title: "Console", url: "/dashboard/console", icon: Terminal, comingSoon: true },
     ],
   },
 
-  // ── 8. System ──────────────────────────────────────────────────────────────
+  // ── 9. System ──────────────────────────────────────────────────────────────
   {
-    id: 8,
+    id: 9,
     label: "System",
     items: [{ title: "Settings", url: "/dashboard/settings", icon: Settings2, comingSoon: true }],
   },

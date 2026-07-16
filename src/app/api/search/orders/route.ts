@@ -1,27 +1,31 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { getDb } from "@/lib/mongodb";
 import {
   DELIVERED_STATUSES,
   FAILED_STATUSES,
   IN_TRANSIT_STATUSES,
   PENDING_STATUSES,
-  resolveDriverNames,
+  reviveStopDoc,
   shapeDraftForSearch,
   shapeStopForSearch,
 } from "@/lib/spoke-fields";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ADMIN cross-tenant order search. Same shaping/scoring as the client portal's
-// /api/client/search, but WITHOUT the `tenant_id` filter — the admin console
-// sees stops & drafts across ALL tenants. Each result is enriched with
-// `tenant_id` + `tenant_name` so the UI can show which tenant it belongs to.
-// (The legacy /api/search route stays untouched — it powers the ⌘ palette.)
+// ADMIN cross-tenant order search — SUPABASE source (Postgres migration).
+// The `stops` / `draft_stops` / `tenants` tables follow the hybrid pattern:
+// promoted scalar columns + a `doc jsonb` column holding the full original Mongo
+// document. We `.select("doc")`, revive it, and reuse the exact same shaping the
+// client portal uses — so results are identical, just sourced from Supabase and
+// WITHOUT any tenant filter (the admin sees every tenant).
 // ─────────────────────────────────────────────────────────────────────────────
 
-function esc(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// PostgREST `.or()` uses `,` to separate conditions and `.` to separate
+// column.operator.value — so strip those (and other reserved chars) from the
+// user query before interpolating it into the filter string.
+function sanitize(q: string) {
+  return q.replace(/[,().*:"']/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function buildCounts(r: SearchResult[]): SearchCounts {
@@ -42,103 +46,102 @@ export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = await getDb();
   const { searchParams } = new URL(request.url);
   const rawQ = (searchParams.get("q") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit") ?? "100"), 300);
-  if (!rawQ || rawQ.length < 2)
+  const q = sanitize(rawQ);
+  if (!q || q.length < 2)
     return NextResponse.json({ results: [], counts: buildCounts([]), query: rawQ, from_stops: 0, from_drafts: 0 });
 
-  const regex = new RegExp(esc(rawQ), "i");
+  const like = `*${q}*`;
   const phoneNorm = rawQ.replace(/\D/g, "");
-  const phoneRx = phoneNorm.length >= 4 ? new RegExp(esc(phoneNorm), "i") : null;
+  const phoneLike = phoneNorm.length >= 4 ? `*${phoneNorm}*` : null;
 
-  const stopOr: Record<string, unknown>[] = [
-    { stop_id: { $regex: regex } },
-    { "recipient.name": { $regex: regex } },
-    { "address.name": { $regex: regex } },
-    { "address.street": { $regex: regex } },
-    { "address.city": { $regex: regex } },
-    { "address.zip": { $regex: regex } },
-    { status: { $regex: regex } },
-    { "assignment.route_title": { $regex: regex } },
-    { "delivery_leg.metrics.route_title": { $regex: regex } },
-    { order_ids: { $regex: regex } },
-    { "package.rx_number": { $regex: regex } },
+  const supabase = getSupabaseAdmin();
+
+  // ── Stops ────────────────────────────────────────────────────────────
+  const stopOr = [
+    `doc->>stop_id.ilike.${like}`,
+    `doc->recipient->>name.ilike.${like}`,
+    `doc->address->>name.ilike.${like}`,
+    `doc->address->>street.ilike.${like}`,
+    `doc->address->>city.ilike.${like}`,
+    `doc->address->>zip.ilike.${like}`,
+    `doc->>status.ilike.${like}`,
+    `doc->assignment->>route_title.ilike.${like}`,
+    `doc->package->>rx_number.ilike.${like}`,
   ];
-  if (phoneRx) {
-    stopOr.push({ "recipient.phone": { $regex: phoneRx } });
-    stopOr.push({ "address.phone": { $regex: phoneRx } });
+  if (phoneLike) {
+    stopOr.push(`doc->recipient->>phone.ilike.${phoneLike}`);
+    stopOr.push(`doc->address->>phone.ilike.${phoneLike}`);
   }
 
-  const qLower = rawQ.toLowerCase();
-  const qNoRtl = rawQ.replace(/^RTL-/i, "").toLowerCase();
-  const phoneLast4 = phoneNorm.length >= 4 ? phoneNorm.slice(-4) : null;
-  const recentCutoff = Date.now() - 7 * 86_400_000;
+  const { data: stopRows, error: stopErr } = await supabase
+    .from("stops")
+    .select("doc, tenant_id")
+    .or(stopOr.join(","))
+    .limit(limit);
+  if (stopErr) return NextResponse.json({ error: stopErr.message }, { status: 500 });
 
-  // NOTE: no tenant_id filter — cross-tenant.
-  const stopDocs = await db
-    .collection("stops")
-    .find({
-      stop_type: { $ne: "pickup" },
-      status: { $ne: "deleted" },
-      $or: stopOr,
-    })
-    .sort({ created_at: -1 })
-    .limit(limit)
-    .toArray();
-  const driverMap = await resolveDriverNames(db, stopDocs);
-  const stopsResults = stopDocs.map((d) => ({
-    ...shapeStopForSearch(d, driverMap),
-    tenant_id: d.tenant_id ?? null,
-  })) as SearchResult[];
+  const stopsResults = (stopRows ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: any) => ({ doc: reviveStopDoc(row.doc), tenant_id: row.tenant_id ?? row.doc?.tenant_id ?? null }))
+    .filter((x) => x.doc && x.doc.status !== "deleted" && x.doc.stop_type !== "pickup")
+    .map((x) => ({ ...shapeStopForSearch(x.doc), tenant_id: x.tenant_id })) as SearchResult[];
 
-  const draftOr: Record<string, unknown>[] = [
-    { tracking_id: { $regex: regex } },
-    { draft_id: { $regex: regex } },
-    { recipient_name: { $regex: regex } },
-    { "delivery_info.delivery_address": { $regex: regex } },
-    { "delivery_info.delivery_city": { $regex: regex } },
-    { "delivery_info.delivery_zip": { $regex: regex } },
-    { status: { $regex: regex } },
-    { order_ids: { $regex: regex } },
-    { "service_info.rx_number": { $regex: regex } },
+  // ── Drafts ───────────────────────────────────────────────────────────
+  const draftOr = [
+    `doc->>tracking_id.ilike.${like}`,
+    `doc->>draft_id.ilike.${like}`,
+    `doc->>recipient_name.ilike.${like}`,
+    `doc->delivery_info->>delivery_address.ilike.${like}`,
+    `doc->delivery_info->>delivery_city.ilike.${like}`,
+    `doc->delivery_info->>delivery_zip.ilike.${like}`,
+    `doc->>status.ilike.${like}`,
+    `doc->service_info->>rx_number.ilike.${like}`,
   ];
-  if (phoneRx) draftOr.push({ recipient_phone: { $regex: phoneRx } });
+  if (phoneLike) draftOr.push(`doc->>recipient_phone.ilike.${phoneLike}`);
 
-  const draftDocs = await db
-    .collection("draft_stops")
-    .find({ status: { $ne: "deleted" }, $or: draftOr })
-    .sort({ created_at: -1 })
-    .limit(limit)
-    .toArray();
-  const draftResults = draftDocs.map((d) => ({
-    ...shapeDraftForSearch(d),
-    tenant_id: d.tenant_id ?? null,
-  })) as SearchResult[];
+  const { data: draftRows, error: draftErr } = await supabase
+    .from("draft_stops")
+    .select("doc, tenant_id")
+    .or(draftOr.join(","))
+    .limit(limit);
+  if (draftErr) return NextResponse.json({ error: draftErr.message }, { status: 500 });
+
+  const draftResults = (draftRows ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: any) => ({ doc: reviveStopDoc(row.doc), tenant_id: row.tenant_id ?? row.doc?.tenant_id ?? null }))
+    .filter((x) => x.doc && x.doc.status !== "deleted")
+    .map((x) => ({ ...shapeDraftForSearch(x.doc), tenant_id: x.tenant_id })) as SearchResult[];
 
   const seenIds = new Set(stopsResults.map((r) => r.stop_id).filter(Boolean));
   const filteredDrafts = draftResults.filter((r) => !r.stop_id || !seenIds.has(r.stop_id));
 
-  // ── Enrich with tenant names (single query) ──────────────────────────
+  // ── Enrich with tenant names ─────────────────────────────────────────
   const merged0 = [...stopsResults, ...filteredDrafts];
   const tenantIds = [...new Set(merged0.map((r) => r.tenant_id).filter((x) => x != null))];
   const tenantMap = new Map<number, string>();
   if (tenantIds.length) {
-    const tenants = await db
-      .collection("tenants")
-      .find({ tenant_id: { $in: tenantIds } })
-      .project({ tenant_id: 1, company_name: 1, name: 1, business_name: 1 })
-      .toArray();
-    for (const t of tenants) {
-      tenantMap.set(t.tenant_id, t.company_name || t.business_name || t.name || `Tenant ${t.tenant_id}`);
+    const { data: tRows } = await supabase.from("tenants").select("tenant_id, doc").in("tenant_id", tenantIds);
+    for (const t of tRows ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = (t as any).doc ?? {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const id = (t as any).tenant_id;
+      tenantMap.set(id, d.company_name || d.business_name || d.name || `Tenant ${id}`);
     }
   }
   for (const r of merged0) {
     r.tenant_name = r.tenant_id != null ? (tenantMap.get(r.tenant_id) ?? `Tenant ${r.tenant_id}`) : null;
   }
 
-  // ── Relevance scoring ────────────────────────────────────────────
+  // ── Relevance scoring (identical to client portal) ───────────────────
+  const qLower = rawQ.toLowerCase();
+  const qNoRtl = rawQ.replace(/^RTL-/i, "").toLowerCase();
+  const phoneLast4 = phoneNorm.length >= 4 ? phoneNorm.slice(-4) : null;
+  const recentCutoff = Date.now() - 7 * 86_400_000;
+
   function scoreResult(r: SearchResult): number {
     let s = 0;
     const stopIdLower = (r.stop_id ?? r.id).toLowerCase();

@@ -87,6 +87,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Admin in "All tenants" scope has no target tenant — a draft can't be created
+  // without a real tenant. Ask them to pick one in the header selector.
+  if (ctx.isAdmin && (!Number.isFinite(Number(ctx.tenantId)) || Number(ctx.tenantId) <= 0)) {
+    return NextResponse.json(
+      { ok: false, error: "Select a specific tenant (top-right selector) before creating a draft." },
+      { status: 400 },
+    );
+  }
   const body = await request.json();
 
   // Fail-closed: a draft MUST have a complete delivery address. Even when Google
@@ -241,7 +249,18 @@ export async function PATCH(request: Request) {
   if (!draft_id) return NextResponse.json({ error: "draft_id required" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant: operate as the DRAFT's real tenant (not the current
+  // header scope) so any tenant's draft can be edited/approved and the
+  // downstream isolation + charging stay correct.
+  let tenantId = Number(ctx.tenantId);
+  if (ctx.isAdmin) {
+    const { data: owner } = await supabase
+      .from("draft_stops")
+      .select("tenant_id")
+      .eq("draft_id", draft_id)
+      .maybeSingle();
+    if (owner?.tenant_id != null) tenantId = Number(owner.tenant_id);
+  }
   const now = new Date();
   const nowIso = now.toISOString();
 

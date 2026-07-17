@@ -23,12 +23,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dra
   const { draft_id } = await params;
   const supabase = getSupabaseAdmin();
 
-  const { data: row, error } = await supabase
-    .from("draft_stops")
-    .select("doc")
-    .eq("draft_id", draft_id)
-    .eq("tenant_id", Number(ctx.tenantId))
-    .maybeSingle();
+  // Admin can open any tenant's draft; regular users stay tenant-scoped.
+  let dq = supabase.from("draft_stops").select("doc").eq("draft_id", draft_id);
+  if (!ctx.isAdmin) dq = dq.eq("tenant_id", Number(ctx.tenantId));
+  const { data: row, error } = await dq.maybeSingle();
 
   if (error) {
     console.error("[draft-stops/[draft_id] GET] supabase error:", error);

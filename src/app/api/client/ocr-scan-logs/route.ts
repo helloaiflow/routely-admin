@@ -23,10 +23,9 @@ export async function GET(request: Request) {
   const createdAt: Record<string, Date> = { $gte: since };
   if (parsedTo && !Number.isNaN(parsedTo.getTime())) createdAt.$lte = parsedTo;
 
-  const query: Record<string, unknown> = {
-    tenant_id: Number(ctx.tenantId),
-    created_at: createdAt,
-  };
+  const query: Record<string, unknown> = { created_at: createdAt };
+  // Admin cross-tenant: "all" scope drops the per-tenant filter.
+  if (!(ctx.isAdmin && ctx.tenantScope === "all")) query.tenant_id = Number(ctx.tenantId);
   if (provider) query.provider = provider;
   if (okParam === "false") query.ok = false;
   else if (okParam === "true") query.ok = true;

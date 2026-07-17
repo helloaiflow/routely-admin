@@ -72,12 +72,12 @@ export async function GET(request: Request) {
   const startStr = addDaysStr(endStr, -(days - 1));
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("ocr_scan_daily")
-    .select("*")
-    .eq("tenant_id", ctx.tenantId)
-    .gte("day", startStr)
-    .order("day", { ascending: true });
+  // Admin cross-tenant: "all" drops the per-tenant filter. (Single-tenant today,
+  // so no per-day collision; sum-by-day can be added when >1 tenant has rollups.)
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
+  let dailyQ = supabase.from("ocr_scan_daily").select("*").gte("day", startStr);
+  if (!scopeAll) dailyQ = dailyQ.eq("tenant_id", ctx.tenantId);
+  const { data, error } = await dailyQ.order("day", { ascending: true });
 
   if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
   const rows = (data ?? []) as Row[];

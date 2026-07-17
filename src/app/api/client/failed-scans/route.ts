@@ -43,7 +43,11 @@ export async function GET(request: Request) {
   const db = await getDb();
   await ensureIndexes(db);
 
-  const tenantFilter = { tenant_id: Number(ctx.tenantId), status: "pending" };
+  // Admin cross-tenant: "all" scope drops the per-tenant filter.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
+  const tenantFilter = scopeAll
+    ? { status: "pending" }
+    : { tenant_id: Number(ctx.tenantId), status: "pending" };
 
   if (new URL(request.url).searchParams.get("count") === "1") {
     const count = await db.collection("failed_scans").countDocuments(tenantFilter);
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
 
   const docs = await db
     .collection("failed_scans")
-    .find({ tenant_id: Number(ctx.tenantId), status: "pending" })
+    .find(tenantFilter)
     .sort({ createdAt: -1 })
     .limit(LIST_LIMIT)
     .toArray();

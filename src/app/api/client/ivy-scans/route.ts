@@ -34,11 +34,9 @@ export async function GET(request: Request) {
   const fromIso = fromParam ?? new Date(Date.now() - minutes * 60_000).toISOString();
 
   try {
-    let q = getSupabaseAdmin()
-      .from("ivy_scans")
-      .select("*")
-      .eq("tenant_id", Number(ctx.tenantId))
-      .gte("started_at", fromIso);
+    let q = getSupabaseAdmin().from("ivy_scans").select("*").gte("started_at", fromIso);
+    // Admin cross-tenant: "all" scope drops the per-tenant filter.
+    if (!(ctx.isAdmin && ctx.tenantScope === "all")) q = q.eq("tenant_id", Number(ctx.tenantId));
     if (toParam) q = q.lte("started_at", toParam);
     const { data, error } = await q.order("started_at", { ascending: false }).limit(2000);
     if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });

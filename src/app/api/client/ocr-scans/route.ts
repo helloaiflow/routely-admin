@@ -37,15 +37,16 @@ export async function GET(request: Request) {
   const since = new Date(Date.now() - minutes * 60_000).toISOString();
   const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabase
+  // Admin cross-tenant: "all" scope drops the per-tenant filter.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
+  let ocrQuery = supabase
     .from("ocr_scans")
     .select(
       "scan_id, created_at, source, provider, ok, status_code, latency_ms, model, fields_captured, critical_score, draft_id, stop_id, image_status",
     )
-    .eq("tenant_id", ctx.tenantId)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+    .gte("created_at", since);
+  if (!scopeAll) ocrQuery = ocrQuery.eq("tenant_id", ctx.tenantId);
+  const { data, error } = await ocrQuery.order("created_at", { ascending: false }).limit(1000);
 
   if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
   const rows = (data ?? []) as ScanRow[];
@@ -57,11 +58,9 @@ export async function GET(request: Request) {
     { recipient_name: string; street: string; city: string; state: string; zip: string; tracking_id: string | null }
   >();
   if (draftIds.length > 0) {
-    const { data: drafts } = await supabase
-      .from("draft_stops")
-      .select("draft_id, doc")
-      .eq("tenant_id", ctx.tenantId)
-      .in("draft_id", draftIds);
+    let draftQ = supabase.from("draft_stops").select("draft_id, doc").in("draft_id", draftIds);
+    if (!scopeAll) draftQ = draftQ.eq("tenant_id", ctx.tenantId);
+    const { data: drafts } = await draftQ;
     for (const dr of drafts ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const doc = (dr as { doc: any }).doc ?? {};

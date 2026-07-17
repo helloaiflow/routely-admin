@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
+import { SWRProvider } from "@/components/swr-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
@@ -16,6 +17,14 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: APP_CONFIG.meta.title,
   description: APP_CONFIG.meta.description,
+};
+
+// Explicit, sane viewport. width=device-width + initial-scale=1; user zoom is
+// LEFT ENABLED (accessibility) — the iOS zoom-on-focus jank is fixed via the
+// 16px form-control rule in globals.css, not by disabling scale.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -35,7 +44,6 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         suppressHydrationWarning
       >
         <head>
-          {/* Applies theme and layout preferences on load to avoid flicker and unnecessary server rerenders. */}
           <ThemeBootScript />
         </head>
         <body className={`${fontVars} min-h-screen antialiased`}>
@@ -47,7 +55,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               navbarStyle={navbar_style}
               font={font}
             >
-              {children}
+              <SWRProvider>{children}</SWRProvider>
               <Toaster />
             </PreferencesStoreProvider>
           </TooltipProvider>

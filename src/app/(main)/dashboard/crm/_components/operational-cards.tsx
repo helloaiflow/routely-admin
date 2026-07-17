@@ -54,7 +54,7 @@ export function OperationalCards() {
                     <span
                       className={cn(
                         "font-medium text-xs tabular-nums",
-                        region.isPositive ? "text-green-500" : "text-destructive",
+                        region.isPositive ? "text-emerald-500" : "text-destructive",
                       )}
                     >
                       {region.growth}
@@ -93,8 +93,8 @@ export function OperationalCards() {
                     className={cn(
                       "w-fit rounded-md px-2 py-1 font-medium text-xs",
                       item.priority === "High" && "bg-destructive/20 text-destructive",
-                      item.priority === "Medium" && "bg-yellow-500/20 text-yellow-500",
-                      item.priority === "Low" && "bg-green-500/20 text-green-500",
+                      item.priority === "Medium" && "bg-amber-500/20 text-amber-500",
+                      item.priority === "Low" && "bg-emerald-500/20 text-emerald-500",
                     )}
                   >
                     {item.priority}

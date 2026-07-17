@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cookies } from "next/headers";
+
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -7,11 +9,18 @@ import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/prefer
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
+import { GlobalDialogs } from "./_components/global-dialogs";
+import { InactivityGuard } from "./_components/inactivity-guard";
+import { LiveChatButton } from "./_components/live-chat-button";
+import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
+import { OcrScanButton } from "./_components/ocr-scan-button";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
+  const cookieStore = await cookies();
+  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
   const [variant, collapsible] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
@@ -19,7 +28,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   return (
     <SidebarProvider
-      defaultOpen={true}
+      defaultOpen={defaultOpen}
+      className="h-svh"
       style={
         {
           "--sidebar-width": "calc(var(--spacing) * 68)",
@@ -29,6 +39,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       <AppSidebar variant={variant} collapsible={collapsible} />
       <SidebarInset
         className={cn(
+          "overflow-y-hidden",
           "[html[data-content-layout=centered]_&>*]:mx-auto",
           "[html[data-content-layout=centered]_&>*]:w-full",
           "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
@@ -51,12 +62,20 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               <SearchDialog />
             </div>
             <div className="flex items-center gap-2">
+              <OcrScanButton />
               <LayoutControls />
               <ThemeSwitcher />
+              <AccountSwitcher />
             </div>
           </div>
         </header>
-        <div className="h-full p-2 sm:p-4 md:p-6">{children}</div>
+        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - 49px)" }}>
+          {children}
+        </div>
+
+        <LiveChatButton />
+        <InactivityGuard />
+        <GlobalDialogs />
       </SidebarInset>
     </SidebarProvider>
   );

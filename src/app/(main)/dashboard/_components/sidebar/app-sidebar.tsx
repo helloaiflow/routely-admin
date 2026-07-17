@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { ClipboardList, MapPin, Package, Star, UserPlus } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -14,22 +14,31 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
+import { usePagePermissions } from "@/hooks/use-page-permissions";
+import { type NavGroup, sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
-import { SidebarSearch } from "./sidebar-search";
-
-const QUICK_ACTIONS = [
-  { label: "Create Stop", icon: MapPin, href: "/dashboard/stops?action=create", color: "text-blue-600" },
-  { label: "Create Plan", icon: Star, href: "/dashboard/plans?action=create", color: "text-violet-600" },
-  { label: "Scan Package", icon: Package, href: "/dashboard/scans", color: "text-green-600" },
-  { label: "Add Lead", icon: UserPlus, href: "/dashboard/leads?action=create", color: "text-amber-600" },
-  { label: "Add Driver", icon: ClipboardList, href: "/dashboard/drivers?action=create", color: "text-teal-600" },
-];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useUser();
+  // Member-system Phase 4: members only see the pages their owner granted.
+  // Owners resolve to full access with no fetch. UI-only — APIs enforce too.
+  const { isMember, permissions } = usePagePermissions();
+  const visibleItems: NavGroup[] = !isMember
+    ? sidebarItems
+    : sidebarItems
+        .map((group) => ({
+          ...group,
+          items: group.items
+            .filter((item) => !item.permission || permissions[item.permission])
+            .map((item) => ({
+              ...item,
+              subItems: item.subItems?.filter((s) => !s.permission || permissions[s.permission]),
+            })),
+        }))
+        .filter((group) => group.items.length > 0);
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.sidebarVariant,
@@ -41,33 +50,59 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
 
+  const companyName = (user?.publicMetadata?.companyName as string) || "";
+  const fullName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "";
+  const displayName = companyName || fullName || "User";
+  const email = user?.emailAddresses?.[0]?.emailAddress || "";
+  const initials = companyName
+    ? companyName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : ((user?.firstName?.[0] || "") + (user?.lastName?.[0] || "")).toUpperCase() || email[0]?.toUpperCase() || "R";
+
+  const clerkUser = {
+    name: displayName,
+    email,
+    avatar: user?.imageUrl || "",
+    initials,
+  };
+
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link prefetch={false} href="/dashboard/default">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground text-sm">
-                  R
-                </div>
-                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="font-bold text-sm">Routely</span>
-                  <span className="truncate text-muted-foreground text-[11px]">Operations Portal</span>
-                </div>
+            <SidebarMenuButton size="lg" asChild tooltip="Routely">
+              <Link
+                prefetch={false}
+                href="/dashboard/default"
+                className="flex items-center py-0 group-data-[collapsible=icon]:justify-center"
+              >
+                {/* Expanded: full wordmark (mark + name), height-constrained */}
+                <img
+                  src="/img/routelyLogoBlack.svg"
+                  alt="Routely"
+                  className="h-10 w-auto dark:invert group-data-[collapsible=icon]:hidden"
+                />
+                {/* Collapsed: brand mark only, centered in the 32px icon button */}
+                <img
+                  src="/img/routely_favico_Blue.svg"
+                  alt="Routely"
+                  className="hidden size-7 group-data-[collapsible=icon]:block"
+                />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="group-data-[collapsible=icon]:hidden px-1">
-          <SidebarSearch />
-        </div>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} quickActions={QUICK_ACTIONS} />
+        <NavMain items={visibleItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <NavUser user={clerkUser} />
       </SidebarFooter>
     </Sidebar>
   );

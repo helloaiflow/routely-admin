@@ -27,7 +27,13 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+// Mobile drawer width. Applied INLINE on the Sheet content (see below) because
+// shadcn's SheetContent sets the width via `data-[side=…]:w-3/4` (75vw) — a
+// variant selector with higher CSS specificity than a plain `w-(--sidebar-width)`
+// class, so a className alone is overridden and the drawer renders ~75vw. Inline
+// `width` wins the cascade. ~85vw on small phones, capped at 18rem — clearly not
+// full-width.
+const SIDEBAR_WIDTH_MOBILE = "min(85vw, 18rem)"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -190,6 +196,10 @@ function Sidebar({
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+              // Inline width + maxWidth beat shadcn's `data-[side=…]:w-3/4`
+              // (75vw, higher-specificity variant selector) and `sm:max-w-sm`.
+              width: SIDEBAR_WIDTH_MOBILE,
+              maxWidth: SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
           side={side}
@@ -198,7 +208,10 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          {/* pb safe-area: without it the footer (user/team row) sits at the very
+              bottom edge and is hidden behind the iOS home indicator / Safari bar.
+              box-border keeps total height = 100%, lifting the footer above it. */}
+          <div className="flex h-full w-full flex-col pb-[env(safe-area-inset-bottom,0px)]">{children}</div>
         </SheetContent>
       </Sheet>
     )

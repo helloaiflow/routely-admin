@@ -1,83 +1,54 @@
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+"use client";
 
-import { cn } from "@/lib/utils"
-import { Separator } from "@/components/ui/separator"
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-const buttonGroupVariants = cva(
-  "flex w-fit items-stretch *:focus-visible:relative *:focus-visible:z-10 has-[>[data-slot=button-group]]:gap-2 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-md [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
-  {
-    variants: {
-      orientation: {
-        horizontal:
-          "[&>*:not(:first-child)]:rounded-l-none [&>*:not(:first-child)]:border-l-0 [&>*:not(:last-child)]:rounded-r-none [&>[data-slot]:not(:has(~[data-slot]))]:rounded-r-md!",
-        vertical:
-          "flex-col [&>*:not(:first-child)]:rounded-t-none [&>*:not(:first-child)]:border-t-0 [&>*:not(:last-child)]:rounded-b-none [&>[data-slot]:not(:has(~[data-slot]))]:rounded-b-md!",
-      },
-    },
-    defaultVariants: {
-      orientation: "horizontal",
-    },
-  }
-)
+// Shadcn Button Group — borders between items, no filled pill
+// Matches: https://ui.shadcn.com/docs/components/radix/button-group
 
-function ButtonGroup({
-  className,
-  orientation,
-  ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>) {
+interface ButtonGroupProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+function ButtonGroup({ className, children, ...props }: ButtonGroupProps) {
   return (
     <div
       role="group"
-      data-slot="button-group"
-      data-orientation={orientation}
-      className={cn(buttonGroupVariants({ orientation }), className)}
+      className={cn("inline-flex items-center", className)}
       {...props}
-    />
-  )
+    >
+      {children}
+    </div>
+  );
 }
 
-function ButtonGroupText({
-  className,
-  asChild = false,
-  ...props
-}: React.ComponentProps<"div"> & {
-  asChild?: boolean
-}) {
-  const Comp = asChild ? Slot.Root : "div"
+interface ButtonGroupItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  active?: boolean;
+}
 
+function ButtonGroupItem({ className, active, children, ...props }: ButtonGroupItemProps) {
   return (
-    <Comp
+    <button
+      type="button"
       className={cn(
-        "flex items-center gap-2 rounded-md border bg-muted px-2.5 text-sm font-medium shadow-xs [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
-        className
+        // Base style — bordered, no rounded except first/last
+        "relative inline-flex h-8 items-center justify-center border border-border bg-background px-3 text-sm font-medium transition-colors",
+        "focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        // Collapse adjacent borders
+        "-ml-px first:ml-0",
+        // Round only the outer corners
+        "first:rounded-l-lg last:rounded-r-lg",
+        // Active state
+        active
+          ? "z-10 border-primary/40 bg-primary/5 text-primary"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        className,
       )}
       {...props}
-    />
-  )
+    >
+      {children}
+    </button>
+  );
 }
 
-function ButtonGroupSeparator({
-  className,
-  orientation = "vertical",
-  ...props
-}: React.ComponentProps<typeof Separator>) {
-  return (
-    <Separator
-      data-slot="button-group-separator"
-      orientation={orientation}
-      className={cn(
-        "relative self-stretch bg-input data-horizontal:mx-px data-horizontal:w-auto data-vertical:my-px data-vertical:h-auto",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-export {
-  ButtonGroup,
-  ButtonGroupSeparator,
-  ButtonGroupText,
-  buttonGroupVariants,
-}
+export { ButtonGroup, ButtonGroupItem };

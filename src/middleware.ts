@@ -2,78 +2,55 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IDENTICAL COPY of /middleware.ts (root).
-// This repo has middleware at BOTH the root and src/ — which one Next.js picks
-// depends on the Next version, and the loser is silently ignored. Until the
-// duplicate is consolidated (tracked in KNOWN_ISSUES hygiene), the two files
-// are kept byte-equivalent so the effective auth policy is the same either way.
-// EDIT BOTH FILES TOGETHER or consolidate first.
+// ROUTELY ADMIN middleware. Reuses client's Clerk login UI (/login) but gates
+// the whole portal to admin roles. This REPLACES client's tenant middleware.
+//   • PUBLIC: /login, /auth, /unauthorized, webhooks, google helper proxies.
+//   • Signed-in on /login → /dashboard/default.
+//   • CEO allowlist bypasses all gating (anti-lockout).
+//   • Only routely_admin / dispatcher may enter; everyone else → /unauthorized.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ── Public routes — no auth required ─────────────────────────────────────────
-const isPublicRoute = createRouteMatcher([
-  "/sign-in(.*)",
-  "/register(.*)",
-  "/verify(.*)",
-  "/unauthorized(.*)",
-  "/api/webhooks(.*)",
-]);
-
-// ── Dispatcher-only routes ────────────────────────────────────────────────────
-const isDispatcherRoute = createRouteMatcher([
-  "/dashboard/package-scans(.*)",
-  "/dashboard/routes(.*)",
-  "/dashboard/drivers(.*)",
-  "/dashboard/spoke-stops(.*)",
-  "/dashboard/spoke-plans(.*)",
-  "/dashboard/spoke-depots(.*)",
-  "/dashboard/spoke-drivers(.*)",
-  "/settings(.*)",
-]);
-
-// Roles allowed in admin portal
-const ADMIN_ROLES = ["routely_admin", "dispatcher"] as const;
-type AdminRole = typeof ADMIN_ROLES[number];
-
-// ── CEO safety-net allowlist (member-system Phase 2 rollout, 2026-06-11) ──
-// Hard guarantee: these clerk_user_ids can NEVER be locked out by bad/missing
-// Clerk publicMetadata. Checked BEFORE any role logic. Env-overridable
-// (comma-separated clerk_user_ids).
-// ⚠ PENDING REMOVAL once Phase 2 is verified stable in production.
 const CEO_ALLOWLIST = (process.env.CEO_CLERK_USER_ALLOWLIST ?? "user_3CUV90FSFpBYL4MBOYoPL9rnWLH")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
+const ADMIN_ROLES = ["routely_admin", "dispatcher"];
+
+const isPublicRoute = createRouteMatcher([
+  "/login(.*)",
+  "/auth(.*)",
+  "/unauthorized(.*)",
+  "/api/webhooks(.*)",
+  "/api/data/package-scans(.*)",
+  "/api/client/distance(.*)",
+  "/api/client/places(.*)",
+  "/api/client/place-details(.*)",
+]);
+
 export default clerkMiddleware(async (auth, req) => {
-  // Always allow public routes
+  const { userId, sessionClaims } = await auth();
+  const path = req.nextUrl.pathname;
+
+  if (userId && path === "/login") {
+    return NextResponse.redirect(new URL("/dashboard/default", req.url));
+  }
+
   if (isPublicRoute(req)) return;
 
-  const { userId, sessionClaims } = await auth();
-
-  // Not signed in → redirect to sign-in
   if (!userId) {
-    const signInUrl = new URL("/sign-in", req.url);
-    signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname);
-    return NextResponse.redirect(signInUrl);
+    if (path.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // CEO safety net: allowlisted ids bypass ALL role gating (anti-lockout).
+  // CEO safety net: allowlisted ids bypass ALL role gating.
   if (CEO_ALLOWLIST.includes(userId)) return;
 
-  const role = (sessionClaims?.metadata as Record<string, unknown>)?.role as string | undefined;
+  const meta = sessionClaims?.metadata as Record<string, unknown> | undefined;
+  const role = meta?.role as string | undefined;
 
-  // Role not allowed in admin portal → unauthorized
-  if (!role || !ADMIN_ROLES.includes(role as AdminRole)) {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
-  }
-
-  // Dispatcher trying to access non-dispatcher route → unauthorized
-  if (role === "dispatcher" && !isDispatcherRoute(req)) {
-    // Allow /dashboard/default as entry point, redirect to their allowed area
-    if (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/dashboard/default") {
-      return NextResponse.redirect(new URL("/dashboard/package-scans", req.url));
-    }
+  // Admin portal is admin-only.
+  if (!role || !ADMIN_ROLES.includes(role)) {
+    if (path.startsWith("/api/")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 });
@@ -82,5 +59,6 @@ export const config = {
   matcher: [
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
+    "/__clerk/(.*)",
   ],
 };

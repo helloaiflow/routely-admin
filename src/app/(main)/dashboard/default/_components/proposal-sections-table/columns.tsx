@@ -288,7 +288,7 @@ export const proposalSectionsColumns: ColumnDef<ProposalSectionsRow>[] = [
     cell: ({ row }) => (
       <Badge variant="outline" className="px-1.5 text-muted-foreground">
         {row.original.status === "Done" ? (
-          <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+          <CircleCheckIcon className="fill-emerald-500 stroke-primary-foreground dark:fill-emerald-600" />
         ) : (
           <LoaderIcon />
         )}

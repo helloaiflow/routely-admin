@@ -35,3 +35,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.env.local.pre-clone-bak
+.agents/
+.claude/skills/
+AGENTS.md
+IMPECCABLE_SETUP.md
+skills-lock.json
+assets/

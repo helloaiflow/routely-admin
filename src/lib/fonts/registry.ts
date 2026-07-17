@@ -12,6 +12,7 @@ import {
   Nunito_Sans,
   Outfit,
   Playfair_Display,
+  Plus_Jakarta_Sans,
   Public_Sans,
   Raleway,
   Roboto,
@@ -107,6 +108,12 @@ const playfairDisplay = Playfair_Display({
   variable: "--font-playfair-display",
 });
 
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-plus-jakarta-sans",
+});
+
 export const fontRegistry = {
   geist: {
     label: "Geist",
@@ -179,6 +186,10 @@ export const fontRegistry = {
   playfairDisplay: {
     label: "Playfair Display",
     font: playfairDisplay,
+  },
+  plusJakartaSans: {
+    label: "Plus Jakarta Sans",
+    font: plusJakartaSans,
   },
 } as const;
 

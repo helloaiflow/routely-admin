@@ -1,7 +1,21 @@
 "use client";
 
-import { useClerk, useUser } from "@clerk/nextjs";
-import { CircleUser, CreditCard, LogOut, MoreHorizontal, User } from "lucide-react";
+import Link from "next/link";
+
+import { useClerk } from "@clerk/nextjs";
+import {
+  CircleUser,
+  Code2,
+  CreditCard,
+  EllipsisVertical,
+  LifeBuoy,
+  LogOut,
+  MessageSquareDot,
+  ScanLine,
+  ScanText,
+  Terminal,
+  Webhook,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -11,26 +25,26 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
-const getInitials = (s: string) =>
-  s
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase() || "?";
-
-export function NavUser() {
+export function NavUser({
+  user,
+}: {
+  readonly user: {
+    readonly name: string;
+    readonly email: string;
+    readonly avatar: string;
+    readonly initials: string;
+  };
+}) {
   const { isMobile } = useSidebar();
-  const { user } = useUser();
   const { signOut } = useClerk();
-
-  const name = user?.fullName ?? "Admin";
-  const email = user?.primaryEmailAddress?.emailAddress ?? "";
-  const avatar = user?.imageUrl ?? "";
 
   return (
     <SidebarMenu>
@@ -39,17 +53,27 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className={cn(
+                // Subtle elevated account card — soft border + gentle bg lift + shadow,
+                // a touch stronger on hover. Dark-safe via tokens.
+                "border border-border/60 bg-card/60 shadow-sm transition-colors hover:border-border/80 hover:bg-muted/40",
+                "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
+                // Collapsed (icon-only) → drop the chrome so the lone avatar reads clean.
+                "group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:shadow-none",
+              )}
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={avatar || undefined} alt={name} />
-                <AvatarFallback className="rounded-lg">{getInitials(name)}</AvatarFallback>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src={user.avatar || undefined} alt={user.name} className="rounded-lg" />
+                <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground text-xs">
+                  {user.initials}
+                </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{name}</span>
-                <span className="truncate text-muted-foreground text-xs">{email}</span>
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate font-semibold text-xs">{user.name}</span>
+                {/* Email must ALWAYS be fully visible — no truncate; wraps if needed. */}
+                <span className="whitespace-nowrap text-[10px] tracking-tight text-muted-foreground leading-tight">{user.email}</span>
               </div>
-              <MoreHorizontal className="ml-auto size-4" />
+              <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -61,34 +85,88 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={avatar || undefined} alt={name} />
-                  <AvatarFallback className="rounded-lg">{getInitials(name)}</AvatarFallback>
+                  <AvatarImage src={user.avatar || undefined} alt={user.name} className="rounded-lg" />
+                  <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground text-xs">
+                    {user.initials}
+                  </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{name}</span>
-                  <span className="truncate text-muted-foreground text-xs">{email}</span>
+                <div className="grid flex-1 text-left leading-tight">
+                  <span className="truncate font-semibold text-xs">{user.name}</span>
+                  <span className="whitespace-nowrap text-[10px] tracking-tight text-muted-foreground leading-tight">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <User />
-                Profile Settings
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings">
+                  <CircleUser />
+                  Account Settings
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CircleUser />
-                Account Settings
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings?tab=billing">
+                  <CreditCard />
+                  Billing
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings?tab=notifications">
+                  <MessageSquareDot />
+                  Notifications
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/support" className="group">
+                  <LifeBuoy className="text-primary transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />
+                  Support
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/" })}>
+            <DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Code2 />
+                  Dev Tools
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/ocr-monitor">
+                      <ScanText />
+                      OCR Scan
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/ivy-monitor">
+                      <ScanLine />
+                      IVY Scan
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/support">
+                      <Webhook />
+                      API
+                      <span className="ml-auto text-[10px] text-muted-foreground">Soon</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/support">
+                      <Terminal />
+                      Terminal
+                      <span className="ml-auto text-[10px] text-muted-foreground">Soon</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-rose-600 focus:text-rose-600"
+              onClick={() => signOut().then(() => (window.location.href = "/login"))}
+            >
               <LogOut />
-              Sign Out
+              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

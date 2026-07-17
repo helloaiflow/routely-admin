@@ -15,6 +15,7 @@ import { LiveChatButton } from "./_components/live-chat-button";
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { OcrScanButton } from "./_components/ocr-scan-button";
+import { TenantSelector } from "@/components/tenant-selector";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
@@ -62,6 +63,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               <SearchDialog />
             </div>
             <div className="flex items-center gap-2">
+              <TenantSelector />
               <OcrScanButton />
               <LayoutControls />
               <ThemeSwitcher />

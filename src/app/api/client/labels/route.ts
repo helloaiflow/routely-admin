@@ -13,7 +13,7 @@ export async function GET() {
     const orders = await client
       .db("routely_prod")
       .collection("label_orders")
-      .find({ tenant_id: String(ctx.tenantId ?? "1") })
+      .find(ctx.isAdmin && ctx.tenantScope === "all" ? {} : { tenant_id: String(ctx.tenantId ?? "1") })
       .sort({ created_at: -1 })
       .limit(100)
       .project({ _id: 0 })

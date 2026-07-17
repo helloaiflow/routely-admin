@@ -34,6 +34,8 @@ export async function GET(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await getDb();
   const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant: "all" scope searches across every tenant.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
   const { searchParams } = new URL(request.url);
   const rawQ = (searchParams.get("q") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit") ?? "100"), 200);
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
   const stopDocs = await db
     .collection("stops")
     .find({
-      tenant_id: tenantId,
+      ...(scopeAll ? {} : { tenant_id: tenantId }),
       stop_type: { $ne: "pickup" }, // hide internal courier-leg pickups from client UI
       status: { $ne: "deleted" }, // never surface soft-deleted stops in search
       $or: stopOr,
@@ -101,7 +103,7 @@ export async function GET(request: Request) {
 
   const draftDocs = await db
     .collection("draft_stops")
-    .find({ tenant_id: tenantId, status: { $ne: "deleted" }, $or: draftOr })
+    .find({ ...(scopeAll ? {} : { tenant_id: tenantId }), status: { $ne: "deleted" }, $or: draftOr })
     .sort({ created_at: -1 })
     .limit(limit)
     .toArray();

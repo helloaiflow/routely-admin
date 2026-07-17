@@ -48,6 +48,9 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdmin();
   const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant: when scoped to "all", skip the per-tenant filter so the
+  // dashboard aggregates every tenant. A specific tenantScope still filters.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
   const { searchParams } = new URL(request.url);
   const period = searchParams.get("period") ?? "today";
   const fromParam = searchParams.get("from"); // YYYY-MM-DD
@@ -90,10 +93,9 @@ export async function GET(request: Request) {
   const lowCreatedIso = new Date(
     Math.min(rangeStart.getTime(), sevenDaysAgo.getTime()) - 86_400_000,
   ).toISOString();
-  const { data: stopRows, error: stopErr } = await supabase
-    .from("stops")
-    .select("doc")
-    .eq("tenant_id", tenantId)
+  let stopsQuery = supabase.from("stops").select("doc");
+  if (!scopeAll) stopsQuery = stopsQuery.eq("tenant_id", tenantId);
+  const { data: stopRows, error: stopErr } = await stopsQuery
     .or(
       `and(doc->service->>date.gte.${lowYmd},doc->service->>date.lte.${highYmd}),` +
         `and(doc->delivery->>date.gte.${lowYmd},doc->delivery->>date.lte.${highYmd}),` +
@@ -141,10 +143,9 @@ export async function GET(request: Request) {
 
   // ── Draft stops (portal orders, not yet submitted) ─────────────────────
   // Not period-filtered — drafts exist outside the scheduled-date world.
-  const { data: draftRows } = await supabase
-    .from("draft_stops")
-    .select("doc")
-    .eq("tenant_id", tenantId)
+  let draftQuery = supabase.from("draft_stops").select("doc");
+  if (!scopeAll) draftQuery = draftQuery.eq("tenant_id", tenantId);
+  const { data: draftRows } = await draftQuery
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -158,22 +159,33 @@ export async function GET(request: Request) {
   const periodStops = realStops;
   const yesterdayReal = realStops.filter((s) => effectiveDate(s) === yesterday);
 
-  // ── Tenant ────────────────────────────────────────────────────────────────
-  const { data: tenantRow } = await supabase
-    .from("tenants")
-    .select("outstanding_amount")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
+  // ── Tenant (outstanding balance) ───────────────────────────────────────────
+  let outstanding = 0;
+  if (scopeAll) {
+    // Aggregate outstanding across every tenant.
+    const { data: tRows } = await supabase.from("tenants").select("outstanding_amount");
+    outstanding = (tRows ?? []).reduce(
+      (a, t) => a + Number((t as { outstanding_amount?: number }).outstanding_amount ?? 0),
+      0,
+    );
+  } else {
+    const { data: tenantRow } = await supabase
+      .from("tenants")
+      .select("outstanding_amount")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    outstanding = Number(tenantRow?.outstanding_amount ?? 0);
+  }
 
   // ── Month total (billing-period count) ──────────────────────────────────
   const billingPeriod = today.slice(0, 7);
   let monthTotal = 0;
   try {
-    const { count } = await supabase
-      .from("usage_events")
-      .select("*", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .or(`billing_period.eq.${billingPeriod},created_at.gte.${monthStart.toISOString()}`);
+    let usageQuery = supabase.from("usage_events").select("*", { count: "exact", head: true });
+    if (!scopeAll) usageQuery = usageQuery.eq("tenant_id", tenantId);
+    const { count } = await usageQuery.or(
+      `billing_period.eq.${billingPeriod},created_at.gte.${monthStart.toISOString()}`,
+    );
     monthTotal = count ?? 0;
   } catch {
     monthTotal = 0;
@@ -214,7 +226,7 @@ export async function GET(request: Request) {
     failed: failedNow,
     signature_required: sigRequired,
     cod_total: Number(codTotal.toFixed(2)),
-    outstanding: Number(tenantRow?.outstanding_amount ?? 0),
+    outstanding: Number(outstanding),
     month_total: monthTotal,
     drafts_total: draftSummary.total,
     stops_by_type: stopsByType,

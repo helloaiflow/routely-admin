@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import type { User } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 
 import clientPromise from "./mongodb";
 
@@ -53,6 +54,12 @@ export type TenantContext = {
    *  no route gates this yet. */
   role:     TenantRole;
   user:     User | null;
+  /** True when the caller is a Routely admin/dispatcher/CEO — the ADMIN console.
+   *  Admins have no tenant of their own; they browse across every tenant. */
+  isAdmin:  boolean;
+  /** For admins: the tenant they've narrowed to (via the header selector), or
+   *  "all" for cross-tenant. For regular users: always their own tenantId. */
+  tenantScope: number | "all";
 };
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -79,6 +86,37 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   const user = await currentUser();
   const meta = (user?.publicMetadata ?? {}) as Record<string, unknown>;
 
+  // ── Admin / CEO detection (cross-tenant console) ───────────────────────────
+  // The admin portal reuses the client codebase but its users are Routely staff
+  // (system role routely_admin / dispatcher) or the CEO allowlist — they have NO
+  // tenant of their own, so instead of 403ing we give them a cross-tenant
+  // context. They may narrow to one tenant via the `admin_tenant` cookie that
+  // the header tenant-selector sets.
+  const CEO_ALLOWLIST = (process.env.CEO_CLERK_USER_ALLOWLIST ?? "user_3CUV90FSFpBYL4MBOYoPL9rnWLH")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const systemRole = typeof meta.role === "string" ? meta.role : "";
+  const isAdmin = CEO_ALLOWLIST.includes(userId) || systemRole === "routely_admin" || systemRole === "dispatcher";
+
+  if (isAdmin) {
+    let tenantScope: number | "all" = "all";
+    try {
+      const sel = (await cookies()).get("admin_tenant")?.value;
+      if (sel && /^\d+$/.test(sel)) tenantScope = Number(sel);
+    } catch {
+      /* cookies() may be unavailable in some render contexts — default to "all" */
+    }
+    return {
+      userId,
+      tenantId: tenantScope === "all" ? 0 : tenantScope,
+      tenantScope,
+      isAdmin: true,
+      role: "admin",
+      user,
+    };
+  }
+
   const rawTenantId = meta.tenant_id;
   const tenantId =
     typeof rawTenantId === "number" ? rawTenantId :
@@ -97,7 +135,7 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   const rawRole = typeof meta.tenant_role === "string" ? meta.tenant_role.toLowerCase() : "";
   const role: TenantRole = isTenantRole(rawRole) ? rawRole : "owner";
 
-  return { userId, tenantId, role, user };
+  return { userId, tenantId, tenantScope: tenantId, isAdmin: false, role, user };
 }
 
 function isTenantRole(s: string): s is TenantRole {
@@ -126,6 +164,8 @@ export const OWNER_PERMISSIONS: PagePermissions = {
 };
 
 export async function getPagePermissions(ctx: TenantContext): Promise<PagePermissions | null> {
+  // Admins (Routely staff / CEO) have every page across every tenant.
+  if (ctx.isAdmin) return OWNER_PERMISSIONS;
   if (ctx.role !== "member") return OWNER_PERMISSIONS;
 
   const db = await getDb();

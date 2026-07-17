@@ -10,6 +10,8 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdmin();
   const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant: "all" scope drops the per-tenant filter.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Number(searchParams.get("limit") ?? "50"), 200);
   const filter = searchParams.get("filter") ?? "all";
@@ -30,7 +32,8 @@ export async function GET(request: Request) {
   // JS semantics exactly), plus created_at DESC ordering and a hard cap. The
   // fine-grained null/missing-field semantics still run in JS unchanged —
   // just over ≤500 rows instead of 2000.
-  let q = supabase.from("stops").select("doc").eq("tenant_id", tenantId);
+  let q = supabase.from("stops").select("doc");
+  if (!scopeAll) q = q.eq("tenant_id", tenantId);
   if (filter === "today") {
     // service.date / delivery.date are plain "YYYY-MM-DD" strings in the doc.
     q = q.or(`doc->service->>date.eq.${etDateStr},doc->delivery->>date.eq.${etDateStr}`);

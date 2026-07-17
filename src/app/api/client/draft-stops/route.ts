@@ -23,11 +23,14 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdmin();
   const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant: "all" scope drops the per-tenant filter.
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const limit = Number(searchParams.get("limit") ?? "100");
 
-  let query = supabase.from("draft_stops").select("doc").eq("tenant_id", tenantId);
+  let query = supabase.from("draft_stops").select("doc");
+  if (!scopeAll) query = query.eq("tenant_id", tenantId);
   if (status && status !== "all") query = query.eq("status", status);
   query = query.order("created_at", { ascending: false }).limit(limit);
 

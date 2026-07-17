@@ -38,12 +38,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
 
   const { stop_id } = await params;
   const tenantId = Number(ctx.tenantId);
+  // Admin cross-tenant "all": stop_id is globally unique, so read it without a
+  // tenant filter (and skip the FastAPI-by-tenant call, which needs a tenant_id).
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
 
   // Read from FastAPI/PG (authority under STOPS_AUTHORITY=supabase) instead of the
   // lagging PG→Mongo mirror. reviveStopDoc converts jsonb ISO strings back to Dates
   // so the shapers' .toISOString() calls keep working.
   let doc: Record<string, unknown> | null = null;
-  if (FASTAPI_SECRET) {
+  if (FASTAPI_SECRET && !scopeAll) {
     try {
       const upstream = await fetch(
         `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`,
@@ -65,15 +68,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
       db = await getDb();
       doc = (await db
         .collection("stops")
-        .findOne({ stop_id, tenant_id: tenantId })) as Record<string, unknown> | null;
+        .findOne(scopeAll ? { stop_id } : { stop_id, tenant_id: tenantId })) as Record<string, unknown> | null;
     } catch {
       return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
     }
     if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
   }
 
-  // Tenant isolation guard (belt-and-suspenders; FastAPI GET now also filters by tenant).
-  if (Number(doc.tenant_id) !== tenantId) {
+  // Tenant isolation guard (belt-and-suspenders). Admin "all" scope views any tenant.
+  if (!scopeAll && Number(doc.tenant_id) !== tenantId) {
     return NextResponse.json({ error: "Stop not found" }, { status: 404 });
   }
 

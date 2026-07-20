@@ -3,6 +3,7 @@ import type { User } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 
 import clientPromise from "./mongodb";
+import { getSupabaseAdmin } from "./supabase";
 
 /* ───────────────────────────────────────────────────────────────────────────
  * Tenant member roles + permissions
@@ -168,11 +169,13 @@ export async function getPagePermissions(ctx: TenantContext): Promise<PagePermis
   if (ctx.isAdmin) return OWNER_PERMISSIONS;
   if (ctx.role !== "member") return OWNER_PERMISSIONS;
 
-  const db = await getDb();
-  const row = await db.collection("tenant_members").findOne(
-    { tenant_id: ctx.tenantId, clerk_user_id: ctx.userId },
-    { projection: { active: 1, page_permissions: 1 } },
-  );
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenant_members")
+    .select("active, page_permissions")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("clerk_user_id", ctx.userId)
+    .maybeSingle();
   // No row or deactivated → no access at all.
   if (!row || row.active !== true) return null;
   const p = (row.page_permissions ?? {}) as Record<string, unknown>;

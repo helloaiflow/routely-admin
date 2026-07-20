@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { clerkClient } from "@clerk/nextjs/server";
 
-import { getDb, getTenantContext } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant";
 
 /* ── /api/client/members ──────────────────────────────────────────────────────
  * Member-system Phase 3 (CEO-approved Clerk-invitation method, 2026-06-11).
@@ -60,16 +61,21 @@ export async function GET() {
     return NextResponse.json({ error: "Owner only" }, { status: 403 });
   }
 
-  const db = await getDb();
-  const rows = await db
-    .collection("tenant_members")
-    .find({ tenant_id: ctx.tenantId })
-    .sort({ created_at: 1 })
-    .toArray();
+  const supabase = getSupabaseAdmin();
+  const { data: rows, error } = await supabase
+    .from("tenant_members")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("[members GET] supabase error:", error);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
+  }
 
   return NextResponse.json({
-    members: rows.map((r) => ({
-      id: String(r._id),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    members: (rows ?? []).map((r: any) => ({
+      id: String(r.id),
       email: r.email ?? "",
       role: r.role,
       active: r.active === true,
@@ -79,7 +85,7 @@ export async function GET() {
       invited_by: r.invited_by ?? null,
       created_at: r.created_at ?? null,
       accepted_at: r.accepted_at ?? null,
-      deactivated_at: r.deactivated_at ?? null,
+      deactivated_at: r.deactivated_at ?? r.doc?.deactivated_at ?? null,
     })),
   });
 }
@@ -105,14 +111,16 @@ export async function POST(req: NextRequest) {
   }
   const perms = parsePerms(body.page_permissions);
 
-  const db = await getDb();
+  const supabase = getSupabaseAdmin();
 
   // One identity per tenant: block if this email already has a live row here.
-  const existing = await db.collection("tenant_members").findOne({
-    tenant_id: ctx.tenantId,
-    email,
-    $or: [{ active: true }, { invitation_status: "pending" }],
-  });
+  const { data: existing } = await supabase
+    .from("tenant_members")
+    .select("id")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("email", email)
+    .or("active.eq.true,invitation_status.eq.pending")
+    .maybeSingle();
   if (existing) {
     return NextResponse.json(
       { error: "This email is already a member or has a pending invite" },
@@ -144,7 +152,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Invitation failed: ${msg}` }, { status: 502 });
   }
 
-  await db.collection("tenant_members").insertOne({
+  await supabase.from("tenant_members").insert({
     tenant_id: ctx.tenantId,
     // Placeholder until acceptance (unique-index safe); webhook swaps in the
     // real clerk_user_id when the invitee's account is created.
@@ -156,8 +164,8 @@ export async function POST(req: NextRequest) {
     invitation_id: invitation.id,
     invitation_status: "pending",
     page_permissions: perms,
-    created_at: new Date(),
-    updated_at: new Date(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   });
 
   return NextResponse.json({ success: true, invitation_id: invitation.id }, { status: 201 });

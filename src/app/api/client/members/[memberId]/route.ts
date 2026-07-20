@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { clerkClient } from "@clerk/nextjs/server";
-import { ObjectId } from "mongodb";
 
-import { getDb, getTenantContext } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { getTenantContext } from "@/lib/tenant";
 
 /* ── PATCH /api/client/members/[memberId] ─────────────────────────────────────
  * Owner-only member management. NEVER hard-deletes (audit trail):
@@ -13,12 +13,10 @@ import { getDb, getTenantContext } from "@/lib/tenant";
  *   action: "reactivate"   → active:true (accepted members only)
  *   action: "revoke"       → revoke a PENDING Clerk invitation + mark row
  * Owner rows are untouchable from this endpoint.
+ * NOTE: memberId is the Postgres uuid (`tenant_members.id`), returned by GET.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ memberId: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ memberId: string }> }) {
   const ctx = await getTenantContext();
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (ctx.role !== "owner") {
@@ -26,7 +24,7 @@ export async function PATCH(
   }
 
   const { memberId } = await params;
-  if (!ObjectId.isValid(memberId)) {
+  if (!memberId) {
     return NextResponse.json({ error: "Invalid member id" }, { status: 400 });
   }
 
@@ -37,56 +35,59 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const db = await getDb();
+  const supabase = getSupabaseAdmin();
   // Tenant-scoped lookup — an owner can only ever touch rows of THEIR tenant.
-  const row = await db.collection("tenant_members").findOne({
-    _id: new ObjectId(memberId),
-    tenant_id: ctx.tenantId,
-  });
+  const { data: row } = await supabase
+    .from("tenant_members")
+    .select("*")
+    .eq("id", memberId)
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
   if (!row) return NextResponse.json({ error: "Member not found" }, { status: 404 });
   if (row.role === "owner") {
     return NextResponse.json({ error: "Owner rows cannot be modified here" }, { status: 403 });
   }
 
+  const nowIso = new Date().toISOString();
+
   switch (body.action) {
     case "permissions": {
       const p = (body.page_permissions ?? {}) as Record<string, unknown>;
-      await db.collection("tenant_members").updateOne(
-        { _id: row._id },
-        {
-          $set: {
-            page_permissions: {
-              orders:   p.orders === true,
-              billing:  p.billing === true,
-              reports:  p.reports === true,
-              settings: p.settings === true,
-            },
-            updated_at: new Date(),
+      await supabase
+        .from("tenant_members")
+        .update({
+          page_permissions: {
+            orders: p.orders === true,
+            billing: p.billing === true,
+            reports: p.reports === true,
+            settings: p.settings === true,
           },
-        },
-      );
+          updated_at: nowIso,
+        })
+        .eq("id", row.id);
       return NextResponse.json({ success: true });
     }
 
     case "deactivate": {
-      await db.collection("tenant_members").updateOne(
-        { _id: row._id },
-        { $set: { active: false, deactivated_at: new Date(), updated_at: new Date() } },
-      );
+      await supabase
+        .from("tenant_members")
+        .update({ active: false, deactivated_at: nowIso, updated_at: nowIso })
+        .eq("id", row.id);
       return NextResponse.json({ success: true });
     }
 
     case "reactivate": {
-      if (row.invitation_status === "revoked" || typeof row.clerk_user_id !== "string" || row.clerk_user_id.startsWith("invite:")) {
-        return NextResponse.json(
-          { error: "Only accepted members can be reactivated" },
-          { status: 400 },
-        );
+      if (
+        row.invitation_status === "revoked" ||
+        typeof row.clerk_user_id !== "string" ||
+        row.clerk_user_id.startsWith("invite:")
+      ) {
+        return NextResponse.json({ error: "Only accepted members can be reactivated" }, { status: 400 });
       }
-      await db.collection("tenant_members").updateOne(
-        { _id: row._id },
-        { $set: { active: true, updated_at: new Date() }, $unset: { deactivated_at: "" } },
-      );
+      await supabase
+        .from("tenant_members")
+        .update({ active: true, deactivated_at: null, updated_at: nowIso })
+        .eq("id", row.id);
       return NextResponse.json({ success: true });
     }
 
@@ -101,17 +102,10 @@ export async function PATCH(
         console.error("[members] revokeInvitation failed:", err);
         return NextResponse.json({ error: "Clerk revoke failed" }, { status: 502 });
       }
-      await db.collection("tenant_members").updateOne(
-        { _id: row._id },
-        {
-          $set: {
-            invitation_status: "revoked",
-            active: false,
-            revoked_at: new Date(),
-            updated_at: new Date(),
-          },
-        },
-      );
+      await supabase
+        .from("tenant_members")
+        .update({ invitation_status: "revoked", active: false, revoked_at: nowIso, updated_at: nowIso })
+        .eq("id", row.id);
       return NextResponse.json({ success: true });
     }
 

@@ -1,30 +1,41 @@
 import { NextResponse } from "next/server";
 
 import { getStripe } from "@/lib/stripe";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function POST() {
   const ctx = await requirePagePermission("billing");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = await getDb();
-  const tenant = await db.collection("tenants").findOne({ tenant_id: ctx.tenantId });
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+
+  const t = (row?.doc ?? {}) as Record<string, any>;
   const stripe = getStripe();
 
-  let stripeCustomerId = tenant?.stripe_customer_id;
+  let stripeCustomerId = row?.stripe_customer_id ?? t.stripe_customer_id;
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
-      email: tenant?.email || ctx.user?.emailAddresses?.[0]?.emailAddress || undefined,
-      name: tenant?.company_name || undefined,
+      email: row?.email || t.email || ctx.user?.emailAddresses?.[0]?.emailAddress || undefined,
+      name: row?.company_name || t.company_name || undefined,
       metadata: { tenant_id: String(ctx.tenantId) },
     });
     stripeCustomerId = customer.id;
-    await db
-      .collection("tenants")
-      .updateOne(
-        { tenant_id: ctx.tenantId },
-        { $set: { stripe_customer_id: stripeCustomerId, updated_at: new Date() } },
-      );
+
+    const doc = { ...t, stripe_customer_id: stripeCustomerId };
+    await supabase
+      .from("tenants")
+      .update({
+        stripe_customer_id: stripeCustomerId,
+        doc,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", ctx.tenantId);
   }
 
   const setupIntent = await stripe.setupIntents.create({

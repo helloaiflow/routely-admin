@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 const PLAN_PRICES: Record<string, { stop: number; mile: number }> = {
   trial: { stop: 0, mile: 0 },
@@ -23,20 +24,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "stops and miles are required numbers" }, { status: 400 });
   }
 
-  const db = await getDb();
-  const tenant = await db
-    .collection("tenants")
-    .findOne(
-      { tenant_id: ctx.tenantId },
-      { projection: { plan_type: 1, price_per_stop: 1, price_per_mile: 1, billing_method: 1 } },
-    );
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("plan_type, doc")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
 
-  if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
-  const planKey = tenant.plan_type || "trial";
+  const tenant = (row.doc ?? {}) as Record<string, number | string | undefined>;
+  const planKey = (row.plan_type ?? tenant.plan_type ?? "trial") as string;
   const prices = PLAN_PRICES[planKey] || PLAN_PRICES.trial;
-  const pricePerStop = tenant.price_per_stop > 0 ? tenant.price_per_stop : prices.stop;
-  const pricePerMile = tenant.price_per_mile > 0 ? tenant.price_per_mile : prices.mile;
+  const pricePerStop = Number(tenant.price_per_stop) > 0 ? Number(tenant.price_per_stop) : prices.stop;
+  const pricePerMile = Number(tenant.price_per_mile) > 0 ? Number(tenant.price_per_mile) : prices.mile;
 
   const stopsCost = stops * pricePerStop;
   const milesCost = miles * pricePerMile;

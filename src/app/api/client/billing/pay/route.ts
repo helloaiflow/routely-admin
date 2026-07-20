@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { type CreateOrderResult, createOrder, fireN8nBackup, type OrderBody } from "@/lib/create-order";
 import { getStripe } from "@/lib/stripe";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 const PLAN_PRICES: Record<string, { stop: number; mile: number }> = {
   trial: { stop: 0, mile: 0 },
@@ -58,14 +59,30 @@ export async function POST(request: Request) {
     collect_amount,
   } = body;
 
-  const db = await getDb();
-  const tenant = await db.collection("tenants").findOne({ tenant_id: ctx.tenantId });
-  if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  const supabase = getSupabaseAdmin();
+  const { data: tenantRow } = await supabase
+    .from("tenants")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  if (!tenantRow) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+
+  // Promoted columns fall back to the original nested `doc` values.
+  const tdoc = (tenantRow.doc ?? {}) as Record<string, unknown>;
+  const tenant = {
+    plan_type: (tenantRow.plan_type ?? tdoc.plan_type) as string | undefined,
+    price_per_stop: tdoc.price_per_stop as number | undefined,
+    price_per_mile: tdoc.price_per_mile as number | undefined,
+    stripe_customer_id: (tenantRow.stripe_customer_id ?? tdoc.stripe_customer_id) as string | undefined,
+    stripe_default_payment_method: tdoc.stripe_default_payment_method as string | undefined,
+    email: (tenantRow.email ?? tdoc.email) as string | undefined,
+    company_name: (tenantRow.company_name ?? tdoc.company_name) as string | undefined,
+  };
 
   const planKey = tenant.plan_type || "trial";
   const prices = PLAN_PRICES[planKey] || PLAN_PRICES.trial;
-  const pricePerStop = tenant.price_per_stop > 0 ? tenant.price_per_stop : prices.stop;
-  const pricePerMile = tenant.price_per_mile > 0 ? tenant.price_per_mile : prices.mile;
+  const pricePerStop = Number(tenant.price_per_stop) > 0 ? Number(tenant.price_per_stop) : prices.stop;
+  const pricePerMile = Number(tenant.price_per_mile) > 0 ? Number(tenant.price_per_mile) : prices.mile;
   const totalDollars = stops * pricePerStop + miles * pricePerMile + (same_day_fee || 0);
   const total = Math.round(totalDollars * 100);
 
@@ -100,9 +117,11 @@ export async function POST(request: Request) {
       metadata: { tenant_id: String(ctx.tenantId) },
     });
     stripeCustomerId = customer.id;
-    await db
-      .collection("tenants")
-      .updateOne({ tenant_id: ctx.tenantId }, { $set: { stripe_customer_id: stripeCustomerId } });
+    const doc = { ...tdoc, stripe_customer_id: stripeCustomerId };
+    await supabase
+      .from("tenants")
+      .update({ stripe_customer_id: stripeCustomerId, doc, updated_at: new Date().toISOString() })
+      .eq("tenant_id", ctx.tenantId);
   }
 
   const metaDescription = description || `Delivery: ${pickup_address} → ${delivery_address}`;

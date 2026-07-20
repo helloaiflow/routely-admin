@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import clientPromise from "@/lib/mongodb";
 import { getShippo } from "@/lib/shippo";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
@@ -57,36 +56,60 @@ export async function POST(request: Request) {
     }
 
     const order_id = `LBL-${Date.now()}${Math.floor(Math.random() * 90 + 10)}`;
-    const client = await clientPromise;
-    await client
-      .db("routely_prod")
-      .collection("label_orders")
-      .insertOne({
+    const nowIso = new Date().toISOString();
+    const fromAddress = {
+      ...from_address,
+      // Same server-side email guarantee as /shippo/rates (Shippo requires it).
+      email: from_address.email || ctx.user?.emailAddresses?.[0]?.emailAddress || "support@routelypro.com",
+    };
+    const rateObj = {
+      rate_id,
+      provider: rate.provider ?? "",
+      service: rate.servicelevel?.name ?? rate.servicelevel?.token ?? "",
+      days: rate.estimatedDays ?? null,
+      raw_price,
+      client_price,
+      currency: rate.currency ?? "USD",
+    };
+    const paymentObj = { type: payment_type, amount_cents };
+    const shippoObj = { shipment_id: rate.shipment ?? null };
+
+    // Full original Mongo document, preserved in `doc`.
+    const doc = {
+      order_id,
+      tenant_id: tenantId,
+      created_by: ctx.userId,
+      created_at: nowIso,
+      status: "pending_payment", // → purchased | refunded | failed
+      from_address: fromAddress,
+      to_address, // includes recipient email when provided (used for the shipped notification)
+      parcel: parcel ?? null,
+      package_type: typeof package_type === "string" ? package_type : null,
+      rate: rateObj,
+      payment: paymentObj,
+      shippo: shippoObj,
+    };
+
+    const { error: insertError } = await getSupabaseAdmin()
+      .from("label_orders")
+      .insert({
         order_id,
-        tenant_id: tenantId,
+        tenant_id: Number(ctx.tenantId ?? 1),
         created_by: ctx.userId,
-        created_at: new Date().toISOString(),
-        status: "pending_payment", // → purchased | refunded | failed
-        from_address: {
-          ...from_address,
-          // Same server-side email guarantee as /shippo/rates (Shippo requires it).
-          email: from_address.email || ctx.user?.emailAddresses?.[0]?.emailAddress || "support@routelypro.com",
-        },
-        to_address, // includes recipient email when provided (used for the shipped notification)
+        status: "pending_payment",
+        from_address: fromAddress,
+        to_address,
         parcel: parcel ?? null,
-        package_type: typeof package_type === "string" ? package_type : null,
-        rate: {
-          rate_id,
-          provider: rate.provider ?? "",
-          service: rate.servicelevel?.name ?? rate.servicelevel?.token ?? "",
-          days: rate.estimatedDays ?? null,
-          raw_price,
-          client_price,
-          currency: rate.currency ?? "USD",
-        },
-        payment: { type: payment_type, amount_cents },
-        shippo: { shipment_id: rate.shipment ?? null },
+        rate: rateObj,
+        payment: paymentObj,
+        shippo: shippoObj,
+        created_at: nowIso,
+        updated_at: nowIso,
+        doc,
       });
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
 
     return NextResponse.json({ order_id, amount_cents, client_price });
   } catch (err) {

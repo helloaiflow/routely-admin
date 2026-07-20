@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 /* ───────────────────────────────────────────────────────────────────────────
  * Notification preferences — persisted on tenant.notification_prefs.
@@ -43,11 +44,14 @@ export async function GET() {
   const ctx = await requirePagePermission("settings");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = await getDb();
-  const t = await db
-    .collection("tenants")
-    .findOne({ tenant_id: ctx.tenantId }, { projection: { notification_prefs: 1 } });
-  return NextResponse.json({ prefs: normalize(t?.notification_prefs) });
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("doc")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  const t = (row?.doc ?? {}) as Record<string, unknown>;
+  return NextResponse.json({ prefs: normalize(t.notification_prefs) });
 }
 
 export async function PATCH(req: Request) {
@@ -56,16 +60,21 @@ export async function PATCH(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   // Merge onto existing prefs so a partial patch keeps the untouched keys.
-  const db = await getDb();
-  const t = await db
-    .collection("tenants")
-    .findOne({ tenant_id: ctx.tenantId }, { projection: { notification_prefs: 1 } });
-  const current = normalize(t?.notification_prefs);
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("doc")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  const t = (row?.doc ?? {}) as Record<string, unknown>;
+  const current = normalize(t.notification_prefs);
   const merged = { ...current };
   for (const k of KEYS) if (typeof body[k] === "boolean") merged[k] = body[k] as boolean;
 
-  await db
-    .collection("tenants")
-    .updateOne({ tenant_id: ctx.tenantId }, { $set: { notification_prefs: merged, updated_at: new Date() } });
+  const doc = { ...t, notification_prefs: merged };
+  await supabase
+    .from("tenants")
+    .update({ doc, updated_at: new Date().toISOString() })
+    .eq("tenant_id", ctx.tenantId);
   return NextResponse.json({ prefs: merged });
 }

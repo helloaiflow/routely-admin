@@ -157,7 +157,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { stop_id } = await params;
-    const tenantId = Number(ctx.tenantId);
+    // Admin cross-tenant: operate as the STOP's real tenant so any tenant's stop
+    // can be edited and dispatch/charging stay correct.
+    let tenantId = Number(ctx.tenantId);
+    if (ctx.isAdmin) {
+      try {
+        const dbc = await getDb();
+        const owner = await dbc.collection("stops").findOne({ stop_id }, { projection: { tenant_id: 1 } });
+        if (owner?.tenant_id != null) tenantId = Number(owner.tenant_id);
+      } catch {
+        /* keep current scope tenant */
+      }
+    }
     const body = (await request.json()) as Record<string, unknown>;
     const rec = (body.recipient ?? {}) as Record<string, unknown>;
 
@@ -354,7 +365,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       const current = await db
         .collection("stops")
         .findOne(
-          { stop_id, tenant_id: Number(ctx.tenantId) },
+          { stop_id, tenant_id: tenantId },
           { projection: Object.fromEntries(auditKeys.map((k) => [k, 1])) },
         );
       if (current) {
@@ -368,7 +379,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
 
     const result = await db
       .collection("stops")
-      .updateOne({ stop_id, tenant_id: Number(ctx.tenantId) }, { $set: updates });
+      .updateOne({ stop_id, tenant_id: tenantId }, { $set: updates });
 
     if (result.matchedCount === 0) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
 
@@ -376,7 +387,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       const a = actorFor(ctx);
       try {
         await db.collection("stops").updateOne(
-          { stop_id, tenant_id: Number(ctx.tenantId) },
+          { stop_id, tenant_id: tenantId },
           {
             $push: {
               timeline: {
@@ -388,7 +399,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
                 actor_id: a.clerk_user_id,
                 metadata: {
                   field_changes: fieldChanges,
-                  tenant_id: Number(ctx.tenantId),
+                  tenant_id: tenantId,
                   tenant_role: a.tenant_role,
                 },
                 visibility: "customer",
@@ -417,17 +428,23 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     const { stop_id } = await params;
     const db = await getDb();
+    // Admin cross-tenant: operate as the STOP's real tenant.
+    let tenantId = Number(ctx.tenantId);
+    if (ctx.isAdmin) {
+      const owner = await db.collection("stops").findOne({ stop_id }, { projection: { tenant_id: 1 } });
+      if (owner?.tenant_id != null) tenantId = Number(owner.tenant_id);
+    }
 
     const doc = await db
       .collection("stops")
-      .findOne({ stop_id, tenant_id: Number(ctx.tenantId) }, { projection: { status: 1, assignment: 1 } });
+      .findOne({ stop_id, tenant_id: tenantId }, { projection: { status: 1, assignment: 1 } });
     if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
 
     if (isUnassignedDoc(doc) && FASTAPI_SECRET) {
       let upstream: Response;
       try {
         upstream = await fetch(
-          `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${Number(ctx.tenantId)}`,
+          `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`,
           {
             method: "DELETE",
             headers: { "X-API-Key": FASTAPI_SECRET, "Content-Type": "application/json" },
@@ -450,7 +467,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     // Legacy path (non-unassigned): Mongo-only soft delete, unchanged.
     const result = await db
       .collection("stops")
-      .updateOne({ stop_id, tenant_id: Number(ctx.tenantId) }, { $set: { status: "deleted", updated_at: new Date() } });
+      .updateOne({ stop_id, tenant_id: tenantId }, { $set: { status: "deleted", updated_at: new Date() } });
 
     if (result.matchedCount === 0) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
     return NextResponse.json({ ok: true, stop_id });

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 
-import clientPromise from "@/lib/mongodb";
 import { getStripe } from "@/lib/stripe";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function POST() {
   const { userId } = await auth();
@@ -14,12 +14,17 @@ export async function POST() {
     const email = user?.emailAddresses[0]?.emailAddress || "";
     const name = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
-    const client = await clientPromise;
-    const db = client.db();
-    const tenant = await db.collection("tenants").findOne({ clerk_user_id: userId });
+    const supabase = getSupabaseAdmin();
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("tenant_id, stripe_customer_id, doc")
+      .eq("clerk_user_id", userId)
+      .maybeSingle();
 
-    if (tenant?.stripe_customer_id) {
-      return NextResponse.json({ customerId: tenant.stripe_customer_id });
+    const existingCustomerId =
+      tenant?.stripe_customer_id ?? (tenant?.doc as Record<string, unknown> | undefined)?.stripe_customer_id;
+    if (existingCustomerId) {
+      return NextResponse.json({ customerId: existingCustomerId });
     }
 
     const customer = await getStripe().customers.create({
@@ -28,12 +33,11 @@ export async function POST() {
       metadata: { clerk_user_id: userId, tenant_id: String(tenant?.tenant_id || "") },
     });
 
-    await db
-      .collection("tenants")
-      .updateOne(
-        { clerk_user_id: userId },
-        { $set: { stripe_customer_id: customer.id, billing_email: email, updated_at: new Date() } },
-      );
+    const doc = { ...((tenant?.doc ?? {}) as Record<string, unknown>), stripe_customer_id: customer.id, billing_email: email };
+    await supabase
+      .from("tenants")
+      .update({ stripe_customer_id: customer.id, doc, updated_at: new Date().toISOString() })
+      .eq("clerk_user_id", userId);
 
     return NextResponse.json({ customerId: customer.id });
   } catch (err) {

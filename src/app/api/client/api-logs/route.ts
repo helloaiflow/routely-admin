@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 /* ── GET /api/client/api-logs ────────────────────────────────────────────────
  * Read recent external-API audit lines for the signed-in tenant. The data IS
@@ -40,7 +41,6 @@ export async function GET(request: Request) {
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
 
-  const db = await getDb();
   const tenantId = Number(ctx.tenantId);
   const parsedFrom = fromParam ? new Date(fromParam) : null;
   const parsedTo = toParam ? new Date(toParam) : null;
@@ -48,36 +48,55 @@ export async function GET(request: Request) {
     parsedFrom && !Number.isNaN(parsedFrom.getTime()) ? parsedFrom : new Date(Date.now() - sinceMin * 60_000);
   const until = parsedTo && !Number.isNaN(parsedTo.getTime()) ? parsedTo : null;
 
-  const createdAt: Record<string, Date> = { $gte: since };
-  if (until) createdAt.$lte = until;
+  // DB level: tenant + time window (promoted columns) newest-first. The remaining
+  // filters target fields nested in `doc`, so they run in memory below.
+  const supabase = getSupabaseAdmin();
+  let sel = supabase
+    .from("api_logs")
+    .select("doc")
+    .eq("tenant_id", tenantId)
+    .gte("created_at", since.toISOString())
+    .order("created_at", { ascending: false });
+  if (until) sel = sel.lte("created_at", until.toISOString());
+  const { data, error } = await sel;
+  if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-  const query: Record<string, unknown> = { tenant_id: tenantId, created_at: createdAt };
-  if (provider) query.provider = provider;
-  if (operation) {
-    query.operation = operation.endsWith("*")
-      ? { $regex: `^${operation.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}` }
-      : operation;
-  }
-  if (okParam === "false") query.ok = false;
-  else if (okParam === "true") query.ok = true;
-  if (statusParam && /^\d{3}$/.test(statusParam)) query.status_code = Number(statusParam);
-  if (stage) query["request_summary.stage"] = stage;
-  if (model) query["request_summary.model"] = model;
-  if (batchId) query["correlation.batch_id"] = batchId;
-  if (q) {
-    const safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    query.$or = [
-      { provider: { $regex: safeQ, $options: "i" } },
-      { operation: { $regex: safeQ, $options: "i" } },
-      { error_code: { $regex: safeQ, $options: "i" } },
-      { error_message: { $regex: safeQ, $options: "i" } },
-      { "request_summary.model": { $regex: safeQ, $options: "i" } },
-      { "request_summary.stage": { $regex: safeQ, $options: "i" } },
-      { "correlation.batch_id": { $regex: safeQ, $options: "i" } },
-    ];
-  }
+  const opPrefix = operation?.endsWith("*") ? operation.slice(0, -1) : null;
+  const qLower = q ? q.toLowerCase() : null;
+  const matches = (l: Record<string, unknown>): boolean => {
+    if (provider && l.provider !== provider) return false;
+    if (operation) {
+      if (opPrefix != null) {
+        if (typeof l.operation !== "string" || !l.operation.startsWith(opPrefix)) return false;
+      } else if (l.operation !== operation) return false;
+    }
+    if (okParam === "false" && l.ok !== false) return false;
+    if (okParam === "true" && l.ok !== true) return false;
+    if (statusParam && /^\d{3}$/.test(statusParam) && Number(l.status_code) !== Number(statusParam)) return false;
+    const reqSummary = (l.request_summary ?? {}) as Record<string, unknown>;
+    if (stage && reqSummary.stage !== stage) return false;
+    if (model && reqSummary.model !== model) return false;
+    const correlation = (l.correlation ?? {}) as Record<string, unknown>;
+    if (batchId && correlation.batch_id !== batchId) return false;
+    if (qLower) {
+      const fields = [
+        l.provider,
+        l.operation,
+        l.error_code,
+        l.error_message,
+        reqSummary.model,
+        reqSummary.stage,
+        correlation.batch_id,
+      ];
+      if (!fields.some((f) => typeof f === "string" && f.toLowerCase().includes(qLower))) return false;
+    }
+    return true;
+  };
 
-  const logs = await db.collection("api_logs").find(query).sort({ created_at: -1 }).limit(limit).toArray();
+  const logs = (data ?? [])
+    .map((r) => r.doc as Record<string, unknown>)
+    .filter((l) => matches(l))
+    .slice(0, limit);
 
   // Lightweight rollup so the caller can eyeball "N failures, by provider+status".
   const byProviderStatus: Record<string, number> = {};

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const ctx = await requirePagePermission("orders");
@@ -20,29 +21,36 @@ export async function GET(request: Request) {
   const parsedTo = toParam ? new Date(toParam) : null;
   const since =
     parsedFrom && !Number.isNaN(parsedFrom.getTime()) ? parsedFrom : new Date(Date.now() - sinceMin * 60_000);
-  const createdAt: Record<string, Date> = { $gte: since };
-  if (parsedTo && !Number.isNaN(parsedTo.getTime())) createdAt.$lte = parsedTo;
+  const until = parsedTo && !Number.isNaN(parsedTo.getTime()) ? parsedTo : null;
 
-  const query: Record<string, unknown> = { created_at: createdAt };
-  // Admin cross-tenant: "all" scope drops the per-tenant filter.
-  if (!(ctx.isAdmin && ctx.tenantScope === "all")) query.tenant_id = Number(ctx.tenantId);
-  if (provider) query.provider = provider;
-  if (okParam === "false") query.ok = false;
-  else if (okParam === "true") query.ok = true;
-  if (batchId) query["correlation.batch_id"] = batchId;
-  if (q) {
-    const safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    query.$or = [
-      { provider: { $regex: safeQ, $options: "i" } },
-      { model: { $regex: safeQ, $options: "i" } },
-      { error_code: { $regex: safeQ, $options: "i" } },
-      { error_message: { $regex: safeQ, $options: "i" } },
-      { "correlation.batch_id": { $regex: safeQ, $options: "i" } },
-    ];
-  }
+  // DB level: time window (+ tenant unless admin "all" scope). The remaining
+  // filters target fields nested in `doc`, so they run in memory below.
+  const supabase = getSupabaseAdmin();
+  const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
+  let sel = supabase.from("ocr_scan_logs").select("doc").gte("created_at", since.toISOString());
+  if (until) sel = sel.lte("created_at", until.toISOString());
+  if (!scopeAll) sel = sel.eq("tenant_id", Number(ctx.tenantId));
+  const { data, error } = await sel.order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-  const db = await getDb();
-  const logs = await db.collection("ocr_scan_logs").find(query).sort({ created_at: -1 }).limit(limit).toArray();
+  const qLower = q ? q.toLowerCase() : null;
+  const matches = (l: Record<string, unknown>): boolean => {
+    if (provider && l.provider !== provider) return false;
+    if (okParam === "false" && l.ok !== false) return false;
+    if (okParam === "true" && l.ok !== true) return false;
+    const correlation = (l.correlation ?? {}) as Record<string, unknown>;
+    if (batchId && correlation.batch_id !== batchId) return false;
+    if (qLower) {
+      const fields = [l.provider, l.model, l.error_code, l.error_message, correlation.batch_id];
+      if (!fields.some((f) => typeof f === "string" && f.toLowerCase().includes(qLower))) return false;
+    }
+    return true;
+  };
+
+  const logs = (data ?? [])
+    .map((r) => r.doc as Record<string, unknown>)
+    .filter((l) => matches(l))
+    .slice(0, limit);
 
   const rollup = {
     total: logs.length,

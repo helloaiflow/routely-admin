@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
-import clientPromise from "@/lib/mongodb";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 // ── POST /api/webhooks/clerk ──────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, skipped: true });
     }
 
-    const client = await clientPromise;
-    const db     = client.db("routely_prod");
+    const supabase = getSupabaseAdmin();
     const email  = data.email_addresses?.[0]?.email_address?.toLowerCase() ?? "";
+    const nowIso = new Date().toISOString();
 
     // ── Invitation-born MEMBER (member-system Phase 3, 2026-06-11) ──────────
     // Origin rule (CEO-locked): members never self-register — they only exist
@@ -49,58 +49,71 @@ export async function POST(req: NextRequest) {
     if (bornMeta.tenant_role === "member" && Number.isFinite(memberTenantId) && memberTenantId > 0) {
       const memberName = `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
 
-      await db.collection("users").updateOne(
-        { clerk_user_id: data.id },
-        {
-          $setOnInsert: {
+      // users row — insert only if this clerk_user_id doesn't exist yet.
+      const { data: uExisting } = await supabase
+        .from("users")
+        .select("id")
+        .eq("clerk_user_id", data.id)
+        .maybeSingle();
+      if (!uExisting) {
+        await supabase.from("users").insert({
+          clerk_user_id: data.id,
+          email,
+          name:          memberName,
+          system_role:   "tenant_user",
+          created_from:  "member_invite",
+          created_at:    nowIso,
+          doc: {
             clerk_user_id: data.id,
             email,
             name:          memberName,
             system_role:   "tenant_user",
-            created_at:    new Date(),
+            created_at:    nowIso,
             created_from:  "member_invite",
           },
-        },
-        { upsert: true },
-      );
+        });
+      }
 
       // Flip the pending row → active, swapping the "invite:<id>" placeholder
       // for the real clerk_user_id.
-      const flip = await db.collection("tenant_members").updateOne(
-        { tenant_id: memberTenantId, email, invitation_status: "pending" },
-        {
-          $set: {
-            clerk_user_id:     data.id,
-            active:            true,
-            invitation_status: "accepted",
-            accepted_at:       new Date(),
-            updated_at:        new Date(),
-          },
-        },
-      );
+      const { data: flipped } = await supabase
+        .from("tenant_members")
+        .update({
+          clerk_user_id:     data.id,
+          active:            true,
+          invitation_status: "accepted",
+          accepted_at:       nowIso,
+          updated_at:        nowIso,
+        })
+        .eq("tenant_id", memberTenantId)
+        .eq("email", email)
+        .eq("invitation_status", "pending")
+        .select("id");
 
-      if (flip.matchedCount === 0) {
+      if (!flipped || flipped.length === 0) {
         // Defensive: the metadata can only originate from our createInvitation,
         // so honor it even if the pending row is missing — orders-only perms,
-        // flagged for review.
-        await db.collection("tenant_members").updateOne(
-          { tenant_id: memberTenantId, clerk_user_id: data.id },
-          {
-            $setOnInsert: {
-              tenant_id:         memberTenantId,
-              clerk_user_id:     data.id,
-              email,
-              role:              "member",
-              active:            true,
-              invited_by:        null,
-              invitation_status: "accepted",
-              page_permissions:  { orders: true, billing: false, reports: false, settings: false },
-              created_at:        new Date(),
-              created_from:      "webhook_member_fallback",
-            },
-          },
-          { upsert: true },
-        );
+        // flagged for review. Insert only if no row for this pair exists.
+        const { data: fbExisting } = await supabase
+          .from("tenant_members")
+          .select("id")
+          .eq("tenant_id", memberTenantId)
+          .eq("clerk_user_id", data.id)
+          .maybeSingle();
+        if (!fbExisting) {
+          await supabase.from("tenant_members").insert({
+            tenant_id:         memberTenantId,
+            clerk_user_id:     data.id,
+            email,
+            role:              "member",
+            active:            true,
+            invited_by:        null,
+            invitation_status: "accepted",
+            page_permissions:  { orders: true, billing: false, reports: false, settings: false },
+            created_at:        nowIso,
+            updated_at:        nowIso,
+          });
+        }
         notifyTelegram(`⚠️ <b>MEMBER ACCEPTED WITHOUT PENDING ROW</b>\n📧 ${email}\n🏢 Tenant ${memberTenantId}\nCreated fallback row (orders-only perms) — review in settings.`);
       } else {
         notifyTelegram(`👥 <b>MEMBER JOINED</b>\n👤 ${memberName || "N/A"}\n📧 ${email}\n🏢 Tenant ${memberTenantId}`);
@@ -109,17 +122,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, member: true, tenant_id: memberTenantId });
     }
 
-    // Idempotency check
-    const existing = await db.collection("tenants").findOne({
-      $or: [{ email }, { clerk_user_id: data.id }]
-    });
+    // Idempotency check — match on email OR clerk_user_id.
+    let existingQuery = supabase.from("tenants").select("*");
+    existingQuery = email
+      ? existingQuery.or(`email.eq.${email},clerk_user_id.eq.${data.id}`)
+      : existingQuery.eq("clerk_user_id", data.id);
+    const { data: existingRows } = await existingQuery.limit(1);
+    const existing = existingRows?.[0];
 
     if (existing) {
       if (!existing.clerk_user_id) {
-        await db.collection("tenants").updateOne(
-          { _id: existing._id },
-          { $set: { clerk_user_id: data.id, updated_at: new Date() } }
-        );
+        const doc = { ...((existing.doc ?? {}) as Record<string, unknown>), clerk_user_id: data.id };
+        await supabase
+          .from("tenants")
+          .update({ clerk_user_id: data.id, doc, updated_at: nowIso })
+          .eq("tenant_id", existing.tenant_id);
       }
       await setClerkMetadata(CLERK_SECRET_KEY, data.id, {
         role: "tenant_user",
@@ -131,31 +148,27 @@ export async function POST(req: NextRequest) {
 
     // Next tenant_id — fail closed: a guessed id can collide with an existing
     // tenant and cross-contaminate all tenant-scoped data. Never default.
-    const counter = await db.collection("counters").findOneAndUpdate(
-      { _id: "tenant_id" as unknown as import("bson").ObjectId },
-      { $inc: { seq: 1 } },
-      { upsert: true, returnDocument: "after" }
-    );
-    if (typeof counter?.seq !== "number") {
-      console.error("[clerk-webhook] tenant_id counter read failed — aborting provisioning", { email, clerk_user_id: data.id });
-      notifyTelegram(`🚨 <b>TENANT PROVISIONING FAILED</b>\n📧 ${email}\nCounter read returned no seq — signup aborted, Clerk will retry.`);
-      return NextResponse.json({ error: "tenant_id counter unavailable" }, { status: 503 });
+    // Minted atomically from the Postgres sequence via the next_tenant_id() RPC.
+    const { data: tid, error: tidErr } = await supabase.rpc("next_tenant_id");
+    if (tidErr || tid == null || !Number.isFinite(Number(tid))) {
+      console.error("[clerk-webhook] tenant_id sequence read failed — aborting provisioning", { email, clerk_user_id: data.id, tidErr });
+      notifyTelegram(`🚨 <b>TENANT PROVISIONING FAILED</b>\n📧 ${email}\nSequence read returned no id — signup aborted, Clerk will retry.`);
+      return NextResponse.json({ error: "tenant_id sequence unavailable" }, { status: 503 });
     }
-    const tenant_id = counter.seq;
+    const tenant_id = Number(tid);
 
-    const trialEndsAt   = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const trialEndsAt   = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     const contactName   = `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
 
-    await db.collection("tenants").insertOne({
+    // Full original tenant document → stored verbatim in `doc`; promoted scalar
+    // columns are duplicated onto the row for querying.
+    const tenantDoc = {
       tenant_id,
       company_name:        "",
       contact_name:        contactName,
       email,
       phone:               data.phone_numbers?.[0]?.phone_number ?? "",
       clerk_user_id:       data.id,
-      // Canonical owner pointer (member-system design). Dual-write with
-      // clerk_user_id is intentional during the transition — other code
-      // still reads the old field.
       owner_clerk_user_id: data.id,
       price_per_stop:      16.00,
       price_per_mile:      1.65,
@@ -172,11 +185,29 @@ export async function POST(req: NextRequest) {
       active:              true,
       address:             {},
       pickup_locations:    [],
-      created_at:          new Date(),
-      updated_at:          new Date(),
+      created_at:          nowIso,
+      updated_at:          nowIso,
+    };
+
+    await supabase.from("tenants").insert({
+      tenant_id,
+      company_name:        "",
+      plan_type:           "free_trial",
+      stripe_customer_id:  null,
+      outstanding_amount:  0,
+      owner_clerk_user_id: data.id,
+      credit_limit:        0,
+      status:              "pending_setup",
+      active:              true,
+      postpay_enabled:     false,
+      clerk_user_id:       data.id,
+      email,
+      created_at:          nowIso,
+      updated_at:          nowIso,
+      doc:                 tenantDoc,
     });
 
-    await db.collection("tenant_members").insertOne({
+    await supabase.from("tenant_members").insert({
       tenant_id,
       clerk_user_id: data.id,
       email,
@@ -184,24 +215,34 @@ export async function POST(req: NextRequest) {
       active:        true,
       invited_by:    null,
       page_permissions: { orders: true, billing: true, reports: true, settings: true },
-      created_at:    new Date(),
+      created_at:    nowIso,
+      updated_at:    nowIso,
     });
 
     // users row (member-system Phase 2+): every Clerk user gets a users doc.
-    await db.collection("users").updateOne(
-      { clerk_user_id: data.id },
-      {
-        $setOnInsert: {
+    const { data: uOwner } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerk_user_id", data.id)
+      .maybeSingle();
+    if (!uOwner) {
+      await supabase.from("users").insert({
+        clerk_user_id: data.id,
+        email,
+        name:          contactName,
+        system_role:   "tenant_user",
+        created_from:  "clerk_webhook",
+        created_at:    nowIso,
+        doc: {
           clerk_user_id: data.id,
           email,
           name:          contactName,
           system_role:   "tenant_user",
-          created_at:    new Date(),
+          created_at:    nowIso,
           created_from:  "clerk_webhook",
         },
-      },
-      { upsert: true },
-    );
+      });
+    }
 
     await setClerkMetadata(CLERK_SECRET_KEY, data.id, {
       role:        "tenant_user",

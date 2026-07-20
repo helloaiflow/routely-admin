@@ -1,37 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { ObjectId } from "mongodb";
-
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 /* ── /api/client/failed-scans ─────────────────────────────────────────────────
  * Bulletproof SAME-DAY tray for labels that failed the 3-field OCR gate during a
- * (batch) scan. Persisted in MongoDB `failed_scans` so they survive window close,
- * back, refresh, and device switch for the rest of the day. Auto-deleted 24h
- * after createdAt via a MongoDB TTL index (no cron). PHI: the label image lives
- * IN the document (temporary, same-day); this route is auth-protected and
- * tenant-scoped — never a public/guessable route.
+ * (batch) scan. Persisted in Supabase `failed_scans` so they survive window
+ * close, back, refresh, and device switch for the rest of the day. PHI: the
+ * label image lives IN the row (temporary, same-day); this route is
+ * auth-protected and tenant-scoped — never a public/guessable route.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-const MAX_IMAGE_CHARS = 12 * 1024 * 1024; // ~12MB data URL ceiling (Mongo doc limit 16MB)
+const MAX_IMAGE_CHARS = 12 * 1024 * 1024; // ~12MB data URL ceiling
 const LIST_LIMIT = 100;
-
-let indexesEnsured = false;
-async function ensureIndexes(db: Awaited<ReturnType<typeof getDb>>) {
-  if (indexesEnsured) return;
-  try {
-    await db.collection("failed_scans").createIndexes([
-      // TTL — Mongo auto-deletes a doc 24h after createdAt. The field MUST be a
-      // real BSON Date for the TTL monitor to act on it.
-      { key: { createdAt: 1 }, name: "ttl_createdAt_24h", expireAfterSeconds: 86400 },
-      { key: { tenant_id: 1, status: 1, createdAt: -1 }, name: "idx_tenant_status_created" },
-    ]);
-    indexesEnsured = true;
-  } catch (err) {
-    // Non-fatal: a parallel cold start may race; the index is idempotent.
-    console.error("[failed-scans ensureIndexes]", err);
-  }
-}
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -40,43 +21,45 @@ const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null
 export async function GET(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await getDb();
-  await ensureIndexes(db);
+  const supabase = getSupabaseAdmin();
 
   // Admin cross-tenant: "all" scope drops the per-tenant filter.
   const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
-  const tenantFilter = scopeAll
-    ? { status: "pending" }
-    : { tenant_id: Number(ctx.tenantId), status: "pending" };
+  const tenantId = Number(ctx.tenantId);
 
   if (new URL(request.url).searchParams.get("count") === "1") {
-    const count = await db.collection("failed_scans").countDocuments(tenantFilter);
-    return NextResponse.json({ count });
+    let cq = supabase.from("failed_scans").select("*", { count: "exact", head: true }).eq("status", "pending");
+    if (!scopeAll) cq = cq.eq("tenant_id", tenantId);
+    const { count, error } = await cq;
+    if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+    return NextResponse.json({ count: count ?? 0 });
   }
 
-  const docs = await db
-    .collection("failed_scans")
-    .find(tenantFilter)
-    .sort({ createdAt: -1 })
-    .limit(LIST_LIMIT)
-    .toArray();
+  let lq = supabase.from("failed_scans").select("id, doc, created_at").eq("status", "pending");
+  if (!scopeAll) lq = lq.eq("tenant_id", tenantId);
+  const { data, error } = await lq.order("created_at", { ascending: false }).limit(LIST_LIMIT);
+  if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-  const items = docs.map((d) => ({
-    id: d._id.toString(),
-    image: typeof d.image === "string" ? d.image : null,
-    name: d.extracted?.name ?? null,
-    phone: d.extracted?.phone ?? null,
-    address: d.extracted?.address ?? null,
-    dob: d.extracted?.dob ?? null,
-    orderIds: Array.isArray(d.extracted?.orderIds) ? d.extracted.orderIds : [],
-    reasons: Array.isArray(d.reasons) ? d.reasons : [],
-    createdAt: d.createdAt?.toISOString?.() ?? null,
-  }));
+  const items = (data ?? []).map((row) => {
+    // biome-ignore lint/suspicious/noExplicitAny: original flat Mongo document shape
+    const d = (row.doc ?? {}) as any;
+    return {
+      id: String(row.id),
+      image: typeof d.image === "string" ? d.image : null,
+      name: d.extracted?.name ?? null,
+      phone: d.extracted?.phone ?? null,
+      address: d.extracted?.address ?? null,
+      dob: d.extracted?.dob ?? null,
+      orderIds: Array.isArray(d.extracted?.orderIds) ? d.extracted.orderIds : [],
+      reasons: Array.isArray(d.reasons) ? d.reasons : [],
+      createdAt: d.createdAt ?? row.created_at ?? null,
+    };
+  });
 
   return NextResponse.json({ items, total: items.length });
 }
 
-// ── POST: persist a failed scan (image stored in the doc) ─────────────────────
+// ── POST: persist a failed scan (image stored in the row) ─────────────────────
 export async function POST(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -96,12 +79,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Image too large" }, { status: 413 });
   }
 
-  const db = await getDb();
-  await ensureIndexes(db);
-  const now = new Date();
+  const nowIso = new Date().toISOString();
+  const tenantId = Number(ctx.tenantId);
 
   const doc = {
-    tenant_id: Number(ctx.tenantId),
+    tenant_id: tenantId,
     status: "pending" as const,
     image,
     extracted: {
@@ -122,16 +104,27 @@ export async function POST(request: Request) {
         "",
       tenant_role: ctx.role,
     },
-    createdAt: now, // BSON Date — the TTL anchor (24h auto-delete)
+    createdAt: nowIso,
   };
 
-  try {
-    const result = await db.collection("failed_scans").insertOne(doc);
-    return NextResponse.json({ ok: true, id: result.insertedId.toString() });
-  } catch (err) {
-    console.error("[failed-scans POST]", err);
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+  const { data, error } = await getSupabaseAdmin()
+    .from("failed_scans")
+    .insert({
+      tenant_id: tenantId,
+      status: "pending",
+      rtscan_id: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      doc,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[failed-scans POST]", error);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
+  return NextResponse.json({ ok: true, id: String(data?.id) });
 }
 
 // ── PATCH: mark failed scan(s) resolved / discarded (tenant-scoped) ───────────
@@ -150,21 +143,15 @@ export async function PATCH(request: Request) {
   const status = body.status === "resolved" || body.status === "discarded" ? body.status : null;
   if (!status) return NextResponse.json({ error: "valid status required" }, { status: 400 });
 
-  const rawIds = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
-  const objectIds: ObjectId[] = [];
-  for (const v of rawIds) {
-    try {
-      objectIds.push(new ObjectId(String(v)));
-    } catch {
-      /* skip malformed ids */
-    }
-  }
-  if (objectIds.length === 0) return NextResponse.json({ error: "id or ids required" }, { status: 400 });
+  const rawIds = (Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : []).map((v) => String(v)).filter(Boolean);
+  if (rawIds.length === 0) return NextResponse.json({ error: "id or ids required" }, { status: 400 });
 
-  const db = await getDb();
-  const res = await db.collection("failed_scans").updateMany(
-    { _id: { $in: objectIds }, tenant_id: Number(ctx.tenantId) }, // tenant scope enforced in the match
-    { $set: { status, resolvedAt: new Date() } },
-  );
-  return NextResponse.json({ ok: true, modified: res.modifiedCount });
+  const { data, error } = await getSupabaseAdmin()
+    .from("failed_scans")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("tenant_id", Number(ctx.tenantId)) // tenant scope enforced in the match
+    .in("id", rawIds)
+    .select("id");
+  if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+  return NextResponse.json({ ok: true, modified: (data ?? []).length });
 }

@@ -3,7 +3,29 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
 import { getStripe } from "@/lib/stripe";
-import { getDb } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+
+type Supa = ReturnType<typeof getSupabaseAdmin>;
+
+/** Read the tenant's `doc`, apply `mutate`, write it back — matched by tenant_id. */
+async function patchTenantDoc(
+  supabase: Supa,
+  tenantId: number,
+  mutate: (doc: Record<string, unknown>) => void,
+) {
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("doc")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (!row) return;
+  const doc = { ...((row.doc ?? {}) as Record<string, unknown>) };
+  mutate(doc);
+  await supabase
+    .from("tenants")
+    .update({ doc, updated_at: new Date().toISOString() })
+    .eq("tenant_id", tenantId);
+}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -23,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const db = await getDb();
+  const supabase = getSupabaseAdmin();
   const appUrl = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : process.env.NEXT_PUBLIC_APP_URL || "https://app.routelypro.com";
@@ -33,12 +55,10 @@ export async function POST(request: Request) {
       const pi = event.data.object as Stripe.PaymentIntent;
       const tenantId = Number.parseInt(pi.metadata?.tenant_id || "0", 10);
       if (tenantId) {
-        await db
-          .collection("tenants")
-          .updateOne(
-            { tenant_id: tenantId },
-            { $inc: { packages_this_month: Number.parseInt(pi.metadata?.stops || "0", 10) } },
-          );
+        const stops = Number.parseInt(pi.metadata?.stops || "0", 10);
+        await patchTenantDoc(supabase, tenantId, (doc) => {
+          doc.packages_this_month = (Number(doc.packages_this_month) || 0) + stops;
+        });
       }
       break;
     }
@@ -53,9 +73,9 @@ export async function POST(request: Request) {
             const pi = await stripe.paymentIntents.retrieve(session.payment_intent as string);
             if (pi.payment_method) {
               await stripe.paymentMethods.attach(pi.payment_method as string, { customer: session.customer as string });
-              await db
-                .collection("tenants")
-                .updateOne({ tenant_id: tenantId }, { $set: { stripe_default_payment_method: pi.payment_method } });
+              await patchTenantDoc(supabase, tenantId, (doc) => {
+                doc.stripe_default_payment_method = pi.payment_method;
+              });
             }
           } catch (err) {
             console.error("[webhook] card save error:", err);
@@ -101,12 +121,9 @@ export async function POST(request: Request) {
         const customer = (await stripe.customers.retrieve(si.customer as string)) as Stripe.Customer;
         const tenantId = Number.parseInt(customer.metadata?.tenant_id || "0", 10);
         if (tenantId) {
-          await db
-            .collection("tenants")
-            .updateOne(
-              { tenant_id: tenantId },
-              { $set: { stripe_default_payment_method: si.payment_method, updated_at: new Date() } },
-            );
+          await patchTenantDoc(supabase, tenantId, (doc) => {
+            doc.stripe_default_payment_method = si.payment_method;
+          });
         }
       }
       break;
@@ -116,12 +133,10 @@ export async function POST(request: Request) {
       const invoice = event.data.object as Stripe.Invoice;
       const tenantId = Number.parseInt((invoice.metadata as Record<string, string>)?.tenant_id || "0", 10);
       if (tenantId) {
-        await db
-          .collection("tenants")
-          .updateOne(
-            { tenant_id: tenantId },
-            { $set: { billing_status: "active", past_due_since: null, updated_at: new Date() } },
-          );
+        await patchTenantDoc(supabase, tenantId, (doc) => {
+          doc.billing_status = "active";
+          doc.past_due_since = null;
+        });
       }
       break;
     }
@@ -130,12 +145,10 @@ export async function POST(request: Request) {
       const invoice = event.data.object as Stripe.Invoice;
       const tenantId = Number.parseInt((invoice.metadata as Record<string, string>)?.tenant_id || "0", 10);
       if (tenantId) {
-        await db
-          .collection("tenants")
-          .updateOne(
-            { tenant_id: tenantId },
-            { $set: { billing_status: "past_due", past_due_since: new Date(), updated_at: new Date() } },
-          );
+        await patchTenantDoc(supabase, tenantId, (doc) => {
+          doc.billing_status = "past_due";
+          doc.past_due_since = new Date().toISOString();
+        });
       }
       break;
     }

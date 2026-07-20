@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import clientPromise from "@/lib/mongodb";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -38,46 +38,35 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const db = (await clientPromise).db("routely_prod");
+    const supabase = getSupabaseAdmin();
 
-    const tenant = await db.collection("tenants").findOne(
-      { tenant_id: ctx.tenantId },
-      {
-        projection: {
-          plan_type: 1,
-          billing_method: 1,
-          billing_status: 1,
-          price_per_stop: 1,
-          price_per_mile: 1,
-          packages_this_month: 1,
-          miles_this_month: 1,
-          outstanding_amount: 1,
-          outstanding_routes_count: 1,
-          billing_cycle_start: 1,
-          billing_cycle_end: 1,
-          trial_ends_at: 1,
-          company_name: 1,
-          name: 1,
-          address: 1,
-          full_address: 1,
-          phone: 1,
-          contact_phone: 1,
-          email: 1,
-          billing_email: 1,
-        },
-      },
-    );
-    if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+    const { data: tenantRow } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("tenant_id", ctx.tenantId)
+      .maybeSingle();
+    if (!tenantRow) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+
+    // Promoted columns win; everything else lives in the original `doc`.
+    const tdoc = (tenantRow.doc ?? {}) as Record<string, unknown>;
+    const tenant: Record<string, unknown> = {
+      ...tdoc,
+      plan_type: tenantRow.plan_type ?? tdoc.plan_type,
+      outstanding_amount: tenantRow.outstanding_amount ?? tdoc.outstanding_amount,
+      company_name: tenantRow.company_name ?? tdoc.company_name,
+      email: tenantRow.email ?? tdoc.email,
+    };
 
     // Last 180 days of label orders for this tenant (chart series + ledger).
     const since = new Date(Date.now() - 180 * 86400_000).toISOString();
-    const orders = await db
-      .collection("label_orders")
-      .find({ tenant_id: String(ctx.tenantId), created_at: { $gte: since } })
-      .sort({ created_at: -1 })
-      .limit(500)
-      .project({ _id: 0 })
-      .toArray();
+    const { data: orderRows } = await supabase
+      .from("label_orders")
+      .select("doc")
+      .eq("tenant_id", Number(ctx.tenantId))
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    const orders = (orderRows ?? []).map((r) => (r.doc ?? {}) as Record<string, unknown>);
 
     // ── Month window (calendar month, aligns with *_this_month counters) ──
     const now = new Date();

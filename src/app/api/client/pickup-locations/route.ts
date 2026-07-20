@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 /* ───────────────────────────────────────────────────────────────────────────
  * Pickup Locations — tenant-scoped CRUD over the tenant.pickup_locations array.
@@ -62,18 +63,28 @@ const isValid = (f: ReturnType<typeof sanitize>) =>
   Boolean(f.name && f.address.street && f.address.city && f.address.zip);
 
 async function loadLocations(tenantId: number): Promise<PickupLocation[]> {
-  const db = await getDb();
-  const t = await db
-    .collection("tenants")
-    .findOne({ tenant_id: tenantId }, { projection: { pickup_locations: 1 } });
-  return Array.isArray(t?.pickup_locations) ? (t!.pickup_locations as PickupLocation[]) : [];
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("doc")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const list = (row?.doc as Record<string, unknown> | undefined)?.pickup_locations;
+  return Array.isArray(list) ? (list as PickupLocation[]) : [];
 }
 
 async function saveLocations(tenantId: number, locations: PickupLocation[]) {
-  const db = await getDb();
-  await db
-    .collection("tenants")
-    .updateOne({ tenant_id: tenantId }, { $set: { pickup_locations: locations, updated_at: new Date() } });
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("doc")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const doc = { ...((row?.doc ?? {}) as Record<string, unknown>), pickup_locations: locations };
+  await supabase
+    .from("tenants")
+    .update({ doc, updated_at: new Date().toISOString() })
+    .eq("tenant_id", tenantId);
 }
 
 /* GET — list all pickup locations for the tenant. */

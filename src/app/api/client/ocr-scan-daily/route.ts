@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import clientPromise from "@/lib/mongodb";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
@@ -167,13 +166,16 @@ export async function POST() {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const db = (await clientPromise).db("routely_prod");
+    const supabase = getSupabaseAdmin();
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const logs = await db
-      .collection("ocr_scan_logs")
-      .find({ tenant_id: Number(ctx.tenantId), created_at: { $gte: since } })
-      .limit(5000)
-      .toArray();
+    const { data: logRows, error: readErr } = await supabase
+      .from("ocr_scan_logs")
+      .select("doc")
+      .eq("tenant_id", Number(ctx.tenantId))
+      .gte("created_at", since.toISOString())
+      .limit(5000);
+    if (readErr) return NextResponse.json({ error: "Database error" }, { status: 500 });
+    const logs = (logRows ?? []).map((r) => r.doc as Record<string, unknown>);
 
     type Agg = {
       tenant_id: number;

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { BRAND_PRIMARY } from "@/lib/brand";
-import clientPromise from "@/lib/mongodb";
 import { getShippo } from "@/lib/shippo";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -23,10 +22,18 @@ export async function POST(request: Request) {
   if (!order_id) return NextResponse.json({ error: "order_id required" }, { status: 400 });
 
   const tenantId = String(ctx.tenantId ?? "1");
-  const client = await clientPromise;
-  const col = client.db("routely_prod").collection("label_orders");
+  const tenantIdNum = Number(ctx.tenantId ?? 1);
+  const supabase = getSupabaseAdmin();
 
-  const order = await col.findOne({ order_id, tenant_id: tenantId });
+  const { data: orderRow, error: fetchError } = await supabase
+    .from("label_orders")
+    .select("doc")
+    .eq("order_id", order_id)
+    .eq("tenant_id", tenantIdNum)
+    .maybeSingle();
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  // biome-ignore lint/suspicious/noExplicitAny: original flat Mongo document shape
+  const order = orderRow?.doc as any;
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   if (order.status === "purchased") {
     // Idempotent: a retry after success returns the existing label.
@@ -103,16 +110,20 @@ export async function POST(request: Request) {
           console.error("[labels/purchase] REFUND FAILED — manual action needed", order_id, e);
         }
       }
-      await col.updateOne(
-        { order_id },
-        {
-          $set: {
-            status: paymentType === "card" ? (refund_id ? "refunded" : "refund_failed") : "failed",
-            error: msg,
-            "payment.refund_id": refund_id,
-          },
-        },
-      );
+      const failStatus = paymentType === "card" ? (refund_id ? "refunded" : "refund_failed") : "failed";
+      order.status = failStatus;
+      order.error = msg;
+      order.payment = { ...order.payment, refund_id };
+      await supabase
+        .from("label_orders")
+        .update({
+          status: failStatus,
+          error: msg,
+          payment: order.payment,
+          doc: order,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", order_id);
       return NextResponse.json(
         { error: `${msg}${refund_id ? " — your payment was refunded automatically" : ""}` },
         { status: 400 },
@@ -120,22 +131,31 @@ export async function POST(request: Request) {
     }
 
     // ── 3 · Persist success ───────────────────────────────────────────────
-    await col.updateOne(
-      { order_id },
-      {
-        $set: {
-          status: "purchased",
-          purchased_at: new Date().toISOString(),
-          "payment.payment_intent_id": payment_intent_id ?? null,
-          "payment.card_brand": cardBrand,
-          "payment.card_last4": cardLast4,
-          "shippo.transaction_id": txn.objectId ?? null,
-          "shippo.tracking_number": txn.trackingNumber,
-          "shippo.tracking_url": txn.trackingUrlProvider,
-          "shippo.label_url": txn.labelUrl,
-        },
-      },
-    );
+    order.status = "purchased";
+    order.purchased_at = new Date().toISOString();
+    order.payment = {
+      ...order.payment,
+      payment_intent_id: payment_intent_id ?? null,
+      card_brand: cardBrand,
+      card_last4: cardLast4,
+    };
+    order.shippo = {
+      ...order.shippo,
+      transaction_id: txn.objectId ?? null,
+      tracking_number: txn.trackingNumber,
+      tracking_url: txn.trackingUrlProvider,
+      label_url: txn.labelUrl,
+    };
+    await supabase
+      .from("label_orders")
+      .update({
+        status: "purchased",
+        payment: order.payment,
+        shippo: order.shippo,
+        doc: order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("order_id", order_id);
 
     // ── 4 · Postpay accrues to the tenant's outstanding balance ──────────
     if (paymentType === "postpay") {
@@ -252,7 +272,11 @@ export async function POST(request: Request) {
             html,
           }),
         });
-        await col.updateOne({ order_id }, { $set: { recipient_notified_at: new Date().toISOString() } });
+        order.recipient_notified_at = new Date().toISOString();
+        await supabase
+          .from("label_orders")
+          .update({ doc: order, updated_at: new Date().toISOString() })
+          .eq("order_id", order_id);
       } catch (e) {
         console.error("[labels/purchase] recipient notification failed", order_id, e);
       }

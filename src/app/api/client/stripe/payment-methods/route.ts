@@ -1,22 +1,31 @@
 import { NextResponse } from "next/server";
 
 import { getStripe } from "@/lib/stripe";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
   const ctx = await requirePagePermission("billing");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = await getDb();
-  const tenant = await db.collection("tenants").findOne({ tenant_id: ctx.tenantId });
+  const supabase = getSupabaseAdmin();
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
 
-  if (!tenant?.stripe_customer_id) {
+  const t = (row?.doc ?? {}) as Record<string, any>;
+  const stripeCustomerId = row?.stripe_customer_id ?? t.stripe_customer_id;
+  const defaultPm = t.stripe_default_payment_method;
+
+  if (!stripeCustomerId) {
     return NextResponse.json({ payment_methods: [], default_pm: null });
   }
 
   const stripe = getStripe();
   const pms = await stripe.paymentMethods.list({
-    customer: tenant.stripe_customer_id,
+    customer: stripeCustomerId,
     type: "card",
   });
 
@@ -27,9 +36,9 @@ export async function GET() {
       last4: pm.card?.last4,
       exp_month: pm.card?.exp_month,
       exp_year: pm.card?.exp_year,
-      is_default: pm.id === tenant.stripe_default_payment_method,
+      is_default: pm.id === defaultPm,
     })),
-    default_pm: tenant.stripe_default_payment_method,
+    default_pm: defaultPm ?? null,
   });
 }
 
@@ -38,14 +47,21 @@ export async function POST(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { payment_method_id } = await request.json();
-  const db = await getDb();
+  const supabase = getSupabaseAdmin();
 
-  await db
-    .collection("tenants")
-    .updateOne(
-      { tenant_id: ctx.tenantId },
-      { $set: { stripe_default_payment_method: payment_method_id, updated_at: new Date() } },
-    );
+  const { data: row } = await supabase
+    .from("tenants")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+
+  const t = (row?.doc ?? {}) as Record<string, any>;
+  const doc = { ...t, stripe_default_payment_method: payment_method_id };
+
+  await supabase
+    .from("tenants")
+    .update({ doc, updated_at: new Date().toISOString() })
+    .eq("tenant_id", ctx.tenantId);
 
   return NextResponse.json({ ok: true });
 }

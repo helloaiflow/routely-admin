@@ -23,7 +23,9 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("drivers")
-    .select("id, tenant_id, name, phone, email, hub_id, vehicle, status, external_circuit_id, doc, created_at, updated_at")
+    .select(
+      "id, tenant_id, name, phone, email, hub_id, all_hubs, vehicle, status, external_circuit_id, doc, driver_hubs(hub_id), created_at, updated_at",
+    )
     .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
     .order("status", { ascending: true }) // active before inactive
     .order("name", { ascending: true });
@@ -31,7 +33,13 @@ export async function GET() {
     console.error("[drivers GET]", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  return NextResponse.json({ drivers: data ?? [] });
+  // Flatten the driver_hubs join to hub_ids[] (multi-hub membership, CC1.1).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const drivers = (data ?? []).map((r: any) => {
+    const { driver_hubs, ...rest } = r;
+    return { ...rest, hub_ids: Array.isArray(driver_hubs) ? driver_hubs.map((x: { hub_id: string }) => x.hub_id) : [] };
+  });
+  return NextResponse.json({ drivers });
 }
 
 // ── POST — create a driver (proxy to FastAPI so the event fires) ─────────────

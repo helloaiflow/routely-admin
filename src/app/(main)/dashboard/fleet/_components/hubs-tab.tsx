@@ -28,15 +28,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type Address = { line1?: string; city?: string; state?: string; zip?: string };
+
+type RouteDefaults = {
+  start_time?: string;
+  start_address?: Address;
+  default_time_at_stop?: number;
+  end_address?: Address;
+  end_time?: string;
+  max_stops?: number;
+  round_trip?: boolean;
+};
+
 type Hub = {
   id: string;
   tenant_id: number;
   name: string;
-  address: { line1?: string; city?: string; state?: string; zip?: string } | null;
+  address: Address | null;
   geo: { lat?: number; lng?: number } | null;
   timezone: string;
   is_default: boolean;
   external_circuit_id: string | null;
+  route_defaults?: RouteDefaults | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -51,6 +64,20 @@ type FormState = {
   lat: string;
   lng: string;
   is_default: boolean;
+  // Route defaults (all optional; empty strings are omitted on save)
+  rdStartTime: string;
+  rdStartLine1: string;
+  rdStartCity: string;
+  rdStartState: string;
+  rdStartZip: string;
+  rdMinutesPerStop: string; // minutes in the UI, stored ×60 as seconds
+  rdEndTime: string;
+  rdMaxStops: string;
+  rdRoundTrip: boolean;
+  rdEndLine1: string;
+  rdEndCity: string;
+  rdEndState: string;
+  rdEndZip: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -63,12 +90,36 @@ const EMPTY_FORM: FormState = {
   lat: "",
   lng: "",
   is_default: false,
+  rdStartTime: "",
+  rdStartLine1: "",
+  rdStartCity: "",
+  rdStartState: "",
+  rdStartZip: "",
+  rdMinutesPerStop: "",
+  rdEndTime: "",
+  rdMaxStops: "",
+  rdRoundTrip: false,
+  rdEndLine1: "",
+  rdEndCity: "",
+  rdEndState: "",
+  rdEndZip: "",
 };
 
 function addressLine(hub: Hub): string {
   const a = hub.address ?? {};
   const cityLine = [a.city, a.state, a.zip].filter(Boolean).join(", ").replace(/, (\d)/, " $1");
   return [a.line1, cityLine].filter(Boolean).join(" · ");
+}
+
+// Build an Address from four inputs, or undefined when they're all empty.
+function buildAddress(line1: string, city: string, state: string, zip: string): Address | undefined {
+  const addr: Address = {
+    line1: line1.trim() || undefined,
+    city: city.trim() || undefined,
+    state: state.trim() || undefined,
+    zip: zip.trim() || undefined,
+  };
+  return Object.values(addr).some(Boolean) ? addr : undefined;
 }
 
 export function HubsTab() {
@@ -104,6 +155,7 @@ export function HubsTab() {
 
   function openEdit(hub: Hub) {
     setEditing(hub);
+    const rd = hub.route_defaults ?? {};
     setForm({
       name: hub.name ?? "",
       line1: hub.address?.line1 ?? "",
@@ -114,6 +166,20 @@ export function HubsTab() {
       lat: hub.geo?.lat != null ? String(hub.geo.lat) : "",
       lng: hub.geo?.lng != null ? String(hub.geo.lng) : "",
       is_default: Boolean(hub.is_default),
+      rdStartTime: rd.start_time ?? "",
+      rdStartLine1: rd.start_address?.line1 ?? "",
+      rdStartCity: rd.start_address?.city ?? "",
+      rdStartState: rd.start_address?.state ?? "",
+      rdStartZip: rd.start_address?.zip ?? "",
+      rdMinutesPerStop:
+        rd.default_time_at_stop != null ? String(Math.round(rd.default_time_at_stop / 60)) : "",
+      rdEndTime: rd.end_time ?? "",
+      rdMaxStops: rd.max_stops != null ? String(rd.max_stops) : "",
+      rdRoundTrip: Boolean(rd.round_trip),
+      rdEndLine1: rd.end_address?.line1 ?? "",
+      rdEndCity: rd.end_address?.city ?? "",
+      rdEndState: rd.end_address?.state ?? "",
+      rdEndZip: rd.end_address?.zip ?? "",
     });
     setError("");
     setDialogOpen(true);
@@ -144,6 +210,28 @@ export function HubsTab() {
     };
     if (lat != null || lng != null) payload.geo = { lat, lng };
 
+    // Route defaults — include only the fields the user filled in.
+    const routeDefaults: RouteDefaults = {};
+    if (form.rdStartTime.trim()) routeDefaults.start_time = form.rdStartTime.trim();
+    const startAddress = buildAddress(form.rdStartLine1, form.rdStartCity, form.rdStartState, form.rdStartZip);
+    if (startAddress) routeDefaults.start_address = startAddress;
+    if (form.rdMinutesPerStop.trim()) {
+      const minutes = Number(form.rdMinutesPerStop);
+      if (!Number.isNaN(minutes)) routeDefaults.default_time_at_stop = Math.round(minutes * 60);
+    }
+    if (form.rdEndTime.trim()) routeDefaults.end_time = form.rdEndTime.trim();
+    if (form.rdMaxStops.trim()) {
+      const maxStops = Number(form.rdMaxStops);
+      if (!Number.isNaN(maxStops) && maxStops > 0) routeDefaults.max_stops = Math.round(maxStops);
+    }
+    if (form.rdRoundTrip) {
+      routeDefaults.round_trip = true;
+    } else {
+      const endAddress = buildAddress(form.rdEndLine1, form.rdEndCity, form.rdEndState, form.rdEndZip);
+      if (endAddress) routeDefaults.end_address = endAddress;
+    }
+    payload.route_defaults = routeDefaults;
+
     setSaving(true);
     setError("");
     const url = editing ? `/api/client/hubs/${encodeURIComponent(editing.id)}` : "/api/client/hubs";
@@ -161,6 +249,10 @@ export function HubsTab() {
     setDialogOpen(false);
     load();
   }
+
+  // Client hint only — the server does the real validation.
+  const endBeforeStart =
+    Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
 
   return (
     <div className="space-y-5">
@@ -359,6 +451,144 @@ export function HubsTab() {
                 checked={form.is_default}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
               />
+            </div>
+
+            {/* Route defaults — template a route inherits from this hub */}
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <p className="font-semibold text-sm">Route defaults</p>
+                <p className="text-muted-foreground text-xs">
+                  Defaults a route inherits from this hub — overridable per route.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Start time">
+                  <Input
+                    type="time"
+                    value={form.rdStartTime}
+                    onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
+                    placeholder="07:00"
+                    className="h-9 font-mono tabular-nums"
+                  />
+                </Field>
+                <Field label="End time">
+                  <Input
+                    type="time"
+                    value={form.rdEndTime}
+                    onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
+                    placeholder="HH:MM"
+                    className="h-9 font-mono tabular-nums"
+                  />
+                </Field>
+              </div>
+              {endBeforeStart && (
+                <p className="text-amber-600 text-xs dark:text-amber-500">
+                  End time is at or before the start time — the route may not fit in the day.
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Minutes per stop">
+                  <Input
+                    value={form.rdMinutesPerStop}
+                    onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
+                    placeholder="5"
+                    inputMode="numeric"
+                    className="h-9 tabular-nums"
+                  />
+                </Field>
+                <Field label="Max stops">
+                  <Input
+                    value={form.rdMaxStops}
+                    onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
+                    placeholder="0 = unlimited"
+                    inputMode="numeric"
+                    className="h-9 tabular-nums"
+                  />
+                </Field>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-medium text-sm">Start address</Label>
+                <p className="text-muted-foreground text-xs">Leave empty to use the hub address.</p>
+                <Input
+                  value={form.rdStartLine1}
+                  onChange={(e) => setForm((f) => ({ ...f, rdStartLine1: e.target.value }))}
+                  placeholder="Street address"
+                  className="h-9"
+                />
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="col-span-2">
+                    <Input
+                      value={form.rdStartCity}
+                      onChange={(e) => setForm((f) => ({ ...f, rdStartCity: e.target.value }))}
+                      placeholder="City"
+                      className="h-9"
+                    />
+                  </div>
+                  <Input
+                    value={form.rdStartState}
+                    onChange={(e) => setForm((f) => ({ ...f, rdStartState: e.target.value }))}
+                    placeholder="FL"
+                    maxLength={2}
+                    className="h-9 uppercase"
+                  />
+                  <Input
+                    value={form.rdStartZip}
+                    onChange={(e) => setForm((f) => ({ ...f, rdStartZip: e.target.value }))}
+                    placeholder="ZIP"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
+                <div>
+                  <p className="font-medium text-sm">Round-trip</p>
+                  <p className="text-muted-foreground text-xs">Route ends where it starts.</p>
+                </div>
+                <Switch
+                  checked={form.rdRoundTrip}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, rdRoundTrip: v }))}
+                />
+              </div>
+
+              {!form.rdRoundTrip && (
+                <div className="space-y-1.5">
+                  <Label className="font-medium text-sm">End address</Label>
+                  <p className="text-muted-foreground text-xs">Leave empty to use the hub address.</p>
+                  <Input
+                    value={form.rdEndLine1}
+                    onChange={(e) => setForm((f) => ({ ...f, rdEndLine1: e.target.value }))}
+                    placeholder="Street address"
+                    className="h-9"
+                  />
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="col-span-2">
+                      <Input
+                        value={form.rdEndCity}
+                        onChange={(e) => setForm((f) => ({ ...f, rdEndCity: e.target.value }))}
+                        placeholder="City"
+                        className="h-9"
+                      />
+                    </div>
+                    <Input
+                      value={form.rdEndState}
+                      onChange={(e) => setForm((f) => ({ ...f, rdEndState: e.target.value }))}
+                      placeholder="FL"
+                      maxLength={2}
+                      className="h-9 uppercase"
+                    />
+                    <Input
+                      value={form.rdEndZip}
+                      onChange={(e) => setForm((f) => ({ ...f, rdEndZip: e.target.value }))}
+                      placeholder="ZIP"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && <p className="text-destructive text-sm">{error}</p>}

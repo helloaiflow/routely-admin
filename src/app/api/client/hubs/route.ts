@@ -26,7 +26,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("hubs")
-    .select("id, tenant_id, name, address, geo, timezone, is_default, external_circuit_id, created_at, updated_at")
+    .select("id, tenant_id, name, address, geo, timezone, is_default, external_circuit_id, route_defaults, created_at, updated_at")
     .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Ban, Loader2, Mail, Pencil, Plus, RotateCcw, Users } from "lucide-react";
+import { Ban, Check, Loader2, Mail, Pencil, Plus, RotateCcw, Users } from "lucide-react";
 
 import {
   AlertDialog,
@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -52,6 +51,8 @@ type Driver = {
   phone: string;
   email: string | null;
   hub_id: string | null;
+  all_hubs?: boolean;
+  hub_ids?: string[];
   vehicle: { description?: string } | Record<string, unknown> | null;
   status: "active" | "inactive";
   external_circuit_id: string | null;
@@ -64,7 +65,8 @@ type FormState = {
   name: string;
   phone: string;
   email: string;
-  hub_id: string;
+  allHubs: boolean;
+  hubIds: string[];
   vehicle: string;
 };
 
@@ -72,11 +74,10 @@ const EMPTY_FORM: FormState = {
   name: "",
   phone: "",
   email: "",
-  hub_id: "",
+  allHubs: false,
+  hubIds: [],
   vehicle: "",
 };
-
-const NO_HUB = "__none__";
 
 function formatPhone(raw: string): string {
   const d = (raw || "").replace(/\D/g, "");
@@ -125,11 +126,19 @@ export function DriversTab() {
       .catch(() => setHubs([]));
   }, []);
 
-  const hubName = useMemo(() => {
+  const hubNameMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const h of hubs) map.set(h.id, h.name);
-    return (id: string | null) => (id ? map.get(id) ?? "Unknown hub" : "—");
+    return map;
   }, [hubs]);
+
+  // Render a driver's hub assignment: "All hubs" badge, a list of hub names, or "—".
+  function hubNames(ids: string[]): string {
+    const names = ids.map((id) => hubNameMap.get(id) ?? "Unknown hub");
+    if (names.length === 0) return "—";
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  }
 
   // Active first, then inactive; each group alphabetical by name.
   const ordered = useMemo(() => {
@@ -156,11 +165,17 @@ export function DriversTab() {
 
   function openEdit(driver: Driver) {
     setEditing(driver);
+    const ids = Array.isArray(driver.hub_ids)
+      ? driver.hub_ids
+      : driver.hub_id
+        ? [driver.hub_id]
+        : [];
     setForm({
       name: driver.name ?? "",
       phone: driver.phone ?? "",
       email: driver.email ?? "",
-      hub_id: driver.hub_id ?? "",
+      allHubs: Boolean(driver.all_hubs),
+      hubIds: ids,
       vehicle: vehicleText(driver.vehicle),
     });
     setError("");
@@ -178,11 +193,13 @@ export function DriversTab() {
       return;
     }
 
+    const hubIds = form.allHubs ? [] : form.hubIds;
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
       phone: phoneDigits,
       email: form.email.trim() || null,
-      hub_id: form.hub_id || null,
+      all_hubs: form.allHubs,
+      hub_ids: hubIds,
       vehicle: form.vehicle.trim() ? { description: form.vehicle.trim() } : null,
     };
 
@@ -335,7 +352,21 @@ export function DriversTab() {
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{hubName(driver.hub_id)}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {driver.all_hubs ? (
+                        <Badge variant="outline" className="bg-primary/10 text-primary">
+                          All hubs
+                        </Badge>
+                      ) : (
+                        hubNames(
+                          Array.isArray(driver.hub_ids)
+                            ? driver.hub_ids
+                            : driver.hub_id
+                              ? [driver.hub_id]
+                              : [],
+                        )
+                      )}
+                    </TableCell>
                     <TableCell>
                       {inactive ? (
                         <Badge variant="outline" className="bg-muted text-muted-foreground">
@@ -432,24 +463,62 @@ export function DriversTab() {
                 />
               </Field>
             </div>
-            <Field label="Hub">
-              <Select
-                value={form.hub_id || NO_HUB}
-                onValueChange={(v) => setForm((f) => ({ ...f, hub_id: v === NO_HUB ? "" : v }))}
-              >
-                <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Assign a hub" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_HUB}>No hub</SelectItem>
-                  {hubs.map((h) => (
-                    <SelectItem key={h.id} value={h.id}>
-                      {h.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
+                <div>
+                  <p className="font-medium text-sm">All hubs</p>
+                  <p className="text-muted-foreground text-xs">Available at every hub in the fleet.</p>
+                </div>
+                <Switch
+                  checked={form.allHubs}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))}
+                />
+              </div>
+
+              {!form.allHubs && (
+                <Field label="Hubs">
+                  {hubs.length === 0 ? (
+                    <p className="rounded-lg border px-3.5 py-2.5 text-muted-foreground text-sm">
+                      No hubs available yet.
+                    </p>
+                  ) : (
+                    <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border p-1">
+                      {hubs.map((h) => {
+                        const selected = form.hubIds.includes(h.id);
+                        return (
+                          <button
+                            key={h.id}
+                            type="button"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                hubIds: selected
+                                  ? f.hubIds.filter((id) => id !== h.id)
+                                  : [...f.hubIds, h.id],
+                              }))
+                            }
+                            className={cn(
+                              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted",
+                              selected && "bg-primary/5",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "grid size-4 shrink-0 place-items-center rounded border",
+                                selected ? "border-primary bg-primary text-primary-foreground" : "border-input",
+                              )}
+                            >
+                              {selected && <Check className="size-3" aria-hidden="true" />}
+                            </span>
+                            {h.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Field>
+              )}
+            </div>
             <Field label="Vehicle">
               <Input
                 value={form.vehicle}

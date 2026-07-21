@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Loader2, Route, Send, Shuffle } from "lucide-react";
+import { Loader2, Route, Send, Shuffle, Waypoints } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -205,7 +205,12 @@ export function IntegrationsTab() {
       {/* ── Circuit hybrid switch ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Circuit (transición)</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Waypoints className="size-4" aria-hidden="true" />
+            </span>
+            Circuit (transición)
+          </CardTitle>
           <p className="text-muted-foreground text-sm">
             Mientras migramos al dispatch propio, Circuit queda como fallback. Apágalo por tenant
             cuando el sistema propio esté probado.

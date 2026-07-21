@@ -2,7 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Ban, Check, Loader2, Mail, Pencil, Plus, RotateCcw, Users } from "lucide-react";
+import {
+  Ban,
+  Building2,
+  Car,
+  ChevronsUpDown,
+  Contact,
+  Loader2,
+  Mail,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Users,
+  X,
+} from "lucide-react";
 
 import {
   AlertDialog,
@@ -18,15 +31,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -91,12 +114,99 @@ function vehicleText(v: Driver["vehicle"]): string {
   return typeof desc === "string" ? desc : "";
 }
 
+// ── Searchable multi-select of hubs (Popover + Command) ──────────────────────
+function HubMultiSelect({
+  hubs,
+  selected,
+  onToggle,
+}: {
+  hubs: Hub[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedHubs = useMemo(
+    () => hubs.filter((h) => selected.includes(h.id)),
+    [hubs, selected],
+  );
+
+  return (
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-9 w-full justify-between font-normal"
+          >
+            <span className="flex items-center gap-2 truncate">
+              <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              {selected.length > 0 ? (
+                <span>
+                  Select hubs <span className="text-muted-foreground">· {selected.length} selected</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Select hubs</span>
+              )}
+            </span>
+            <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search hubs…" />
+            <CommandList>
+              <CommandEmpty>No hubs found.</CommandEmpty>
+              <CommandGroup>
+                {hubs.map((h) => {
+                  const isSel = selected.includes(h.id);
+                  return (
+                    <CommandItem
+                      key={h.id}
+                      value={h.name}
+                      data-checked={isSel}
+                      onSelect={() => onToggle(h.id)}
+                    >
+                      <Building2 className="size-4 text-muted-foreground" aria-hidden="true" />
+                      <span className="truncate">{h.name}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {selectedHubs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedHubs.map((h) => (
+            <Badge key={h.id} variant="secondary" className="gap-1 pr-1">
+              {h.name}
+              <button
+                type="button"
+                onClick={() => onToggle(h.id)}
+                className="grid size-4 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                aria-label={`Remove ${h.name}`}
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DriversTab() {
   const [drivers, setDrivers] = useState<Driver[] | null>(null);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [loadError, setLoadError] = useState(false);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -160,7 +270,7 @@ export function DriversTab() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setError("");
-    setDialogOpen(true);
+    setSheetOpen(true);
   }
 
   function openEdit(driver: Driver) {
@@ -179,7 +289,7 @@ export function DriversTab() {
       vehicle: vehicleText(driver.vehicle),
     });
     setError("");
-    setDialogOpen(true);
+    setSheetOpen(true);
   }
 
   async function submit() {
@@ -218,7 +328,7 @@ export function DriversTab() {
       setError(j.error || "Could not save the driver. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setDialogOpen(false);
+    setSheetOpen(false);
     loadDrivers();
   }
 
@@ -243,6 +353,13 @@ export function DriversTab() {
     }
   }
 
+  function toggleHub(id: string) {
+    setForm((f) => ({
+      ...f,
+      hubIds: f.hubIds.includes(id) ? f.hubIds.filter((x) => x !== id) : [...f.hubIds, id],
+    }));
+  }
+
   return (
     <div className="space-y-5">
       {/* Header + add */}
@@ -262,7 +379,7 @@ export function DriversTab() {
         </div>
       </div>
 
-      {error && !dialogOpen && !statusTarget && (
+      {error && !sheetOpen && !statusTarget && (
         <p className="text-destructive text-sm">{error}</p>
       )}
 
@@ -310,8 +427,8 @@ export function DriversTab() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Driver</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Hub</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden md:table-cell">Hubs</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="pr-4 text-right">Actions</TableHead>
               </TableRow>
@@ -320,6 +437,11 @@ export function DriversTab() {
               {visible.map((driver) => {
                 const inactive = driver.status !== "active";
                 const busy = busyId === driver.id;
+                const ids = Array.isArray(driver.hub_ids)
+                  ? driver.hub_ids
+                  : driver.hub_id
+                    ? [driver.hub_id]
+                    : [];
                 return (
                   <TableRow key={driver.id} className={cn(inactive && "opacity-55")}>
                     <TableCell className="pl-4">
@@ -344,7 +466,7 @@ export function DriversTab() {
                     <TableCell>
                       <span className="font-mono text-sm tabular-nums">{formatPhone(driver.phone)}</span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="hidden text-muted-foreground text-sm lg:table-cell">
                       {driver.email ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Mail className="size-3.5" aria-hidden="true" /> {driver.email}
@@ -353,19 +475,13 @@ export function DriversTab() {
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="hidden text-muted-foreground text-sm md:table-cell">
                       {driver.all_hubs ? (
                         <Badge variant="outline" className="bg-primary/10 text-primary">
                           All hubs
                         </Badge>
                       ) : (
-                        hubNames(
-                          Array.isArray(driver.hub_ids)
-                            ? driver.hub_ids
-                            : driver.hub_id
-                              ? [driver.hub_id]
-                              : [],
-                        )
+                        hubNames(ids)
                       )}
                     </TableCell>
                     <TableCell>
@@ -425,46 +541,77 @@ export function DriversTab() {
         </Card>
       )}
 
-      {/* Add / edit dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit driver" : "New driver"}</DialogTitle>
-            <DialogDescription>
+      {/* Add / edit sheet */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+          <SheetHeader className="shrink-0 gap-1 border-b px-5 py-4 pr-12">
+            <SheetTitle className="font-semibold text-base">{editing ? "Edit driver" : "New driver"}</SheetTitle>
+            <SheetDescription>
               {editing ? "Update this driver's details." : "Add a driver to the Routely fleet."}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <div className="space-y-4">
-            <Field label="Full name" required>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Jane Doe"
-                className="h-9"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Phone" required>
+          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+            {/* ── Details ── */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Contact className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                <h4 className="font-semibold text-sm">Details</h4>
+              </div>
+              <Separator />
+
+              <Field label="Full name" required>
                 <Input
-                  value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="(305) 555-0100"
-                  inputMode="tel"
-                  className="h-9 font-mono tabular-nums"
-                />
-              </Field>
-              <Field label="Email">
-                <Input
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  placeholder="jane@example.com"
-                  type="email"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Jane Doe"
                   className="h-9"
                 />
               </Field>
-            </div>
-            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Phone" required>
+                  <Input
+                    value={form.phone}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="(305) 555-0100"
+                    inputMode="tel"
+                    className="h-9 font-mono tabular-nums"
+                  />
+                </Field>
+                <Field label="Email">
+                  <Input
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="jane@example.com"
+                    type="email"
+                    className="h-9"
+                  />
+                </Field>
+              </div>
+              <Field label="Vehicle">
+                <div className="relative">
+                  <Car
+                    className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    value={form.vehicle}
+                    onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
+                    placeholder="White Ford Transit"
+                    className="h-9 pl-9"
+                  />
+                </div>
+              </Field>
+            </section>
+
+            {/* ── Hubs ── */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                <h4 className="font-semibold text-sm">Hubs</h4>
+              </div>
+              <Separator />
+
               <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
                 <div>
                   <p className="font-medium text-sm">All hubs</p>
@@ -477,72 +624,32 @@ export function DriversTab() {
               </div>
 
               {!form.allHubs && (
-                <Field label="Hubs">
+                <Field label="Assigned hubs">
                   {hubs.length === 0 ? (
                     <p className="rounded-lg border px-3.5 py-2.5 text-muted-foreground text-sm">
                       No hubs available yet.
                     </p>
                   ) : (
-                    <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-lg border p-1">
-                      {hubs.map((h) => {
-                        const selected = form.hubIds.includes(h.id);
-                        return (
-                          <button
-                            key={h.id}
-                            type="button"
-                            onClick={() =>
-                              setForm((f) => ({
-                                ...f,
-                                hubIds: selected
-                                  ? f.hubIds.filter((id) => id !== h.id)
-                                  : [...f.hubIds, h.id],
-                              }))
-                            }
-                            className={cn(
-                              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted",
-                              selected && "bg-primary/5",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "grid size-4 shrink-0 place-items-center rounded border",
-                                selected ? "border-primary bg-primary text-primary-foreground" : "border-input",
-                              )}
-                            >
-                              {selected && <Check className="size-3" aria-hidden="true" />}
-                            </span>
-                            {h.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <HubMultiSelect hubs={hubs} selected={form.hubIds} onToggle={toggleHub} />
                   )}
                 </Field>
               )}
-            </div>
-            <Field label="Vehicle">
-              <Input
-                value={form.vehicle}
-                onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
-                placeholder="White Ford Transit"
-                className="h-9"
-              />
-            </Field>
+            </section>
 
             {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+          <SheetFooter className="shrink-0 flex-row justify-end gap-2 border-t px-5 py-3">
+            <Button variant="outline" onClick={() => setSheetOpen(false)} disabled={saving}>
               Cancel
             </Button>
             <Button onClick={submit} disabled={saving}>
               {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
               {editing ? "Save changes" : "Create driver"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {/* Status change confirm */}
       <AlertDialog open={Boolean(statusTarget)} onOpenChange={(o) => !o && setStatusTarget(null)}>

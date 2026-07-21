@@ -7,7 +7,8 @@ export type SettingsTab =
   | "plans"
   | "pickup"
   | "invoices"
-  | "team";
+  | "team"
+  | "integrations";
 
 export type BillingData = {
   plan: string;

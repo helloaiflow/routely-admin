@@ -5,12 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useUser } from "@clerk/nextjs";
-import { Bell, CreditCard, FileText, Layers, MapPin, User, Users } from "lucide-react";
+import { Bell, CreditCard, FileText, Layers, MapPin, Plug, User, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { AccountTab } from "./account-tab";
 import { BillingTab } from "./billing-tab";
+import { IntegrationsTab } from "./integrations-tab";
 import { InvoicesTab } from "./invoices-tab";
 import { NotificationsTab } from "./notifications-tab";
 import { PickupTab } from "./pickup-tab";
@@ -26,6 +27,7 @@ const TABS: Array<{ key: SettingsTab; label: string; icon: React.ElementType }> 
   { key: "pickup", label: "Pickup Locations", icon: MapPin },
   { key: "invoices", label: "Invoices", icon: FileText },
   { key: "team", label: "Team", icon: Users },
+  { key: "integrations", label: "Integrations", icon: Plug },
 ];
 
 // Members see only their own account (server-side guards enforce the rest).
@@ -147,6 +149,7 @@ export function SettingsShell() {
         {activeTab === "pickup" && <PickupTab />}
         {activeTab === "invoices" && <InvoicesTab />}
         {activeTab === "team" && !isMember && <TeamSection />}
+        {activeTab === "integrations" && !isMember && <IntegrationsTab />}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -102,6 +103,8 @@ export function DriversTab() {
 
   const [statusTarget, setStatusTarget] = useState<Driver | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Fleet default: only ACTIVE drivers are shown; inactive are hidden behind a toggle.
+  const [showInactive, setShowInactive] = useState(false);
 
   function loadDrivers() {
     setLoadError(false);
@@ -136,6 +139,13 @@ export function DriversTab() {
       return (a.name || "").localeCompare(b.name || "");
     });
   }, [drivers]);
+
+  const inactiveCount = useMemo(() => (drivers ?? []).filter((d) => d.status !== "active").length, [drivers]);
+  // Default view = active only; the toggle reveals inactive drivers too.
+  const visible = useMemo(
+    () => (showInactive ? ordered : ordered.filter((d) => d.status === "active")),
+    [ordered, showInactive],
+  );
 
   function openAdd() {
     setEditing(null);
@@ -223,9 +233,15 @@ export function DriversTab() {
           <h3 className="font-semibold text-lg tracking-tight">Drivers</h3>
           <p className="text-muted-foreground text-sm">The people who run Routely deliveries.</p>
         </div>
-        <Button size="sm" className="h-9" onClick={openAdd}>
-          <Plus className="mr-1.5 size-4" aria-hidden="true" /> New driver
-        </Button>
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
+            <Switch checked={showInactive} onCheckedChange={setShowInactive} />
+            Show inactive{inactiveCount ? ` (${inactiveCount})` : ""}
+          </label>
+          <Button size="sm" className="h-9" onClick={openAdd}>
+            <Plus className="mr-1.5 size-4" aria-hidden="true" /> New driver
+          </Button>
+        </div>
       </div>
 
       {error && !dialogOpen && !statusTarget && (
@@ -262,6 +278,13 @@ export function DriversTab() {
             )}
           </CardContent>
         </Card>
+      ) : visible.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground text-sm">
+            No active drivers. Turn on &ldquo;Show inactive&rdquo; to see deactivated drivers
+            {inactiveCount ? ` (${inactiveCount})` : ""}.
+          </CardContent>
+        </Card>
       ) : (
         <Card className="overflow-hidden">
           <Table>
@@ -276,7 +299,7 @@ export function DriversTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ordered.map((driver) => {
+              {visible.map((driver) => {
                 const inactive = driver.status !== "active";
                 const busy = busyId === driver.id;
                 return (

@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Invitation failed: ${msg}` }, { status: 502 });
   }
 
-  await supabase.from("tenant_members").insert({
+  const { error: insertErr } = await supabase.from("tenant_members").insert({
     tenant_id: ctx.tenantId,
     // Placeholder until acceptance (unique-index safe); webhook swaps in the
     // real clerk_user_id when the invitee's account is created.
@@ -164,9 +164,25 @@ export async function POST(req: NextRequest) {
     invitation_id: invitation.id,
     invitation_status: "pending",
     page_permissions: perms,
+    // `doc` is NOT NULL on tenant_members (hybrid schema) with no default. An
+    // invite has no Mongo-shaped document, so seed {}. Omitting it made this
+    // insert fail the not-null constraint — but the error was swallowed, so
+    // every pending invite silently never persisted (invisible in the Team
+    // list until the invitee accepted). Seed doc + surface any insert error.
+    doc: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
+  if (insertErr) {
+    // The Clerk invite email already went out, but we couldn't record the
+    // pending row — return an error instead of a misleading 201 so the owner
+    // knows the invite isn't tracked (and can retry).
+    console.error("[members POST] pending-row insert failed:", insertErr);
+    return NextResponse.json(
+      { error: `Invite email sent, but recording the pending member failed: ${insertErr.message}` },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ success: true, invitation_id: invitation.id }, { status: 201 });
 }

@@ -11,6 +11,7 @@ import {
   Phone,
   Search,
   Truck,
+  Warehouse,
 } from "lucide-react";
 
 /** Member-system Phase 4: which page permission an item needs. Items without
@@ -102,6 +103,12 @@ export const sidebarItems: NavGroup[] = [
             icon: Truck,
             permission: "orders",
             comingSoon: true,
+          },
+          {
+            title: "Fleet",
+            url: "/dashboard/fleet",
+            icon: Warehouse,
+            permission: "settings",
           },
         ],
       },

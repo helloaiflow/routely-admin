@@ -200,7 +200,8 @@ export function DriversTab() {
       email: form.email.trim() || null,
       all_hubs: form.allHubs,
       hub_ids: hubIds,
-      vehicle: form.vehicle.trim() ? { description: form.vehicle.trim() } : null,
+      // FastAPI expects a dict for vehicle — send {} (not null) when empty, or it 422s.
+      vehicle: form.vehicle.trim() ? { description: form.vehicle.trim() } : {},
     };
 
     setSaving(true);

@@ -360,7 +360,7 @@ export function HubsTab() {
 
       {/* Add / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit hub" : "New hub"}</DialogTitle>
             <DialogDescription>

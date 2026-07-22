@@ -102,6 +102,18 @@ const EMPTY_FORM: FormState = {
   vehicle: "",
 };
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Format the visible phone value as (XXX) XXX-XXXX while typing. Non-digits are
+// stripped and the value is capped at 10 digits; submit uses digits only.
+function formatPhoneInput(raw: string): string {
+  const d = (raw || "").replace(/\D/g, "").slice(0, 10);
+  if (d.length === 0) return "";
+  if (d.length < 4) return `(${d}`;
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+
 function formatPhone(raw: string): string {
   const d = (raw || "").replace(/\D/g, "");
   if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
@@ -211,6 +223,7 @@ export function DriversTab() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [attempted, setAttempted] = useState(false);
 
   const [statusTarget, setStatusTarget] = useState<Driver | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -270,6 +283,7 @@ export function DriversTab() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setError("");
+    setAttempted(false);
     setSheetOpen(true);
   }
 
@@ -282,24 +296,35 @@ export function DriversTab() {
         : [];
     setForm({
       name: driver.name ?? "",
-      phone: driver.phone ?? "",
+      phone: formatPhoneInput(driver.phone ?? ""),
       email: driver.email ?? "",
       allHubs: Boolean(driver.all_hubs),
       hubIds: ids,
       vehicle: vehicleText(driver.vehicle),
     });
     setError("");
+    setAttempted(false);
     setSheetOpen(true);
   }
 
+  const phoneDigits = form.phone.replace(/\D/g, "");
+  const phoneInvalid = phoneDigits.length !== 10;
+  const emailInvalid = form.email.trim() !== "" && !EMAIL_RE.test(form.email.trim());
+  const nameError = attempted && !form.name.trim();
+  const phoneError = (attempted || phoneDigits.length > 0) && phoneInvalid;
+
   async function submit() {
-    const phoneDigits = form.phone.replace(/\D/g, "");
+    setAttempted(true);
     if (!form.name.trim()) {
       setError("Driver name is required.");
       return;
     }
     if (phoneDigits.length !== 10) {
       setError("Phone must be 10 digits.");
+      return;
+    }
+    if (emailInvalid) {
+      setError("Enter a valid email address.");
       return;
     }
 
@@ -421,31 +446,132 @@ export function DriversTab() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4">Driver</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead className="hidden lg:table-cell">Email</TableHead>
-                <TableHead className="hidden md:table-cell">Hubs</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="pr-4 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((driver) => {
-                const inactive = driver.status !== "active";
-                const busy = busyId === driver.id;
-                const ids = Array.isArray(driver.hub_ids)
-                  ? driver.hub_ids
-                  : driver.hub_id
-                    ? [driver.hub_id]
-                    : [];
-                return (
-                  <TableRow key={driver.id} className={cn(inactive && "opacity-55")}>
-                    <TableCell className="pl-4">
-                      <div className="flex items-center gap-2.5">
+        <>
+          {/* Desktop / tablet: table */}
+          <Card className="hidden overflow-hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-4">Driver</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Hubs</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="pr-4 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((driver) => {
+                  const inactive = driver.status !== "active";
+                  const busy = busyId === driver.id;
+                  const ids = Array.isArray(driver.hub_ids)
+                    ? driver.hub_ids
+                    : driver.hub_id
+                      ? [driver.hub_id]
+                      : [];
+                  return (
+                    <TableRow key={driver.id} className={cn(inactive && "opacity-55")}>
+                      <TableCell className="pl-4">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={
+                              inactive
+                                ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+                                : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+                            }
+                          >
+                            <Users className="size-4" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm">{driver.name}</p>
+                            {vehicleText(driver.vehicle) && (
+                              <p className="truncate text-muted-foreground text-xs">{vehicleText(driver.vehicle)}</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm tabular-nums">{formatPhone(driver.phone)}</span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {driver.all_hubs ? (
+                          <Badge variant="outline" className="bg-primary/10 text-primary">
+                            All hubs
+                          </Badge>
+                        ) : (
+                          hubNames(ids)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {inactive ? (
+                          <Badge variant="outline" className="bg-muted text-muted-foreground">
+                            Inactive
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
+                            Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="pr-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => openEdit(driver)}>
+                            <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
+                          </Button>
+                          {inactive ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs"
+                              disabled={busy}
+                              onClick={() => setStatusTarget(driver)}
+                            >
+                              {busy ? (
+                                <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <RotateCcw className="mr-1 size-3" aria-hidden="true" />
+                              )}
+                              Reactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-destructive text-xs hover:bg-destructive/10 hover:text-destructive"
+                              disabled={busy}
+                              onClick={() => setStatusTarget(driver)}
+                            >
+                              {busy ? (
+                                <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Ban className="mr-1 size-3" aria-hidden="true" />
+                              )}
+                              Deactivate
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Card>
+
+          {/* Mobile: stacked card list */}
+          <div className="space-y-3 md:hidden">
+            {visible.map((driver) => {
+              const inactive = driver.status !== "active";
+              const busy = busyId === driver.id;
+              const ids = Array.isArray(driver.hub_ids)
+                ? driver.hub_ids
+                : driver.hub_id
+                  ? [driver.hub_id]
+                  : [];
+              return (
+                <Card key={driver.id} className={cn(inactive && "opacity-55")}>
+                  <CardContent className="space-y-2.5 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2.5">
                         <span
                           className={
                             inactive
@@ -456,94 +582,93 @@ export function DriversTab() {
                           <Users className="size-4" aria-hidden="true" />
                         </span>
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{driver.name}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium text-sm">{driver.name}</span>
+                            {inactive ? (
+                              <Badge variant="outline" className="bg-muted text-muted-foreground">
+                                Inactive
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-primary/10 text-primary">
+                                Active
+                              </Badge>
+                            )}
+                          </div>
                           {vehicleText(driver.vehicle) && (
                             <p className="truncate text-muted-foreground text-xs">{vehicleText(driver.vehicle)}</p>
                           )}
                         </div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono text-sm tabular-nums">{formatPhone(driver.phone)}</span>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground text-sm lg:table-cell">
-                      {driver.email ? (
-                        <span className="inline-flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="-mr-1 h-8 shrink-0 text-xs"
+                        onClick={() => openEdit(driver)}
+                      >
+                        <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
+                      </Button>
+                    </div>
+                    <div className="space-y-1 pl-[42px]">
+                      <p className="font-mono text-sm tabular-nums">{formatPhone(driver.phone)}</p>
+                      {driver.email && (
+                        <p className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
                           <Mail className="size-3.5" aria-hidden="true" /> {driver.email}
-                        </span>
-                      ) : (
-                        "—"
+                        </p>
                       )}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground text-sm md:table-cell">
-                      {driver.all_hubs ? (
-                        <Badge variant="outline" className="bg-primary/10 text-primary">
-                          All hubs
-                        </Badge>
-                      ) : (
-                        hubNames(ids)
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {inactive ? (
-                        <Badge variant="outline" className="bg-muted text-muted-foreground">
-                          Inactive
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                          Active
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="pr-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => openEdit(driver)}>
-                          <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
-                        </Button>
-                        {inactive ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-xs"
-                            disabled={busy}
-                            onClick={() => setStatusTarget(driver)}
-                          >
-                            {busy ? (
-                              <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <RotateCcw className="mr-1 size-3" aria-hidden="true" />
-                            )}
-                            Reactivate
-                          </Button>
+                      <p className="text-muted-foreground text-xs">
+                        {driver.all_hubs ? (
+                          <Badge variant="outline" className="bg-primary/10 text-primary">
+                            All hubs
+                          </Badge>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-destructive text-xs hover:bg-destructive/10 hover:text-destructive"
-                            disabled={busy}
-                            onClick={() => setStatusTarget(driver)}
-                          >
-                            {busy ? (
-                              <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <Ban className="mr-1 size-3" aria-hidden="true" />
-                            )}
-                            Deactivate
-                          </Button>
+                          hubNames(ids)
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-end border-t pt-2.5">
+                      {inactive ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs"
+                          disabled={busy}
+                          onClick={() => setStatusTarget(driver)}
+                        >
+                          {busy ? (
+                            <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <RotateCcw className="mr-1 size-3" aria-hidden="true" />
+                          )}
+                          Reactivate
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-destructive text-xs hover:bg-destructive/10 hover:text-destructive"
+                          disabled={busy}
+                          onClick={() => setStatusTarget(driver)}
+                        >
+                          {busy ? (
+                            <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Ban className="mr-1 size-3" aria-hidden="true" />
+                          )}
+                          Deactivate
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Add / edit sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
           <SheetHeader className="shrink-0 gap-1 border-b px-5 py-4 pr-12">
             <SheetTitle className="font-semibold text-base">{editing ? "Edit driver" : "New driver"}</SheetTitle>
             <SheetDescription>
@@ -560,30 +685,37 @@ export function DriversTab() {
               </div>
               <Separator />
 
-              <Field label="Full name" required>
+              <Field label="Full name" required error={nameError ? "Driver name is required." : undefined}>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="Jane Doe"
+                  aria-invalid={nameError || undefined}
                   className="h-9"
                 />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Phone" required>
+                <Field
+                  label="Phone"
+                  required
+                  error={phoneError ? "Enter a 10-digit phone number." : undefined}
+                >
                   <Input
                     value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
                     placeholder="(305) 555-0100"
                     inputMode="tel"
+                    aria-invalid={phoneError || undefined}
                     className="h-9 font-mono tabular-nums"
                   />
                 </Field>
-                <Field label="Email">
+                <Field label="Email" error={emailInvalid ? "Enter a valid email." : undefined}>
                   <Input
                     value={form.email}
                     onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                     placeholder="jane@example.com"
                     type="email"
+                    aria-invalid={emailInvalid || undefined}
                     className="h-9"
                   />
                 </Field>
@@ -682,7 +814,17 @@ export function DriversTab() {
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <Label className="font-medium text-sm">
@@ -690,6 +832,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
       {children}
+      {error && <p className="text-destructive text-xs">{error}</p>}
     </div>
   );
 }

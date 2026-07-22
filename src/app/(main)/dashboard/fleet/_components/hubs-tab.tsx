@@ -4,25 +4,25 @@ import { useEffect, useState } from "react";
 
 import {
   Building2,
-  ChevronDown,
+  Check,
+  CircleCheck,
   Clock,
   Loader2,
   MapPin,
   Pencil,
   Plus,
   Repeat,
-  Settings2,
   Star,
+  X,
 } from "lucide-react";
 
+import {
+  AddressAutocomplete,
+  type PlaceDetails,
+} from "@/components/ui/address-autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -51,6 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
 
@@ -80,24 +81,26 @@ type Hub = {
 
 type FormState = {
   name: string;
+  // Start From — the hub origin. Maps to payload.address + payload.geo.
+  startValue: string; // display string in the autocomplete
+  startSelected: boolean; // a real place has been chosen
   line1: string;
   city: string;
   state: string;
   zip: string;
-  timezone: string;
   lat: string;
   lng: string;
+  timezone: string;
   is_default: boolean;
-  // Route defaults (all optional; empty strings are omitted on save)
+  // Route defaults
   rdStartTime: string;
-  rdStartLine1: string;
-  rdStartCity: string;
-  rdStartState: string;
-  rdStartZip: string;
-  rdMinutesPerStop: string; // minutes in the UI, stored ×60 as seconds
   rdEndTime: string;
+  rdMinutesPerStop: string; // minutes in the UI, stored ×60 as seconds
   rdMaxStops: string;
   rdRoundTrip: boolean;
+  // End To — route_defaults.end_address (only when not round-trip).
+  endValue: string;
+  endSelected: boolean;
   rdEndLine1: string;
   rdEndCity: string;
   rdEndState: string;
@@ -106,30 +109,30 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   name: "",
+  startValue: "",
+  startSelected: false,
   line1: "",
   city: "",
-  state: "FL",
+  state: "",
   zip: "",
-  timezone: "America/New_York",
   lat: "",
   lng: "",
+  timezone: "America/New_York",
   is_default: false,
   rdStartTime: "",
-  rdStartLine1: "",
-  rdStartCity: "",
-  rdStartState: "",
-  rdStartZip: "",
-  rdMinutesPerStop: "",
   rdEndTime: "",
+  rdMinutesPerStop: "",
   rdMaxStops: "",
   rdRoundTrip: false,
+  endValue: "",
+  endSelected: false,
   rdEndLine1: "",
   rdEndCity: "",
   rdEndState: "",
   rdEndZip: "",
 };
 
-// Common US timezones for the compact Location picker (default America/New_York).
+// Common US timezones for the compact picker (default America/New_York).
 const TIMEZONES = [
   { value: "America/New_York", label: "Eastern (New York)" },
   { value: "America/Chicago", label: "Central (Chicago)" },
@@ -137,26 +140,33 @@ const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
 ];
 
+// Human-readable one-line address for the list.
 function addressLine(hub: Hub): string {
   const a = hub.address ?? {};
   const cityLine = [a.city, a.state, a.zip].filter(Boolean).join(", ").replace(/, (\d)/, " $1");
   return [a.line1, cityLine].filter(Boolean).join(" · ");
 }
 
-// Compact summary of a hub's route defaults for the list. Times/numbers render
-// mono; flags render plain. default_time_at_stop is seconds → shown as minutes.
-function routeDefaultChips(rd?: RouteDefaults | null): Array<{ text: string; mono: boolean }> {
-  if (!rd) return [];
-  const chips: Array<{ text: string; mono: boolean }> = [];
-  if (rd.start_time) {
-    chips.push({ text: rd.end_time ? `${rd.start_time}–${rd.end_time}` : rd.start_time, mono: true });
-  }
-  if (rd.default_time_at_stop != null) {
-    chips.push({ text: `${Math.round(rd.default_time_at_stop / 60)}m/stop`, mono: true });
-  }
-  if (rd.round_trip) chips.push({ text: "roundtrip", mono: false });
-  if (rd.max_stops != null && rd.max_stops > 0) chips.push({ text: `max ${rd.max_stops}`, mono: true });
-  return chips;
+// Joined address string used to pre-fill the autocomplete display value on edit.
+function formatAddr(a?: Address | null): string {
+  if (!a) return "";
+  return [a.line1, a.city, a.state, a.zip].filter(Boolean).join(", ");
+}
+
+function hasAddr(a?: Address | null): boolean {
+  return Boolean(a && (a.line1 || a.city || a.state || a.zip));
+}
+
+// Derive the list/table display values from a hub's route defaults.
+function routeCells(rd?: RouteDefaults | null) {
+  return {
+    start: rd?.start_time || "—",
+    end: rd?.end_time || "—",
+    maxStops: rd?.max_stops != null && rd.max_stops > 0 ? String(rd.max_stops) : rd ? "∞" : "—",
+    minPerStop:
+      rd?.default_time_at_stop != null ? `${Math.round(rd.default_time_at_stop / 60)}m` : "—",
+    roundtrip: Boolean(rd?.round_trip),
+  };
 }
 
 // Build an Address from four inputs, or undefined when they're all empty.
@@ -208,24 +218,24 @@ export function HubsTab() {
     const rd = hub.route_defaults ?? {};
     setForm({
       name: hub.name ?? "",
+      startValue: formatAddr(hub.address),
+      startSelected: hasAddr(hub.address),
       line1: hub.address?.line1 ?? "",
       city: hub.address?.city ?? "",
-      state: hub.address?.state ?? "FL",
+      state: hub.address?.state ?? "",
       zip: hub.address?.zip ?? "",
-      timezone: hub.timezone || "America/New_York",
       lat: hub.geo?.lat != null ? String(hub.geo.lat) : "",
       lng: hub.geo?.lng != null ? String(hub.geo.lng) : "",
+      timezone: hub.timezone || "America/New_York",
       is_default: Boolean(hub.is_default),
       rdStartTime: rd.start_time ?? "",
-      rdStartLine1: rd.start_address?.line1 ?? "",
-      rdStartCity: rd.start_address?.city ?? "",
-      rdStartState: rd.start_address?.state ?? "",
-      rdStartZip: rd.start_address?.zip ?? "",
+      rdEndTime: rd.end_time ?? "",
       rdMinutesPerStop:
         rd.default_time_at_stop != null ? String(Math.round(rd.default_time_at_stop / 60)) : "",
-      rdEndTime: rd.end_time ?? "",
       rdMaxStops: rd.max_stops != null ? String(rd.max_stops) : "",
       rdRoundTrip: Boolean(rd.round_trip),
+      endValue: formatAddr(rd.end_address),
+      endSelected: hasAddr(rd.end_address),
       rdEndLine1: rd.end_address?.line1 ?? "",
       rdEndCity: rd.end_address?.city ?? "",
       rdEndState: rd.end_address?.state ?? "",
@@ -236,6 +246,58 @@ export function HubsTab() {
     setSheetOpen(true);
   }
 
+  // ── Start From handlers ──
+  function onStartPlace(d: PlaceDetails) {
+    setForm((f) => ({
+      ...f,
+      startValue: d.formatted_address || d.street || f.startValue,
+      line1: d.street ?? "",
+      city: d.city ?? "",
+      state: d.state ?? "",
+      zip: d.zip ?? "",
+      lat: d.lat != null ? String(d.lat) : "",
+      lng: d.lng != null ? String(d.lng) : "",
+      startSelected: true,
+    }));
+  }
+  function clearStart() {
+    setForm((f) => ({
+      ...f,
+      startValue: "",
+      line1: "",
+      city: "",
+      state: "",
+      zip: "",
+      lat: "",
+      lng: "",
+      startSelected: false,
+    }));
+  }
+
+  // ── End To handlers ──
+  function onEndPlace(d: PlaceDetails) {
+    setForm((f) => ({
+      ...f,
+      endValue: d.formatted_address || d.street || f.endValue,
+      rdEndLine1: d.street ?? "",
+      rdEndCity: d.city ?? "",
+      rdEndState: d.state ?? "",
+      rdEndZip: d.zip ?? "",
+      endSelected: true,
+    }));
+  }
+  function clearEnd() {
+    setForm((f) => ({
+      ...f,
+      endValue: "",
+      rdEndLine1: "",
+      rdEndCity: "",
+      rdEndState: "",
+      rdEndZip: "",
+      endSelected: false,
+    }));
+  }
+
   async function submit() {
     setAttempted(true);
     if (!form.name.trim()) {
@@ -244,10 +306,6 @@ export function HubsTab() {
     }
     const lat = form.lat.trim() ? Number(form.lat) : undefined;
     const lng = form.lng.trim() ? Number(form.lng) : undefined;
-    if ((form.lat.trim() && Number.isNaN(lat!)) || (form.lng.trim() && Number.isNaN(lng!))) {
-      setError("Latitude and longitude must be numbers.");
-      return;
-    }
 
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
@@ -260,13 +318,17 @@ export function HubsTab() {
       timezone: form.timezone.trim() || "America/New_York",
       is_default: form.is_default,
     };
-    if (lat != null || lng != null) payload.geo = { lat, lng };
+    if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
+      payload.geo = {
+        lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
+        lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
+      };
+    }
 
-    // Route defaults — include only the fields the user filled in.
+    // Route defaults — include only the fields the user filled in. start_address
+    // is intentionally omitted (it defaults to the hub address).
     const routeDefaults: RouteDefaults = {};
     if (form.rdStartTime.trim()) routeDefaults.start_time = form.rdStartTime.trim();
-    const startAddress = buildAddress(form.rdStartLine1, form.rdStartCity, form.rdStartState, form.rdStartZip);
-    if (startAddress) routeDefaults.start_address = startAddress;
     if (form.rdMinutesPerStop.trim()) {
       const minutes = Number(form.rdMinutesPerStop);
       if (!Number.isNaN(minutes)) routeDefaults.default_time_at_stop = Math.round(minutes * 60);
@@ -306,22 +368,6 @@ export function HubsTab() {
   const endBeforeStart =
     Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
   const nameError = attempted && !form.name.trim();
-  const latInvalid = form.lat.trim() !== "" && Number.isNaN(Number(form.lat));
-  const lngInvalid = form.lng.trim() !== "" && Number.isNaN(Number(form.lng));
-  // Any custom start/end/coordinate value keeps the Advanced disclosure open on edit.
-  const advancedFilled =
-    Boolean(
-      form.lat ||
-        form.lng ||
-        form.rdStartLine1 ||
-        form.rdStartCity ||
-        form.rdStartState ||
-        form.rdStartZip ||
-        form.rdEndLine1 ||
-        form.rdEndCity ||
-        form.rdEndState ||
-        form.rdEndZip,
-    );
 
   return (
     <div className="space-y-5">
@@ -375,13 +421,17 @@ export function HubsTab() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="pl-4">Hub</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Route defaults</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead className="hidden lg:table-cell">End</TableHead>
+                  <TableHead className="hidden lg:table-cell">Max stops</TableHead>
+                  <TableHead className="hidden xl:table-cell">Min/stop</TableHead>
+                  <TableHead className="hidden xl:table-cell">Roundtrip</TableHead>
                   <TableHead className="pr-4 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hubs.map((hub) => {
-                  const chips = routeDefaultChips(hub.route_defaults);
+                  const c = routeCells(hub.route_defaults);
                   return (
                     <TableRow key={hub.id}>
                       <TableCell className="pl-4">
@@ -405,22 +455,24 @@ export function HubsTab() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-[260px] whitespace-normal text-muted-foreground text-sm">
+                      <TableCell className="max-w-[240px] whitespace-normal text-muted-foreground text-sm">
                         {addressLine(hub) || "—"}
                       </TableCell>
-                      <TableCell>
-                        {chips.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {chips.map((c) => (
-                              <Badge
-                                key={c.text}
-                                variant="secondary"
-                                className={c.mono ? "font-mono text-[11px] tabular-nums" : "text-[11px]"}
-                              >
-                                {c.text}
-                              </Badge>
-                            ))}
-                          </div>
+                      <TableCell className="font-mono text-sm tabular-nums">{c.start}</TableCell>
+                      <TableCell className="hidden font-mono text-sm tabular-nums lg:table-cell">
+                        {c.end}
+                      </TableCell>
+                      <TableCell className="hidden font-mono text-sm tabular-nums lg:table-cell">
+                        {c.maxStops}
+                      </TableCell>
+                      <TableCell className="hidden font-mono text-sm tabular-nums xl:table-cell">
+                        {c.minPerStop}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        {c.roundtrip ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Check className="size-3" aria-hidden="true" /> Yes
+                          </Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
@@ -440,7 +492,7 @@ export function HubsTab() {
           {/* Mobile: stacked card list */}
           <div className="space-y-3 md:hidden">
             {hubs.map((hub) => {
-              const chips = routeDefaultChips(hub.route_defaults);
+              const c = routeCells(hub.route_defaults);
               const addr = addressLine(hub);
               return (
                 <Card key={hub.id}>
@@ -477,19 +529,18 @@ export function HubsTab() {
                         <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
                       </Button>
                     </div>
-                    {chips.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pl-[42px]">
-                        {chips.map((c) => (
-                          <Badge
-                            key={c.text}
-                            variant="secondary"
-                            className={c.mono ? "font-mono text-[10px] tabular-nums" : "text-[10px]"}
-                          >
-                            {c.text}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[42px] text-muted-foreground text-xs">
+                      <span className="font-mono tabular-nums">
+                        {c.start}–{c.end}
+                      </span>
+                      <span className="font-mono tabular-nums">max {c.maxStops}</span>
+                      <span className="font-mono tabular-nums">{c.minPerStop}/stop</span>
+                      {c.roundtrip && (
+                        <span className="inline-flex items-center gap-1">
+                          <Repeat className="size-3" aria-hidden="true" /> roundtrip
+                        </span>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -500,7 +551,7 @@ export function HubsTab() {
 
       {/* Add / edit sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[620px]">
           <SheetHeader className="shrink-0 gap-1 border-b px-5 py-4 pr-12">
             <SheetTitle className="font-semibold text-base">{editing ? "Edit hub" : "New hub"}</SheetTitle>
             <SheetDescription>
@@ -526,79 +577,58 @@ export function HubsTab() {
                   className="h-9"
                 />
               </Field>
-              <Field label="Street address">
-                <Input
-                  value={form.line1}
-                  onChange={(e) => setForm((f) => ({ ...f, line1: e.target.value }))}
-                  placeholder="123 Main St"
-                  className="h-9"
+
+              <Field label="Start From" hint="Where the route starts — the hub's origin.">
+                <AddressField
+                  value={form.startValue}
+                  selected={form.startSelected}
+                  placeholder="Search start address…"
+                  onChange={(v) => setForm((f) => ({ ...f, startValue: v, startSelected: false }))}
+                  onPlaceDetails={onStartPlace}
+                  onClear={clearStart}
                 />
               </Field>
-              <div className="grid grid-cols-6 gap-3">
-                <div className="col-span-3">
-                  <Field label="City">
-                    <Input
-                      value={form.city}
-                      onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-                      placeholder="Orlando"
-                      className="h-9"
+
+              {!form.rdRoundTrip && (
+                <Field label="End To" hint="Where the route ends.">
+                  <AddressField
+                    value={form.endValue}
+                    selected={form.endSelected}
+                    placeholder="Search end address…"
+                    onChange={(v) => setForm((f) => ({ ...f, endValue: v, endSelected: false }))}
+                    onPlaceDetails={onEndPlace}
+                    onClear={clearEnd}
+                  />
+                </Field>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Timezone">
+                  <Select
+                    value={form.timezone}
+                    onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
+                  >
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONES.map((tz) => (
+                        <SelectItem key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Default hub">
+                  <div className="flex h-9 items-center justify-between rounded-lg border px-3">
+                    <span className="text-muted-foreground text-xs">Use when unspecified</span>
+                    <Switch
+                      checked={form.is_default}
+                      onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
                     />
-                  </Field>
-                </div>
-                <div className="col-span-1">
-                  <Field label="State">
-                    <Input
-                      value={form.state}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))
-                      }
-                      placeholder="FL"
-                      maxLength={2}
-                      className="h-9 uppercase"
-                    />
-                  </Field>
-                </div>
-                <div className="col-span-2">
-                  <Field label="ZIP">
-                    <Input
-                      value={form.zip}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, zip: e.target.value.replace(/\D/g, "").slice(0, 5) }))
-                      }
-                      placeholder="32801"
-                      inputMode="numeric"
-                      maxLength={5}
-                      className="h-9 tabular-nums"
-                    />
-                  </Field>
-                </div>
-              </div>
-              <Field label="Timezone">
-                <Select
-                  value={form.timezone}
-                  onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue placeholder="Select timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
-                <div>
-                  <p className="font-medium text-sm">Set as default hub</p>
-                  <p className="text-muted-foreground text-xs">Used automatically when no hub is specified.</p>
-                </div>
-                <Switch
-                  checked={form.is_default}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-                />
+                  </div>
+                </Field>
               </div>
             </section>
 
@@ -679,136 +709,6 @@ export function HubsTab() {
               </div>
             </section>
 
-            {/* ── Advanced (collapsed by default) ── */}
-            <Collapsible defaultOpen={advancedFilled} className="space-y-4">
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="group flex w-full items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex items-center gap-2">
-                    <Settings2 className="size-4 text-muted-foreground" aria-hidden="true" />
-                    <div>
-                      <p className="font-medium text-sm">Custom start / end point (optional)</p>
-                      <p className="text-muted-foreground text-xs">
-                        By default the route starts and ends at this hub&apos;s address.
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
-                    aria-hidden="true"
-                  />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Latitude" error={latInvalid ? "Must be a number." : undefined}>
-                    <Input
-                      value={form.lat}
-                      onChange={(e) => setForm((f) => ({ ...f, lat: e.target.value }))}
-                      placeholder="28.5383"
-                      inputMode="decimal"
-                      aria-invalid={latInvalid || undefined}
-                      className="h-9 font-mono tabular-nums"
-                    />
-                  </Field>
-                  <Field label="Longitude" error={lngInvalid ? "Must be a number." : undefined}>
-                    <Input
-                      value={form.lng}
-                      onChange={(e) => setForm((f) => ({ ...f, lng: e.target.value }))}
-                      placeholder="-81.3792"
-                      inputMode="decimal"
-                      aria-invalid={lngInvalid || undefined}
-                      className="h-9 font-mono tabular-nums"
-                    />
-                  </Field>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="font-medium text-sm">Start address</Label>
-                  <p className="text-muted-foreground text-xs">Leave empty to use the hub address.</p>
-                  <Input
-                    value={form.rdStartLine1}
-                    onChange={(e) => setForm((f) => ({ ...f, rdStartLine1: e.target.value }))}
-                    placeholder="Street address"
-                    className="h-9"
-                  />
-                  <div className="grid grid-cols-6 gap-3">
-                    <div className="col-span-3">
-                      <Input
-                        value={form.rdStartCity}
-                        onChange={(e) => setForm((f) => ({ ...f, rdStartCity: e.target.value }))}
-                        placeholder="City"
-                        className="h-9"
-                      />
-                    </div>
-                    <Input
-                      value={form.rdStartState}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, rdStartState: e.target.value.toUpperCase().slice(0, 2) }))
-                      }
-                      placeholder="FL"
-                      maxLength={2}
-                      className="col-span-1 h-9 uppercase"
-                    />
-                    <Input
-                      value={form.rdStartZip}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, rdStartZip: e.target.value.replace(/\D/g, "").slice(0, 5) }))
-                      }
-                      placeholder="ZIP"
-                      inputMode="numeric"
-                      maxLength={5}
-                      className="col-span-2 h-9 tabular-nums"
-                    />
-                  </div>
-                </div>
-
-                {!form.rdRoundTrip && (
-                  <div className="space-y-1.5">
-                    <Label className="font-medium text-sm">End address</Label>
-                    <p className="text-muted-foreground text-xs">Leave empty to use the hub address.</p>
-                    <Input
-                      value={form.rdEndLine1}
-                      onChange={(e) => setForm((f) => ({ ...f, rdEndLine1: e.target.value }))}
-                      placeholder="Street address"
-                      className="h-9"
-                    />
-                    <div className="grid grid-cols-6 gap-3">
-                      <div className="col-span-3">
-                        <Input
-                          value={form.rdEndCity}
-                          onChange={(e) => setForm((f) => ({ ...f, rdEndCity: e.target.value }))}
-                          placeholder="City"
-                          className="h-9"
-                        />
-                      </div>
-                      <Input
-                        value={form.rdEndState}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, rdEndState: e.target.value.toUpperCase().slice(0, 2) }))
-                        }
-                        placeholder="FL"
-                        maxLength={2}
-                        className="col-span-1 h-9 uppercase"
-                      />
-                      <Input
-                        value={form.rdEndZip}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, rdEndZip: e.target.value.replace(/\D/g, "").slice(0, 5) }))
-                        }
-                        placeholder="ZIP"
-                        inputMode="numeric"
-                        maxLength={5}
-                        className="col-span-2 h-9 tabular-nums"
-                      />
-                    </div>
-                  </div>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-
             {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
 
@@ -827,14 +727,66 @@ export function HubsTab() {
   );
 }
 
+// Stops-styled address input: emerald border + check when a place is chosen,
+// with a clear button. Wraps the shared AddressAutocomplete (borderless inside).
+function AddressField({
+  value,
+  selected,
+  placeholder,
+  onChange,
+  onPlaceDetails,
+  onClear,
+}: {
+  value: string;
+  selected: boolean;
+  placeholder: string;
+  onChange: (v: string) => void;
+  onPlaceDetails: (d: PlaceDetails) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15",
+        selected ? "border-emerald-400 bg-emerald-50/30" : "border-input",
+      )}
+    >
+      <div className="relative flex items-center">
+        <AddressAutocomplete
+          value={value}
+          onChange={onChange}
+          onPlaceDetails={onPlaceDetails}
+          placeholder={placeholder}
+          className="h-9 border-0 bg-transparent pr-16 text-sm focus-visible:border-0 focus-visible:ring-0"
+        />
+        <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
+          {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}
+          {value && (
+            <button
+              type="button"
+              aria-label="Clear address"
+              onClick={onClear}
+              className="pointer-events-auto text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Field({
   label,
   required,
+  hint,
   error,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   error?: string;
   children: React.ReactNode;
 }) {
@@ -844,6 +796,7 @@ function Field({
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
+      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
       {children}
       {error && <p className="text-destructive text-xs">{error}</p>}
     </div>

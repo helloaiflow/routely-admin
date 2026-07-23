@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  ArrowLeft,
   Building2,
   Check,
   ChevronLeft,
@@ -26,6 +25,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -180,7 +187,7 @@ function buildAddress(line1: string, city: string, state: string, zip: string): 
 export function HubsTab() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [view, setView] = useState<"list" | "form">("list");
+  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Hub | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -212,7 +219,7 @@ export function HubsTab() {
     setForm({ ...EMPTY_FORM, is_default: (hubs ?? []).length === 0 });
     setError("");
     setAttempted(false);
-    setView("form");
+    setFormOpen(true);
   }
 
   function openEdit(hub: Hub) {
@@ -245,7 +252,7 @@ export function HubsTab() {
     });
     setError("");
     setAttempted(false);
-    setView("form");
+    setFormOpen(true);
   }
 
   // ── Start From handlers ──
@@ -362,7 +369,7 @@ export function HubsTab() {
       setError(j.error || "Could not save the hub. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setView("list");
+    setFormOpen(false);
     load();
   }
 
@@ -392,33 +399,20 @@ export function HubsTab() {
   const safePage = Math.min(page, pages - 1);
   const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  // ── Form view: full-width form on the page (replaces the old Sheet) ──
-  if (view === "form") {
-    return (
-      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-        {/* Sticky header with back arrow (Stops page-mode pattern) */}
-        <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            onClick={() => setView("list")}
-            aria-label="Back to hubs"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-          </Button>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-base">{editing ? "Edit hub" : "New hub"}</h3>
-            <p className="text-muted-foreground text-sm">
-              {editing ? "Update this dispatch origin." : "Add a depot where routes start and end."}
-            </p>
-          </div>
-        </div>
+  // ── Add/Edit form dialog (shared by New + Edit) ──
+  const formDialog = (
+    <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>{editing ? "Edit hub" : "New hub"}</DialogTitle>
+          <DialogDescription>
+            {editing ? "Update this dispatch origin." : "Add a depot where routes start and end."}
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="space-y-6 px-5 py-5 md:px-6">
-          <div className="mx-auto max-w-2xl space-y-6">
-            {/* ── Location ── */}
-            <section className="space-y-4">
+        <div className="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5">
+          {/* ── Location ── */}
+          <section className="space-y-4">
               <div className="flex items-center gap-2">
                 <MapPin className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 <h4 className="font-semibold text-sm">Location</h4>
@@ -566,26 +560,26 @@ export function HubsTab() {
               </div>
             </section>
 
-            {error && <p className="text-destructive text-sm">{error}</p>}
-          </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 border-t px-5 py-3">
-          <Button variant="outline" onClick={() => setView("list")} disabled={saving}>
+        <DialogFooter className="border-t px-5 py-3">
+          <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
             Cancel
           </Button>
           <Button onClick={submit} disabled={saving}>
             {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
             {editing ? "Save changes" : "Create hub"}
           </Button>
-        </div>
-      </div>
-    );
-  }
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // ── List view: Labels-style grid card ──
   return (
     <div className="space-y-5">
+      {formDialog}
       {/* Header + add */}
       <div className="flex items-center justify-between">
         <div>

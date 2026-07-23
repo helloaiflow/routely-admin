@@ -11,6 +11,7 @@ import {
   Phone,
   Search,
   Truck,
+  Users,
   Warehouse,
 } from "lucide-react";
 
@@ -104,10 +105,24 @@ export const sidebarItems: NavGroup[] = [
             permission: "orders",
             comingSoon: true,
           },
+        ],
+      },
+      {
+        title: "Fleet",
+        url: "/dashboard/hubs",
+        icon: Warehouse,
+        permission: "settings",
+        subItems: [
           {
-            title: "Fleet",
-            url: "/dashboard/fleet",
-            icon: Warehouse,
+            title: "Hubs",
+            url: "/dashboard/hubs",
+            icon: Building2,
+            permission: "settings",
+          },
+          {
+            title: "Drivers",
+            url: "/dashboard/drivers",
+            icon: Users,
             permission: "settings",
           },
         ],

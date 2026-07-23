@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  ArrowLeft,
   Ban,
   Building2,
   Car,
@@ -49,6 +48,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -266,8 +273,8 @@ export function DriversTab() {
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [loadError, setLoadError] = useState(false);
 
-  // "list" = the labels-style grid; "form" = the full-width driver form.
-  const [view, setView] = useState<"list" | "form">("list");
+  // Add/Edit form opens in a modal Dialog (shared by New + Edit).
+  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -351,7 +358,7 @@ export function DriversTab() {
     setForm(EMPTY_FORM);
     setError("");
     setAttempted(false);
-    setView("form");
+    setFormOpen(true);
   }
 
   function openEdit(driver: Driver) {
@@ -371,7 +378,7 @@ export function DriversTab() {
     });
     setError("");
     setAttempted(false);
-    setView("form");
+    setFormOpen(true);
   }
 
   const phoneDigits = form.phone.replace(/\D/g, "");
@@ -420,7 +427,7 @@ export function DriversTab() {
       setError(j.error || "Could not save the driver. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setView("list");
+    setFormOpen(false);
     loadDrivers();
   }
 
@@ -452,35 +459,21 @@ export function DriversTab() {
     }));
   }
 
-  // ── Full-width form view ────────────────────────────────────────────────────
-  if (view === "form") {
-    return (
-      <>
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-          {/* Sticky header with back arrow */}
-          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border/40 bg-card/95 px-4 py-3 backdrop-blur-sm">
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-              aria-label="Back to drivers"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden="true" />
-            </button>
-            <span className="text-muted-foreground/25">|</span>
-            <div className="min-w-0">
-              <p className="font-semibold text-base">{editing ? "Edit driver" : "New driver"}</p>
-              <p className="truncate text-muted-foreground text-xs">
-                {editing ? "Update this driver's details." : "Add a driver to the Routely fleet."}
-              </p>
-            </div>
-          </div>
+  // ── Add/Edit form dialog (shared by New + Edit) ──
+  const formDialog = (
+    <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>{editing ? "Edit driver" : "New driver"}</DialogTitle>
+          <DialogDescription>
+            {editing ? "Update this driver's details." : "Add a driver to the Routely fleet."}
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Body */}
-          <div className="space-y-6 px-5 py-5 md:px-6">
-            <div className="mx-auto max-w-2xl space-y-6">
-              {/* ── Details ── */}
-              <section className="space-y-4">
+        {/* Body */}
+        <div className="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5">
+          {/* ── Details ── */}
+          <section className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Contact className="size-3.5 text-muted-foreground" aria-hidden="true" />
                   <h4 className="font-semibold text-sm">Details</h4>
@@ -570,35 +563,27 @@ export function DriversTab() {
                 )}
               </section>
 
-              {error && <p className="text-destructive text-sm">{error}</p>}
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex justify-end gap-2 border-t px-5 py-3">
-            <Button variant="outline" onClick={() => setView("list")} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
-              {editing ? "Save changes" : "Create driver"}
-            </Button>
-          </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
 
-        {/* Status change confirm — rendered regardless of view */}
-        <StatusConfirm
-          statusTarget={statusTarget}
-          setStatusTarget={setStatusTarget}
-          confirmStatusChange={confirmStatusChange}
-        />
-      </>
-    );
-  }
+        {/* Footer */}
+        <DialogFooter className="border-t px-5 py-3">
+          <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
+            {editing ? "Save changes" : "Create driver"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // ── List view ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+      {formDialog}
       {/* Header + add */}
       <div className="flex items-center justify-between">
         <div>

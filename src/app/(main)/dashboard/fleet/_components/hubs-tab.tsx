@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  ArrowLeft,
   Building2,
   Check,
+  ChevronLeft,
+  ChevronRight,
   CircleCheck,
   Clock,
   Loader2,
   MapPin,
-  Pencil,
   Plus,
   Repeat,
+  Search,
   Star,
   X,
 } from "lucide-react";
@@ -33,14 +36,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -140,6 +135,8 @@ const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
 ];
 
+const PAGE_SIZE = 25;
+
 // Human-readable one-line address for the list.
 function addressLine(hub: Hub): string {
   const a = hub.address ?? {};
@@ -183,12 +180,17 @@ function buildAddress(line1: string, city: string, state: string, zip: string): 
 export function HubsTab() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [view, setView] = useState<"list" | "form">("list");
   const [editing, setEditing] = useState<Hub | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [attempted, setAttempted] = useState(false);
+
+  // List toolbar state
+  const [query, setQuery] = useState("");
+  const [rtFilter, setRtFilter] = useState<"all" | "roundtrip" | "oneway">("all");
+  const [page, setPage] = useState(0);
 
   function load() {
     setLoadError(false);
@@ -210,7 +212,7 @@ export function HubsTab() {
     setForm({ ...EMPTY_FORM, is_default: (hubs ?? []).length === 0 });
     setError("");
     setAttempted(false);
-    setSheetOpen(true);
+    setView("form");
   }
 
   function openEdit(hub: Hub) {
@@ -243,7 +245,7 @@ export function HubsTab() {
     });
     setError("");
     setAttempted(false);
-    setSheetOpen(true);
+    setView("form");
   }
 
   // ── Start From handlers ──
@@ -360,7 +362,7 @@ export function HubsTab() {
       setError(j.error || "Could not save the hub. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setSheetOpen(false);
+    setView("list");
     load();
   }
 
@@ -369,197 +371,52 @@ export function HubsTab() {
     Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
   const nameError = attempted && !form.name.trim();
 
-  return (
-    <div className="space-y-5">
-      {/* Header + add */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-lg tracking-tight">Hubs</h3>
-          <p className="text-muted-foreground text-sm">Dispatch origins where routes begin and end.</p>
-        </div>
-        <Button size="sm" className="h-9" onClick={openAdd}>
-          <Plus className="mr-1.5 size-4" aria-hidden="true" /> New hub
-        </Button>
-      </div>
+  const resetPage = () => setPage(0);
 
-      {/* List */}
-      {!hubs ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={`hub-${i}`} className="h-14 w-full" />
-          ))}
-        </div>
-      ) : hubs.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
-            <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
-              <Building2 className="size-6" aria-hidden="true" />
-            </span>
-            <p className="font-medium text-sm">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
-            <p className="max-w-sm text-muted-foreground text-xs">
-              {loadError
-                ? "There was a problem reaching the fleet service. Try again."
-                : "Add the depots where Routely drivers start and finish their routes."}
-            </p>
-            {loadError ? (
-              <Button size="sm" variant="outline" className="mt-2 h-9" onClick={load}>
-                Retry
-              </Button>
-            ) : (
-              <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
-                <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first hub
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Desktop / tablet: table */}
-          <Card className="hidden overflow-hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-4">Hub</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead className="hidden lg:table-cell">End</TableHead>
-                  <TableHead className="hidden lg:table-cell">Max stops</TableHead>
-                  <TableHead className="hidden xl:table-cell">Min/stop</TableHead>
-                  <TableHead className="hidden xl:table-cell">Roundtrip</TableHead>
-                  <TableHead className="pr-4 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {hubs.map((hub) => {
-                  const c = routeCells(hub.route_defaults);
-                  return (
-                    <TableRow key={hub.id}>
-                      <TableCell className="pl-4">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={
-                              hub.is_default
-                                ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                                : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                            }
-                          >
-                            <Building2 className="size-4" aria-hidden="true" />
-                          </span>
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="font-medium text-sm">{hub.name}</span>
-                            {hub.is_default && (
-                              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                                <Star className="size-3" aria-hidden="true" /> Default
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[240px] whitespace-normal text-muted-foreground text-sm">
-                        {addressLine(hub) || "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm tabular-nums">{c.start}</TableCell>
-                      <TableCell className="hidden font-mono text-sm tabular-nums lg:table-cell">
-                        {c.end}
-                      </TableCell>
-                      <TableCell className="hidden font-mono text-sm tabular-nums lg:table-cell">
-                        {c.maxStops}
-                      </TableCell>
-                      <TableCell className="hidden font-mono text-sm tabular-nums xl:table-cell">
-                        {c.minPerStop}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        {c.roundtrip ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Check className="size-3" aria-hidden="true" /> Yes
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="pr-4 text-right">
-                        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => openEdit(hub)}>
-                          <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+  // Filter + paginate the list (Labels grid pattern).
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (hubs ?? []).filter((hub) => {
+      const rt = Boolean(hub.route_defaults?.round_trip);
+      if (rtFilter === "roundtrip" && !rt) return false;
+      if (rtFilter === "oneway" && rt) return false;
+      if (!q) return true;
+      return (
+        (hub.name ?? "").toLowerCase().includes(q) ||
+        addressLine(hub).toLowerCase().includes(q)
+      );
+    });
+  }, [hubs, query, rtFilter]);
 
-          {/* Mobile: stacked card list */}
-          <div className="space-y-3 md:hidden">
-            {hubs.map((hub) => {
-              const c = routeCells(hub.route_defaults);
-              const addr = addressLine(hub);
-              return (
-                <Card key={hub.id}>
-                  <CardContent className="space-y-2.5 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span
-                          className={
-                            hub.is_default
-                              ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                              : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                          }
-                        >
-                          <Building2 className="size-4" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate font-medium text-sm">{hub.name}</span>
-                            {hub.is_default && (
-                              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                                <Star className="size-3" aria-hidden="true" /> Default
-                              </Badge>
-                            )}
-                          </div>
-                          {addr && <p className="mt-0.5 truncate text-muted-foreground text-xs">{addr}</p>}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="-mr-1 h-8 shrink-0 text-xs"
-                        onClick={() => openEdit(hub)}
-                      >
-                        <Pencil className="mr-1 size-3" aria-hidden="true" /> Edit
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[42px] text-muted-foreground text-xs">
-                      <span className="font-mono tabular-nums">
-                        {c.start}–{c.end}
-                      </span>
-                      <span className="font-mono tabular-nums">max {c.maxStops}</span>
-                      <span className="font-mono tabular-nums">{c.minPerStop}/stop</span>
-                      {c.roundtrip && (
-                        <span className="inline-flex items-center gap-1">
-                          <Repeat className="size-3" aria-hidden="true" /> roundtrip
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </>
-      )}
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pages - 1);
+  const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-      {/* Add / edit sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[620px]">
-          <SheetHeader className="shrink-0 gap-1 border-b px-5 py-4 pr-12">
-            <SheetTitle className="font-semibold text-base">{editing ? "Edit hub" : "New hub"}</SheetTitle>
-            <SheetDescription>
+  // ── Form view: full-width form on the page (replaces the old Sheet) ──
+  if (view === "form") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+        {/* Sticky header with back arrow (Stops page-mode pattern) */}
+        <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={() => setView("list")}
+            aria-label="Back to hubs"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+          </Button>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-base">{editing ? "Edit hub" : "New hub"}</h3>
+            <p className="text-muted-foreground text-sm">
               {editing ? "Update this dispatch origin." : "Add a depot where routes start and end."}
-            </SheetDescription>
-          </SheetHeader>
+            </p>
+          </div>
+        </div>
 
-          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        <div className="space-y-6 px-5 py-5 md:px-6">
+          <div className="mx-auto max-w-2xl space-y-6">
             {/* ── Location ── */}
             <section className="space-y-4">
               <div className="flex items-center gap-2">
@@ -711,18 +568,258 @@ export function HubsTab() {
 
             {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
+        </div>
 
-          <SheetFooter className="shrink-0 flex-row justify-end gap-2 border-t px-5 py-3">
-            <Button variant="outline" onClick={() => setSheetOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={submit} disabled={saving}>
-              {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
-              {editing ? "Save changes" : "Create hub"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+        <div className="flex justify-end gap-2 border-t px-5 py-3">
+          <Button variant="outline" onClick={() => setView("list")} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
+            {editing ? "Save changes" : "Create hub"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── List view: Labels-style grid card ──
+  return (
+    <div className="space-y-5">
+      {/* Header + add */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-lg tracking-tight">Hubs</h3>
+          <p className="text-muted-foreground text-sm">Dispatch origins where routes begin and end.</p>
+        </div>
+        <Button size="sm" className="h-9" onClick={openAdd}>
+          <Plus className="mr-1.5 size-4" aria-hidden="true" /> New hub
+        </Button>
+      </div>
+
+      {/* List */}
+      {!hubs ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={`hub-${i}`} className="h-14 w-full" />
+          ))}
+        </div>
+      ) : hubs.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
+            <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
+              <Building2 className="size-6" aria-hidden="true" />
+            </span>
+            <p className="font-medium text-sm">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
+            <p className="max-w-sm text-muted-foreground text-xs">
+              {loadError
+                ? "There was a problem reaching the fleet service. Try again."
+                : "Add the depots where Routely drivers start and finish their routes."}
+            </p>
+            {loadError ? (
+              <Button size="sm" variant="outline" className="mt-2 h-9" onClick={load}>
+                Retry
+              </Button>
+            ) : (
+              <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
+                <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first hub
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+          {/* ── Toolbar — lives INSIDE the card, separated by border-b ── */}
+          <div className="flex flex-col gap-2 border-border/60 border-b px-3 py-2.5 sm:flex-row sm:items-center">
+            <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+              <Search className="size-3.5 shrink-0 text-primary/60" aria-hidden="true" />
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  resetPage();
+                }}
+                placeholder="Search hubs by name or address…"
+                aria-label="Search hubs"
+                className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-[13px]"
+              />
+            </div>
+            <Select
+              value={rtFilter}
+              onValueChange={(v) => {
+                setRtFilter(v as "all" | "roundtrip" | "oneway");
+                resetPage();
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="h-9 w-[150px] border-border/60 text-[13px]"
+                aria-label="Filter by roundtrip"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All hubs</SelectItem>
+                <SelectItem value="roundtrip">Roundtrip only</SelectItem>
+                <SelectItem value="oneway">One-way only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* ── Desktop table ── */}
+          <div className="hidden sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Hub Name</TableHead>
+                  <TableHead>Address</TableHead>
+                  <TableHead>Start Time</TableHead>
+                  <TableHead>End Time</TableHead>
+                  <TableHead>Max Stops</TableHead>
+                  <TableHead>Minutes per Stop</TableHead>
+                  <TableHead>Roundtrip</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((hub) => {
+                  const c = routeCells(hub.route_defaults);
+                  return (
+                    <TableRow key={hub.id} className="cursor-pointer" onClick={() => openEdit(hub)}>
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={
+                              hub.is_default
+                                ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+                                : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+                            }
+                          >
+                            <Building2 className="size-4" aria-hidden="true" />
+                          </span>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="font-medium text-sm">{hub.name}</span>
+                            {hub.is_default && (
+                              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
+                                <Star className="size-3" aria-hidden="true" /> Default
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[240px] whitespace-normal text-muted-foreground text-sm">
+                        {addressLine(hub) || "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm tabular-nums">{c.start}</TableCell>
+                      <TableCell className="font-mono text-sm tabular-nums">{c.end}</TableCell>
+                      <TableCell className="font-mono text-sm tabular-nums">{c.maxStops}</TableCell>
+                      <TableCell className="font-mono text-sm tabular-nums">{c.minPerStop}</TableCell>
+                      <TableCell>
+                        {c.roundtrip ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Check className="size-3" aria-hidden="true" /> Yes
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* ── Mobile rows (same card, divided) ── */}
+          <div className="divide-y divide-border/40 sm:hidden">
+            {rows.map((hub) => {
+              const c = routeCells(hub.route_defaults);
+              const addr = addressLine(hub);
+              return (
+                <button
+                  key={hub.id}
+                  type="button"
+                  onClick={() => openEdit(hub)}
+                  className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/30"
+                >
+                  <span
+                    className={
+                      hub.is_default
+                        ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+                        : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+                    }
+                  >
+                    <Building2 className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate font-medium text-[13px]">{hub.name}</span>
+                      {hub.is_default && (
+                        <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
+                          <Star className="size-3" aria-hidden="true" /> Default
+                        </Badge>
+                      )}
+                    </span>
+                    {addr && (
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{addr}</span>
+                    )}
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                      <span className="font-mono tabular-nums">
+                        {c.start}–{c.end}
+                      </span>
+                      <span>·</span>
+                      <span className="font-mono tabular-nums">max {c.maxStops}</span>
+                      <span>·</span>
+                      <span className="font-mono tabular-nums">{c.minPerStop}/stop</span>
+                      {c.roundtrip && (
+                        <>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Repeat className="size-3" aria-hidden="true" /> roundtrip
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Footer: empty-filter state + pagination inside the card ── */}
+          {filtered.length === 0 && (
+            <p className="px-4 py-8 text-center text-muted-foreground text-sm">No hubs match those filters.</p>
+          )}
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-border/60 border-t px-3 py-2">
+              <p className="text-[11px] text-muted-foreground tabular-nums">
+                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 border-border/60"
+                  disabled={safePage === 0}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  <ChevronLeft className="size-3.5" aria-hidden="true" />
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 border-border/60"
+                  disabled={safePage >= pages - 1}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  Next
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

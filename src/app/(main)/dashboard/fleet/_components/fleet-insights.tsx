@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import Image from "next/image";
-
+import { animate, motion, useMotionValue, useReducedMotion } from "framer-motion";
 import { Activity, CheckCircle2, Clock3, MapPin, Route, Target, Users, XCircle } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BRAND_PRIMARY, brandAlpha } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 type StopSnapshot = {
@@ -110,6 +110,196 @@ function useOperationalStops() {
   return stops;
 }
 
+/* ── Magic-UI-style number ticker (counts up on mount, glides on updates) ─── */
+function NumberTicker({
+  value,
+  decimals = 0,
+  suffix = "",
+  reduced,
+  delay = 0.2,
+}: {
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  reduced: boolean;
+  delay?: number;
+}) {
+  const mv = useMotionValue(0);
+  const [display, setDisplay] = useState(0);
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (reduced) {
+      setDisplay(value);
+      return;
+    }
+    const isFirst = firstRun.current;
+    firstRun.current = false;
+    const controls = animate(mv, value, {
+      duration: isFirst ? 1.4 : 0.6,
+      delay: isFirst ? delay : 0,
+      ease: [0.16, 1, 0.3, 1],
+    });
+    const unsub = mv.on("change", (v) => setDisplay(v));
+    return () => {
+      controls.stop();
+      unsub();
+    };
+  }, [value, reduced, delay, mv]);
+
+  const text = decimals > 0 ? display.toFixed(decimals) : Math.round(display).toLocaleString();
+  return (
+    <span className="tabular-nums">
+      {text}
+      {suffix}
+    </span>
+  );
+}
+
+/* ── Magic-UI-style BorderBeam — a light particle orbiting the card border ── */
+function BorderBeam({ size = 60, duration = 8, delay = 0 }: { size?: number; duration?: number; delay?: number }) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 rounded-[inherit] border border-transparent [mask-clip:padding-box,border-box] [mask-composite:intersect] [mask-image:linear-gradient(transparent,transparent),linear-gradient(#000,#000)]"
+      aria-hidden="true"
+    >
+      <motion.div
+        className="absolute aspect-square"
+        style={{
+          width: size,
+          offsetPath: `rect(0 auto auto 0 round ${size}px)`,
+          background: `linear-gradient(to left, ${BRAND_PRIMARY}, ${brandAlpha(0.6)}, transparent)`,
+        }}
+        initial={{ offsetDistance: "0%" }}
+        animate={{ offsetDistance: "100%" }}
+        transition={{ duration, delay, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+      />
+    </div>
+  );
+}
+
+function LiveBadge({ reduced }: { reduced: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="relative flex size-1.5">
+        {!reduced && (
+          <motion.span
+            className="absolute inline-flex size-full rounded-full bg-emerald-400"
+            animate={{ scale: [1, 2.6], opacity: [0.6, 0] }}
+            transition={{ duration: 2.2, repeat: Number.POSITIVE_INFINITY, ease: "easeOut" }}
+          />
+        )}
+        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+      </span>
+      <span className="type-label text-emerald-600">Live</span>
+    </span>
+  );
+}
+
+/* ── Animated success ring — brand-tinted radial gauge (login "analytics" ring) */
+function SuccessRing({ value, reduced }: { value: number; reduced: boolean }) {
+  const r = 30;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference - (Math.max(0, Math.min(100, value)) / 100) * circumference;
+
+  return (
+    <div className="relative grid size-[86px] shrink-0 place-items-center">
+      <svg viewBox="0 0 80 80" className="size-full -rotate-90" aria-hidden="true">
+        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="7" className="stroke-muted" />
+        <motion.circle
+          cx="40"
+          cy="40"
+          r={r}
+          fill="none"
+          strokeWidth="7"
+          strokeLinecap="round"
+          className="stroke-primary"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: reduced ? offset : circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: reduced ? 0 : 1.4, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center leading-none">
+        <span className="font-semibold text-lg tabular-nums tracking-tight">
+          <NumberTicker value={value} suffix="%" reduced={reduced} delay={0.4} />
+        </span>
+        <span className="type-caption mt-0.5">Success</span>
+      </div>
+    </div>
+  );
+}
+
+type HeadlineMetric = {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  tone?: "default" | "success" | "danger";
+};
+
+/* ── Headline glass card — brand-gradient, BorderBeam, LiveBadge, tickers ─── */
+function HeadlineCard({
+  title,
+  window: windowLabel,
+  metrics,
+  successRate,
+  reduced,
+}: {
+  title: string;
+  window: string;
+  metrics: HeadlineMetric[];
+  successRate: number;
+  reduced: boolean;
+}) {
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/[0.07] via-card to-card p-4 shadow-sm"
+    >
+      {!reduced && <BorderBeam size={52} duration={9} />}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="type-card-title">{title}</h3>
+          <span className="type-label rounded-md bg-primary/10 px-1.5 py-0.5 text-primary">{windowLabel}</span>
+        </div>
+        <LiveBadge reduced={reduced} />
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="grid flex-1 grid-cols-3 gap-3">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="min-w-0">
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <metric.icon
+                  className={cn(
+                    "size-3.5",
+                    metric.tone === "success" && "text-success",
+                    metric.tone === "danger" && "text-destructive",
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="type-caption truncate">{metric.label}</span>
+              </div>
+              <p
+                className={cn(
+                  "mt-1 font-semibold text-2xl tabular-nums tracking-tight",
+                  metric.tone === "success" && "text-success",
+                  metric.tone === "danger" && "text-destructive",
+                )}
+              >
+                <NumberTicker value={metric.value} reduced={reduced} delay={0.25} />
+              </p>
+            </div>
+          ))}
+        </div>
+        <SuccessRing value={successRate} reduced={reduced} />
+      </div>
+    </motion.div>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -148,14 +338,21 @@ function PanelTitle({ title, description }: { title: string; description: string
 }
 
 function EmptyInsights({ subject }: { subject: string }) {
+  const reduced = useReducedMotion() ?? false;
   return (
     <div className="grid min-h-80 place-items-center px-6 text-center">
       <div>
-        <span className="mx-auto grid size-10 place-items-center rounded-xl bg-muted text-muted-foreground">
+        <motion.span
+          initial={reduced ? false : { opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="relative mx-auto grid size-11 place-items-center overflow-hidden rounded-xl bg-primary/10 text-primary"
+        >
+          {!reduced && <BorderBeam size={30} duration={6} />}
           <Activity className="size-4" aria-hidden="true" />
-        </span>
+        </motion.span>
         <p className="mt-3 font-medium text-sm">Select a {subject}</p>
-        <p className="type-caption mx-auto mt-1 max-w-56">Performance and recent activity will appear here.</p>
+        <p className="type-caption mx-auto mt-1 max-w-56">Live performance and recent activity will appear here.</p>
       </div>
     </div>
   );
@@ -227,6 +424,7 @@ const driverChartConfig = {
 } satisfies ChartConfig;
 
 export function DriverInsights({ driver }: { driver: InsightDriver | null }) {
+  const reduced = useReducedMotion() ?? false;
   const stops = useOperationalStops();
 
   const driverStops = useMemo(() => {
@@ -286,16 +484,17 @@ export function DriverInsights({ driver }: { driver: InsightDriver | null }) {
   return (
     <div className="divide-y divide-border/60">
       <section className="px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <PanelTitle title="Driver performance" description="Live operational record, last 30 days" />
-          <span className="type-label rounded-md bg-primary/10 px-2 py-1 text-primary">30 days</span>
-        </div>
-        <div className="mt-3 grid grid-cols-4 divide-x divide-border/60">
-          <Metric label="Routes" value={String(routes)} icon={Route} />
-          <Metric label="Success" value={String(successes.length)} icon={CheckCircle2} tone="success" />
-          <Metric label="Failed" value={String(failures.length)} icon={XCircle} tone="danger" />
-          <Metric label="Success rate" value={`${successRate}%`} icon={Target} />
-        </div>
+        <HeadlineCard
+          title="Driver performance"
+          window="30 days"
+          successRate={successRate}
+          reduced={reduced}
+          metrics={[
+            { label: "Routes", value: routes, icon: Route },
+            { label: "Success", value: successes.length, icon: CheckCircle2, tone: "success" },
+            { label: "Failed", value: failures.length, icon: XCircle, tone: "danger" },
+          ]}
+        />
       </section>
 
       <section className="px-4 py-4">
@@ -342,6 +541,7 @@ const hubChartConfig = {
 } satisfies ChartConfig;
 
 export function HubInsights({ hub, assignedDrivers }: { hub: InsightHub | null; assignedDrivers: number }) {
+  const reduced = useReducedMotion() ?? false;
   const stops = useOperationalStops();
 
   const hubStops = useMemo(() => {
@@ -404,34 +604,18 @@ export function HubInsights({ hub, assignedDrivers }: { hub: InsightHub | null; 
 
   return (
     <div className="divide-y divide-border/60">
-      <div className="relative h-24 overflow-hidden bg-muted">
-        <Image
-          src="/img/routely-hubs-isometric-v2.png"
-          alt="Isometric Routely hub network across Florida"
-          fill
-          priority
-          sizes="(min-width: 1280px) 34vw, 100vw"
-          className="object-cover object-center"
-        />
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-card via-card/80 to-transparent px-4 pt-8 pb-2.5">
-          <div>
-            <p className="type-label text-primary">Florida network</p>
-            <p className="type-caption text-foreground">Medical courier coverage</p>
-          </div>
-          <span className="type-caption rounded-md bg-card/90 px-2 py-1 font-medium shadow-xs">Live operations</span>
-        </div>
-      </div>
       <section className="px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <PanelTitle title="Hub operations" description="Current network activity and capacity" />
-          <span className="type-label rounded-md bg-primary/10 px-2 py-1 text-primary">7 days</span>
-        </div>
-        <div className="mt-3 grid grid-cols-4 divide-x divide-border/60">
-          <Metric label="Routes" value={String(routes.size)} icon={Route} />
-          <Metric label="Stops" value={String(hubStops.length)} icon={MapPin} />
-          <Metric label="Drivers" value={String(assignedDrivers)} icon={Users} />
-          <Metric label="Success" value={`${successRate}%`} icon={Target} />
-        </div>
+        <HeadlineCard
+          title="Hub operations"
+          window="7 days"
+          successRate={successRate}
+          reduced={reduced}
+          metrics={[
+            { label: "Routes", value: routes.size, icon: Route },
+            { label: "Stops", value: hubStops.length, icon: MapPin },
+            { label: "Drivers", value: assignedDrivers, icon: Users },
+          ]}
+        />
       </section>
 
       <section className="px-4 py-4">

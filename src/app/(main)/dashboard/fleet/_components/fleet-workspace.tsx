@@ -1,12 +1,73 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { Building2, Plus, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { brandAlpha } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+
+/* ── Premium isometric hero — center-column banner ─────────────────────────
+ *  Mirrors the login hero language: an isometric mini-ecosystem image under a
+ *  crisp Routely logo chip, a soft brand sheen (respecting reduced motion) and
+ *  a from-card bottom gradient so the form below seats cleanly. Doubles as the
+ *  empty-state when nothing is selected. The hero art may not exist on disk in
+ *  dev — a broken image is acceptable there. */
+export function FleetHero({
+  variant,
+  selectedLabel,
+}: {
+  variant: "hub" | "driver";
+  selectedLabel: string | null;
+}) {
+  const reduced = useReducedMotion() ?? false;
+  const isHub = variant === "hub";
+  const src = isHub ? "/img/fleet-hub-hero.png" : "/img/fleet-driver-hero.png";
+  const eyebrow = isHub ? "Fleet network" : "Last-mile delivery";
+  const alt = isHub ? "Isometric Routely hub network" : "Isometric Routely delivery driver";
+  const hint = isHub ? "Select a hub" : "Select a driver";
+
+  return (
+    <div className="relative h-[168px] overflow-hidden rounded-xl border bg-muted">
+      <Image src={src} alt={alt} fill priority sizes="(min-width: 1280px) 40vw, 100vw" className="object-cover object-center" />
+
+      {/* ambient brand sheen — a slow diagonal light sweep (Magic-UI beams feel) */}
+      {!reduced && (
+        <motion.div
+          className="pointer-events-none absolute -inset-y-1/3 w-1/3 rotate-[18deg] blur-2xl"
+          style={{ background: `linear-gradient(90deg, transparent, ${brandAlpha(0.16)}, transparent)` }}
+          initial={{ left: "-40%" }}
+          animate={{ left: "130%" }}
+          transition={{ duration: 9, repeat: Number.POSITIVE_INFINITY, ease: "linear", repeatDelay: 2.5 }}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* crisp Routely logo — soft blurred chip so branding stays legible on art */}
+      <div className="absolute top-3 left-3 flex items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1.5 shadow-sm backdrop-blur-md">
+        {/* biome-ignore lint/a11y/useAltText: decorative brand mark with adjacent caption */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/img/routely.svg" alt="Routely" className="h-7 w-auto" />
+      </div>
+
+      {/* from-card bottom gradient — seats the form below with no hard seam */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-card via-card/70 to-transparent" />
+
+      {/* caption band */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-3">
+        <div className="min-w-0">
+          <p className="type-label text-primary">{eyebrow}</p>
+          <p className="type-body-sm mt-0.5 truncate font-medium text-foreground">{selectedLabel ?? hint}</p>
+        </div>
+        <span className="type-caption shrink-0 rounded-md bg-card/90 px-2 py-1 font-medium shadow-xs">Live operations</span>
+      </div>
+    </div>
+  );
+}
 
 export function FleetWorkspace({
   title,

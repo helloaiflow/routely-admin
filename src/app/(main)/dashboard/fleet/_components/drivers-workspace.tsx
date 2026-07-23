@@ -24,7 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import { DriverInsights } from "./fleet-insights";
-import { FleetWorkspace } from "./fleet-workspace";
+import { FleetHero, FleetWorkspace } from "./fleet-workspace";
 
 type Hub = {
   id: string;
@@ -364,8 +364,10 @@ export function DriversWorkspace() {
                   type="button"
                   onClick={() => selectDriver(driver)}
                   className={cn(
-                    "flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors",
-                    active ? "bg-primary/10 text-foreground" : "hover:bg-muted/70",
+                    "flex w-full items-start gap-2.5 rounded-lg border-l-2 px-2.5 py-2.5 text-left transition-colors",
+                    active
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-transparent hover:bg-muted/30",
                     driver.status === "inactive" && "opacity-60",
                   )}
                 >
@@ -432,6 +434,11 @@ export function DriversWorkspace() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-6 px-4 py-4">
+          <FleetHero
+            variant="driver"
+            selectedLabel={selectedId === "new" ? "New driver" : (selectedDriver?.name ?? null)}
+          />
+
           <section>
             <SectionHeading icon={Contact} title="Driver details" description="Primary contact and assigned vehicle" />
             <div className="mt-4 space-y-3.5">

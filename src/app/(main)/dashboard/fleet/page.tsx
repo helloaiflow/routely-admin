@@ -1,14 +1,7 @@
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import { FleetShell } from "./_components/fleet-shell";
-
-/** Fleet — Routely's operational hubs (dispatch origins) and drivers. Full-width,
- *  tabbed shell that deep-links via ?tab=. Server wrapper adds the Suspense
- *  boundary needed by the client shell's useSearchParams. Admin-only (ops surface). */
-export default function FleetPage() {
-  return (
-    <Suspense fallback={null}>
-      <FleetShell />
-    </Suspense>
-  );
+/** Backward-compatible entry point for bookmarked Fleet links. */
+export default async function FleetPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  redirect(tab === "drivers" ? "/dashboard/drivers" : "/dashboard/hubs");
 }

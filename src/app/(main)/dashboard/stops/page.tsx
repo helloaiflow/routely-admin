@@ -205,6 +205,8 @@ interface DraftStop {
   delivery_city: string;
   delivery_state: string;
   delivery_zip: string;
+  // Read-only delivery zone (South/North/Central/Other) — backfilled on the record.
+  route_zone?: string | null;
   pickup_address: string;
   pickup_location_id: string;
   recipient_name: string;
@@ -231,6 +233,8 @@ interface TodayStop {
   package_type: string;
   driver_name: string | null;
   route_title: string | null;
+  // Read-only delivery zone from the record (shapeStopForList → `zone`).
+  zone?: string | null;
   total_price: number;
   created_at: string;
   // Recovered draft: a submit failed → status fell back to "draft" + this note.
@@ -254,6 +258,8 @@ interface FullStop {
   stop_type: string;
   status: string;
   order_ref: string | null;
+  // Read-only delivery zone from the record (shapeStopForDetail → `route_zone`).
+  route_zone?: string | null;
   total_price: number;
   created_at: string;
   recipient: { name: string; phone: string; email: string; dob: string | null };
@@ -4389,6 +4395,9 @@ function StopDetailPanel({
   const zip = full?.address.zip ?? summary.zip;
   const driver = full?.assignment.driver_name ?? summary.driver_name;
   const route = full?.assignment.route_title ?? summary.route_title;
+  // Read-only delivery zone (backfilled on the record). Detail exposes it top-level
+  // as `route_zone` (stops + drafts); the list summary exposes it as `zone`.
+  const routeZone = full?.route_zone ?? summary.zone ?? null;
   const fullAddr = [street, city, state, zip].filter(Boolean).join(", ");
   const _isTransit = TRANSIT.includes(status);
 
@@ -4971,6 +4980,18 @@ function StopDetailPanel({
                     );
                   })()}
                 </FieldRow>
+                {/* Route Zone — READ ONLY. Backfilled on the record; never computed
+                  or sent from the UI. Resolves for submitted stops and drafts alike
+                  via routeZone (full.route_zone ?? summary.zone). */}
+                <FieldRow label="Route Zone">
+                  {routeZone ? (
+                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-medium text-[11px] text-foreground leading-snug">
+                      {routeZone}
+                    </span>
+                  ) : (
+                    <span className="font-medium text-xs text-muted-foreground">—</span>
+                  )}
+                </FieldRow>
                 {/* Payment / COD — moved here from the standalone Payment section.
                   Same state + autosave bindings: writes service.collect_payment /
                   service.cod_amount (the PATCH proxy maps them under body.service). */}
@@ -5438,7 +5459,6 @@ function StopDetailPanel({
                 <ReadRow label="Tracking #" value={tid} mono />
                 <ReadRow label="Status" value={statusLabel(status)} />
                 <ReadRow label="Stop Type" value={toTitle(full?.stop_type ?? summary.stop_type)} />
-                <ReadRow label="Route Zone" value={route ?? "—"} />
                 <ReadRow label="Order Ref" value={full?.order_ref ?? undefined} mono />
                 <ReadRow label="Created At" value={`${fmtTime(full?.created_at ?? summary.created_at)}`} />
                 <ReadRow
@@ -6406,6 +6426,8 @@ export default function StopsPage() {
             package_type: String(s.package_type ?? "rx"),
             driver_name: null,
             route_title: null,
+            // Read-only zone from the record (shapeStopForList → zone).
+            zone: (s.zone as string | null) ?? null,
             total_price: 0,
             created_at: String(s.created_at ?? new Date().toISOString()),
             submit_error: (s.submit_error as { reason?: string } | null) ?? { reason: "Submit failed" },
@@ -6427,6 +6449,8 @@ export default function StopsPage() {
             package_type: String(dr.package_type || "rx"),
             driver_name: null,
             route_title: null,
+            // Read-only zone from the draft record (/api/client/draft-stops → route_zone).
+            zone: (dr.route_zone as string | null) ?? null,
             total_price: 0,
             created_at: String(dr.created_at || new Date().toISOString()),
             // Saved pickup ref — used to show the draft's actual pickup in the panel
@@ -7802,6 +7826,7 @@ export default function StopsPage() {
                         delivery_city: s.city,
                         delivery_state: s.state,
                         delivery_zip: s.zip,
+                        route_zone: s.zone ?? null,
                         // Prefer the draft's SAVED pickup; fall back to the tenant default.
                         pickup_address: s.pickup_address || pickup?.address || "",
                         pickup_location_id: s.pickup_location_id || pickup?.id || "",
@@ -8015,6 +8040,8 @@ export default function StopsPage() {
                   package_type: activeDraft.package_type,
                   driver_name: null,
                   route_title: null,
+                  // Read-only zone so the panel's routeZone resolves for drafts too.
+                  zone: activeDraft.route_zone ?? null,
                   total_price: 0,
                   created_at: activeDraft.created_at,
                 }}

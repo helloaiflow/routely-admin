@@ -885,7 +885,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
             )}
             {isDraft && (
               <Button size="sm" className="h-6 px-2 text-[10px] gap-1"
-                onClick={() => router.push('/dashboard/draft_order')}>
+                onClick={() => router.push('/dashboard/stops')}>
                 Process Order
               </Button>
             )}

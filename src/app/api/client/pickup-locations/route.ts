@@ -12,7 +12,7 @@ import { requirePagePermission } from "@/lib/tenant";
  * "settings" page permission.
  *
  * CANONICAL SHAPE (matches existing production entries + the order flow's
- * normalizer in draft_order/page.tsx): the address is a NESTED object, and
+ * normalizer in the stops page): the address is a NESTED object, and
  * entries may carry code / legacy_id / active from earlier seeding — those are
  * preserved untouched on edit.
  *

@@ -74,7 +74,7 @@ export const sidebarItems: NavGroup[] = [
     items: [
       {
         title: "Operations",
-        url: "/dashboard/draft_order",
+        url: "/dashboard/stops",
         icon: Layers,
         defaultOpen: true,
         permission: "orders",

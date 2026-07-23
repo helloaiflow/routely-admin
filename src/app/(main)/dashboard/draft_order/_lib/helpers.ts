@@ -45,6 +45,7 @@ export type DraftOrder = {
   delivery_city: string;
   delivery_state: string;
   delivery_zip: string;
+  route_zone?: string | null;
   delivery_lat?: number;
   delivery_lng?: number;
   apt_unit?: string;

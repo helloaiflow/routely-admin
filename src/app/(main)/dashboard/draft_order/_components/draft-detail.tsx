@@ -10,6 +10,7 @@ import {
   DollarSign,
   Link2,
   Mail,
+  MapPin,
   MessageCircle,
   MoreVertical,
   MousePointerClick,
@@ -259,6 +260,16 @@ export function DraftDetail({ draft, pickupLocations, onChange, onDelete, onAppr
                       <span>{pill.label}</span>
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Route zone (read-only, backend-owned) */}
+              {draft.route_zone && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                    <MapPin className="size-2.5" />
+                    <span>Zone · {draft.route_zone}</span>
+                  </span>
                 </div>
               )}
             </div>

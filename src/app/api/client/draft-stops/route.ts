@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       delivery_city: d.delivery_info?.delivery_city ?? "",
       delivery_state: d.delivery_info?.delivery_state ?? "FL",
       delivery_zip: d.delivery_info?.delivery_zip ?? "",
+      route_zone: d.route_zone ?? null,
       delivery_lat: d.delivery_info?.lat ?? null,
       delivery_lng: d.delivery_info?.lng ?? null,
       recipient_name: d.recipient_name ?? "",

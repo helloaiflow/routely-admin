@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
-import { TenantSelector } from "@/components/tenant-selector";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
@@ -13,9 +12,10 @@ import { getPreference } from "@/server/server-actions";
 import { GlobalDialogs } from "./_components/global-dialogs";
 import { InactivityGuard } from "./_components/inactivity-guard";
 import { LiveChatButton } from "./_components/live-chat-button";
-import { OcrScanButton } from "./_components/ocr-scan-button";
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
+import { OcrScanButton } from "./_components/ocr-scan-button";
+import { TenantSelector } from "@/components/tenant-selector";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
@@ -33,7 +33,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       className="h-svh"
       style={
         {
-          "--sidebar-width": "calc(var(--spacing) * 60)",
+          "--sidebar-width": "calc(var(--spacing) * 68)",
         } as React.CSSProperties
       }
     >
@@ -71,7 +71,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        <div className="overflow-y-auto bg-background p-0" style={{ height: "calc(100svh - 49px)" }}>
+        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - 49px)" }}>
           {children}
         </div>
 

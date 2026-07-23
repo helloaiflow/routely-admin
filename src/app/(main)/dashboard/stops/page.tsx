@@ -8109,6 +8109,34 @@ export default function StopsPage() {
                         : d,
                     ),
                   );
+                  // Re-resolve the delivery zone live so the "Route Zone" field
+                  // (summary.zone = activeDraft.route_zone) refreshes without a
+                  // reload. The DB trigger already persists route_zone on save;
+                  // this is display-only. Capture the draft id BEFORE the fetch so
+                  // a mid-flight draft switch can't stamp the wrong row. Fully
+                  // non-fatal — any failure leaves the shown zone untouched.
+                  const draftIdAtCall = activeDraft.draft_id;
+                  const zip5 = String(a.zip ?? "")
+                    .replace(/\D/g, "")
+                    .slice(0, 5);
+                  const applyZone = (zoneName: string | null) => {
+                    setActiveDraft((prev) =>
+                      prev && prev.draft_id === draftIdAtCall ? { ...prev, route_zone: zoneName } : prev,
+                    );
+                    setDrafts((prev) =>
+                      prev.map((d) => (d.id === draftIdAtCall ? { ...d, zone: zoneName } : d)),
+                    );
+                  };
+                  if (zip5.length !== 5) {
+                    applyZone(null);
+                  } else {
+                    fetch(`/api/client/zones/lookup?zip=${encodeURIComponent(zip5)}`)
+                      .then((r) => (r.ok ? r.json() : null))
+                      .then((json) => {
+                        applyZone(json?.zone_name ?? null);
+                      })
+                      .catch(() => {});
+                  }
                 }}
                 onBasicInfoChange={(patch) => {
                   // Same optimistic pattern as onAddressChange — keep the

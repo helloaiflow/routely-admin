@@ -21,7 +21,6 @@ import {
   Users,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandDialog,
@@ -80,17 +79,6 @@ export function SearchDialog() {
 
   return (
     <>
-      <Button
-        onClick={() => setOpen(true)}
-        variant="link"
-        className="px-0! font-normal text-muted-foreground hover:no-underline"
-      >
-        <Search data-icon="inline-start" />
-        Search
-        <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium text-[10px]">
-          <span className="text-xs">⌘</span>J
-        </kbd>
-      </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <Command>
           <CommandInput placeholder="Go to… stops, orders, IVY, OCR, settings" />

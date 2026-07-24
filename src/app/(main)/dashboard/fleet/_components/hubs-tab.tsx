@@ -6,12 +6,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Building2,
-  Check,
-  ChevronLeft,
-  ChevronRight,
   CircleCheck,
   Clock,
   Loader2,
+  Map as MapIcon,
   MapPin,
   Pencil,
   Plus,
@@ -27,7 +25,6 @@ import {
 } from "@/components/ui/address-autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -48,14 +45,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 import { FleetRouteMap } from "./fleet-route-map";
@@ -147,8 +136,6 @@ const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
 ];
 
-const PAGE_SIZE = 25;
-
 // Human-readable one-line address for the list.
 function addressLine(hub: Hub): string {
   const a = hub.address ?? {};
@@ -210,17 +197,22 @@ export function HubsTab() {
   // List toolbar state
   const [query, setQuery] = useState("");
   const [rtFilter, setRtFilter] = useState<"all" | "roundtrip" | "oneway">("all");
-  const [page, setPage] = useState(0);
 
-  // Selected hub → opens the read-only detail + map panel (not the edit modal).
+  // Selected hub → drives the center detail panel + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  function load() {
+  // Resilient load: on a transient failure at mount, retry once after a short
+  // delay before surfacing the error (keeps the list from getting stuck empty).
+  function load(retry = true) {
     setLoadError(false);
     fetch("/api/client/hubs")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => setHubs((d.hubs ?? []) as Hub[]))
       .catch(() => {
+        if (retry) {
+          setTimeout(() => load(false), 1200);
+          return;
+        }
         setHubs([]);
         setLoadError(true);
       });
@@ -394,9 +386,7 @@ export function HubsTab() {
     Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
   const nameError = attempted && !form.name.trim();
 
-  const resetPage = () => setPage(0);
-
-  // Filter + paginate the list (Labels grid pattern).
+  // Filter the list (Stops-style — the left column scrolls the full result set).
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (hubs ?? []).filter((hub) => {
@@ -410,10 +400,6 @@ export function HubsTab() {
       );
     });
   }, [hubs, query, rtFilter]);
-
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pages - 1);
-  const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   // Resolve the currently selected hub from the loaded list (stays in sync on reload).
   const selectedHub = selectedId ? (hubs ?? []).find((h) => h.id === selectedId) ?? null : null;
@@ -595,280 +581,239 @@ export function HubsTab() {
     </Dialog>
   );
 
-  // ── List view: Labels-style grid card ──
+  // ══ Full-bleed 3-pane shell — a literal clone of /dashboard/stops ══
   return (
-    <div className="space-y-5">
+    <div
+      className="flex h-full overflow-hidden"
+      style={{
+        backgroundColor: "hsl(var(--muted) / 0.4)",
+        backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)",
+        backgroundSize: "20px 20px",
+      }}
+    >
       {formDialog}
-      {/* Header + add */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-lg tracking-tight">Hubs</h3>
-          <p className="text-muted-foreground text-sm">Dispatch origins where routes begin and end.</p>
-        </div>
-        <Button size="sm" className="h-9" onClick={openAdd}>
-          <Plus className="mr-1.5 size-4" aria-hidden="true" /> New hub
-        </Button>
-      </div>
 
-      {/* List + detail panel (Stops-style responsive split) */}
-      <div className="flex gap-5 lg:items-start">
-        <div className="min-w-0 flex-1">
-      {!hubs ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={`hub-${i}`} className="h-14 w-full" />
-          ))}
-        </div>
-      ) : hubs.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
-            <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
-              <Building2 className="size-6" aria-hidden="true" />
-            </span>
-            <p className="font-medium text-sm">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
-            <p className="max-w-sm text-muted-foreground text-xs">
-              {loadError
-                ? "There was a problem reaching the fleet service. Try again."
-                : "Add the depots where Routely drivers start and finish their routes."}
-            </p>
-            {loadError ? (
-              <Button size="sm" variant="outline" className="mt-2 h-9" onClick={load}>
-                Retry
-              </Button>
-            ) : (
-              <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
-                <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first hub
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-          {/* ── Toolbar — lives INSIDE the card, separated by border-b ── */}
-          <div className="flex flex-col gap-2 border-border/60 border-b px-3 py-2.5 sm:flex-row sm:items-center">
-            <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
-              <Search className="size-3.5 shrink-0 text-primary/60" aria-hidden="true" />
+      {/* ═══ LEFT COLUMN — the list ═══ */}
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
+        {/* Toolbar */}
+        <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 dark:bg-input/30">
+              <Search className="size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />
               <input
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  resetPage();
-                }}
-                placeholder="Search hubs by name or address…"
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search hubs…"
                 aria-label="Search hubs"
-                className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-[13px]"
+                className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/40"
               />
             </div>
-            <Select
-              value={rtFilter}
-              onValueChange={(v) => {
-                setRtFilter(v as "all" | "roundtrip" | "oneway");
-                resetPage();
-              }}
+            <Button size="sm" className="h-9 shrink-0" onClick={openAdd}>
+              <Plus className="mr-1 size-4" aria-hidden="true" /> New
+            </Button>
+          </div>
+          <Select
+            value={rtFilter}
+            onValueChange={(v) => setRtFilter(v as "all" | "roundtrip" | "oneway")}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 w-full border-border/60 bg-background text-[13px]"
+              aria-label="Filter by roundtrip"
             >
-              <SelectTrigger
-                size="sm"
-                className="h-9 w-[150px] border-border/60 text-[13px]"
-                aria-label="Filter by roundtrip"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All hubs</SelectItem>
-                <SelectItem value="roundtrip">Roundtrip only</SelectItem>
-                <SelectItem value="oneway">One-way only</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All hubs</SelectItem>
+              <SelectItem value="roundtrip">Roundtrip only</SelectItem>
+              <SelectItem value="oneway">One-way only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* ── Desktop table ── */}
-          <div className="hidden sm:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Hub Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>End Time</TableHead>
-                  <TableHead>Max Stops</TableHead>
-                  <TableHead>Minutes per Stop</TableHead>
-                  <TableHead>Roundtrip</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((hub) => {
-                  const c = routeCells(hub.route_defaults);
-                  return (
-                    <TableRow
-                      key={hub.id}
-                      className={cn(
-                        "cursor-pointer",
-                        selectedId === hub.id && "bg-primary/5",
-                      )}
-                      onClick={() => setSelectedId(hub.id)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={
-                              hub.is_default
-                                ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                                : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                            }
-                          >
-                            <Building2 className="size-4" aria-hidden="true" />
-                          </span>
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="font-medium text-sm">{hub.name}</span>
-                            {hub.is_default && (
-                              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                                <Star className="size-3" aria-hidden="true" /> Default
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[240px] whitespace-normal text-muted-foreground text-sm">
-                        {addressLine(hub) || "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm tabular-nums">{c.start}</TableCell>
-                      <TableCell className="font-mono text-sm tabular-nums">{c.end}</TableCell>
-                      <TableCell className="font-mono text-sm tabular-nums">{c.maxStops}</TableCell>
-                      <TableCell className="font-mono text-sm tabular-nums">{c.minPerStop}</TableCell>
-                      <TableCell>
-                        {c.roundtrip ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Check className="size-3" aria-hidden="true" /> Yes
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* ── Mobile rows (same card, divided) ── */}
-          <div className="divide-y divide-border/40 sm:hidden">
-            {rows.map((hub) => {
-              const c = routeCells(hub.route_defaults);
-              const addr = addressLine(hub);
-              return (
-                <button
-                  key={hub.id}
-                  type="button"
-                  onClick={() => setSelectedId(hub.id)}
-                  className={cn(
-                    "flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/30",
-                    selectedId === hub.id && "bg-primary/5",
-                  )}
-                >
-                  <span
-                    className={
-                      hub.is_default
-                        ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                        : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                    }
-                  >
-                    <Building2 className="size-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate font-medium text-[13px]">{hub.name}</span>
-                      {hub.is_default && (
-                        <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                          <Star className="size-3" aria-hidden="true" /> Default
-                        </Badge>
-                      )}
-                    </span>
-                    {addr && (
-                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{addr}</span>
-                    )}
-                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
-                      <span className="font-mono tabular-nums">
-                        {c.start}–{c.end}
-                      </span>
-                      <span>·</span>
-                      <span className="font-mono tabular-nums">max {c.maxStops}</span>
-                      <span>·</span>
-                      <span className="font-mono tabular-nums">{c.minPerStop}/stop</span>
-                      {c.roundtrip && (
-                        <>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1">
-                            <Repeat className="size-3" aria-hidden="true" /> roundtrip
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── Footer: empty-filter state + pagination inside the card ── */}
-          {filtered.length === 0 && (
-            <p className="px-4 py-8 text-center text-muted-foreground text-sm">No hubs match those filters.</p>
-          )}
-          {filtered.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-border/60 border-t px-3 py-2">
-              <p className="text-[11px] text-muted-foreground tabular-nums">
-                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+        {/* List — independent scroll */}
+        <div className="flex-1 overflow-y-auto">
+          {!hubs ? (
+            <div className="space-y-2 p-3">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={`hub-${i}`} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : hubs.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
+                <Building2 className="size-6" aria-hidden="true" />
+              </span>
+              <p className="font-medium text-sm">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
+              <p className="max-w-xs text-muted-foreground text-xs">
+                {loadError
+                  ? "There was a problem reaching the fleet service. Try again."
+                  : "Add the depots where Routely drivers start and finish their routes."}
               </p>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1 border-border/60"
-                  disabled={safePage === 0}
-                  onClick={() => setPage(safePage - 1)}
-                >
-                  <ChevronLeft className="size-3.5" aria-hidden="true" />
-                  Prev
+              {loadError ? (
+                <Button size="sm" variant="outline" className="mt-2 h-9" onClick={() => load()}>
+                  Retry
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1 border-border/60"
-                  disabled={safePage >= pages - 1}
-                  onClick={() => setPage(safePage + 1)}
-                >
-                  Next
-                  <ChevronRight className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
+                  <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first hub
                 </Button>
-              </div>
+              )}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-4 py-10 text-center text-muted-foreground text-[13px]">
+              No hubs match those filters.
+            </p>
+          ) : (
+            <div>
+              {filtered.map((hub) => (
+                <HubRow
+                  key={hub.id}
+                  hub={hub}
+                  selected={selectedId === hub.id}
+                  onSelect={() => setSelectedId(hub.id)}
+                />
+              ))}
             </div>
           )}
         </div>
-      )}
-        </div>
-
-        {/* ── Detail panel — full-screen overlay on mobile, side panel on desktop ── */}
-        <AnimatePresence>
-          {selectedHub && (
-            <motion.aside
-              key={selectedHub.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="fixed inset-0 z-40 overflow-y-auto bg-background lg:sticky lg:top-4 lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-6rem)] lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:rounded-xl lg:border lg:border-border/60 lg:bg-card"
-            >
-              <HubDetailPanel
-                hub={selectedHub}
-                onClose={() => setSelectedId(null)}
-                onEdit={() => openEdit(selectedHub)}
-              />
-            </motion.aside>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* ═══ CENTER COLUMN — detail panel (desktop) ═══ */}
+      <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
+        {selectedHub ? (
+          <HubDetailPanel
+            hub={selectedHub}
+            onClose={() => setSelectedId(null)}
+            onEdit={() => openEdit(selectedHub)}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
+              <Building2 className="size-7 text-muted-foreground/30" aria-hidden="true" />
+            </div>
+            <p className="font-bold text-sm text-foreground">No hub selected</p>
+            <p className="mt-1.5 max-w-[200px] text-muted-foreground text-xs leading-relaxed">
+              Click a hub from the list to view details
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
+      <div className="hidden overflow-hidden bg-muted/20 lg:block lg:flex-1">
+        <HubMapPanel hub={selectedHub} />
+      </div>
+
+      {/* ═══ MOBILE — full-screen overlay: detail + map stacked ═══ */}
+      <AnimatePresence>
+        {selectedHub && (
+          <motion.div
+            key={selectedHub.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
+          >
+            <HubDetailPanel
+              hub={selectedHub}
+              onClose={() => setSelectedId(null)}
+              onEdit={() => openEdit(selectedHub)}
+            />
+            <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
+              <HubMapPanel hub={selectedHub} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+// ── Compact list row (Stops-density) ──────────────────────────────────────────
+function HubRow({
+  hub,
+  selected,
+  onSelect,
+}: {
+  hub: Hub;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const c = routeCells(hub.route_defaults);
+  const addr = addressLine(hub);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 border-border/20 border-b border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
+        selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
+      )}
+    >
+      <span
+        className={
+          hub.is_default
+            ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+            : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+        }
+      >
+        <Building2 className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-medium text-[13px]">{hub.name}</span>
+          {hub.is_default && (
+            <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
+              <Star className="size-3" aria-hidden="true" /> Default
+            </Badge>
+          )}
+        </span>
+        {addr && (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{addr}</span>
+        )}
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+          <span className="font-mono tabular-nums">
+            {c.start}–{c.end}
+          </span>
+          <span>·</span>
+          <span className="font-mono tabular-nums">max {c.maxStops}</span>
+          {c.roundtrip && (
+            <>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Repeat className="size-3" aria-hidden="true" /> roundtrip
+              </span>
+            </>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// ── Persistent map panel — empty state when nothing selected ──────────────────
+function HubMapPanel({ hub }: { hub: Hub | null }) {
+  if (!hub) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border/60">
+          <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
+        </div>
+        <div className="text-center">
+          <p className="font-bold text-[13px] text-foreground/70">Fleet map</p>
+          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+            Select a hub to see
+            <br />
+            it on the map
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const addr = fullAddress(hub.address);
+  return <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />;
 }
 
 // A read-only label/value row for the detail panel.
@@ -884,7 +829,7 @@ function DetailRow({ label, value, mono }: { label: string; value: React.ReactNo
   );
 }
 
-// ── Hub detail panel: read-only info + map + Edit ──
+// ── Hub detail panel: read-only info + Edit (map lives in its own column) ──
 function HubDetailPanel({
   hub,
   onClose,
@@ -918,7 +863,7 @@ function HubDetailPanel({
       </div>
 
       {/* Body */}
-      <div className="space-y-4 p-4">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {/* Title + default badge */}
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -939,11 +884,6 @@ function HubDetailPanel({
             )}
           </div>
           {addr && <p className="type-desc pl-10">{addr}</p>}
-        </div>
-
-        {/* Map — single point centered on the hub */}
-        <div className="h-56 overflow-hidden rounded-xl border border-border/60">
-          <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />
         </div>
 
         {/* Read rows */}

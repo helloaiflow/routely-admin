@@ -8,14 +8,12 @@ import {
   Ban,
   Building2,
   Car,
-  ChevronLeft,
-  ChevronRight,
   ChevronsUpDown,
   CircleCheck,
   Contact,
   Loader2,
   Mail,
-  MoreVertical,
+  Map as MapIcon,
   Navigation,
   Pencil,
   Plus,
@@ -41,7 +39,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Command,
   CommandEmpty,
@@ -50,12 +47,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -71,14 +62,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 import { FleetRouteMap } from "./fleet-route-map";
@@ -149,8 +132,6 @@ const EMPTY_FORM: FormState = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const PAGE_SIZE = 25;
 
 // Format the visible phone value as (XXX) XXX-XXXX while typing. Non-digits are
 // stripped and the value is capped at 10 digits; submit uses digits only.
@@ -303,48 +284,6 @@ function HubMultiSelect({
   );
 }
 
-// ── Per-row actions menu (Edit + Deactivate/Reactivate) ──────────────────────
-function RowMenu({
-  driver,
-  onEdit,
-  onStatus,
-}: {
-  driver: Driver;
-  onEdit: () => void;
-  onStatus: () => void;
-}) {
-  const inactive = driver.status !== "active";
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-7" aria-label={`Actions for ${driver.name}`}>
-          <MoreVertical className="size-3.5" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onEdit}>
-          <Pencil className="size-3.5" aria-hidden="true" />
-          Edit
-        </DropdownMenuItem>
-        {inactive ? (
-          <DropdownMenuItem onClick={onStatus}>
-            <RotateCcw className="size-3.5" aria-hidden="true" />
-            Reactivate
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            onClick={onStatus}
-            className="text-destructive focus:text-destructive"
-          >
-            <Ban className="size-3.5" aria-hidden="true" />
-            Deactivate
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function DriversTab() {
   const [drivers, setDrivers] = useState<Driver[] | null>(null);
   const [hubs, setHubs] = useState<Hub[]>([]);
@@ -364,28 +303,45 @@ export function DriversTab() {
   // Toolbar filters (the status select replaces the old "Show inactive" switch).
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
 
-  // Selected driver → opens the read-only detail + map panel (not the edit modal).
+  // Selected driver → drives the center detail panel + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  function loadDrivers() {
+  // Resilient load: on a transient failure at mount, retry once after a short
+  // delay before surfacing the error.
+  function loadDrivers(retry = true) {
     setLoadError(false);
     fetch("/api/client/drivers")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => setDrivers((d.drivers ?? []) as Driver[]))
       .catch(() => {
+        if (retry) {
+          setTimeout(() => loadDrivers(false), 1200);
+          return;
+        }
         setDrivers([]);
         setLoadError(true);
       });
   }
 
-  useEffect(() => {
-    loadDrivers();
+  // Hubs are needed to resolve names + map routes. Retry once on failure so a
+  // transient hiccup at mount doesn't leave the list stuck on "Unknown hub".
+  function loadHubs(retry = true) {
     fetch("/api/client/hubs")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => setHubs((d.hubs ?? []) as Hub[]))
-      .catch(() => setHubs([]));
+      .catch(() => {
+        if (retry) {
+          setTimeout(() => loadHubs(false), 1200);
+          return;
+        }
+        setHubs([]);
+      });
+  }
+
+  useEffect(() => {
+    loadDrivers();
+    loadHubs();
   }, []);
 
   const hubNameMap = useMemo(() => {
@@ -394,7 +350,7 @@ export function DriversTab() {
     return map;
   }, [hubs]);
 
-  // Render a driver's hub assignment: "All hubs" badge, a list of hub names, or "—".
+  // Render a driver's hub assignment: a list of hub names, or "—".
   function hubNames(ids: string[]): string {
     const names = ids.map((id) => hubNameMap.get(id) ?? "Unknown hub");
     if (names.length === 0) return "—";
@@ -427,14 +383,8 @@ export function DriversTab() {
     });
   }, [drivers, statusFilter, query]);
 
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pages - 1);
-  const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
-
   // Resolve the selected driver from the loaded list (stays in sync on reload).
   const selectedDriver = selectedId ? (drivers ?? []).find((d) => d.id === selectedId) ?? null : null;
-
-  const resetPage = () => setPage(0);
 
   function openAdd() {
     setEditing(null);
@@ -724,309 +674,160 @@ export function DriversTab() {
     </Dialog>
   );
 
-  // ── List view ───────────────────────────────────────────────────────────────
+  // ══ Full-bleed 3-pane shell — a literal clone of /dashboard/stops ══
   return (
-    <div className="space-y-5">
+    <div
+      className="flex h-full overflow-hidden"
+      style={{
+        backgroundColor: "hsl(var(--muted) / 0.4)",
+        backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)",
+        backgroundSize: "20px 20px",
+      }}
+    >
       {formDialog}
-      {/* Header + add */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-lg tracking-tight">Drivers</h3>
-          <p className="text-muted-foreground text-sm">The people who run Routely deliveries.</p>
-        </div>
-        <Button size="sm" className="h-9" onClick={openAdd}>
-          <Plus className="mr-1.5 size-4" aria-hidden="true" /> New driver
-        </Button>
-      </div>
 
-      {error && !statusTarget && <p className="text-destructive text-sm">{error}</p>}
-
-      {/* List + detail panel (Stops-style responsive split) */}
-      <div className="flex gap-5 lg:items-start">
-        <div className="min-w-0 flex-1">
-      {!drivers ? (
-        <div className="space-y-3">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={`drv-${i}`} className="h-14 w-full" />
-          ))}
-        </div>
-      ) : drivers.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
-            <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
-              <Users className="size-6" aria-hidden="true" />
-            </span>
-            <p className="font-medium text-sm">{loadError ? "Couldn't load drivers" : "No drivers yet"}</p>
-            <p className="max-w-sm text-muted-foreground text-xs">
-              {loadError
-                ? "There was a problem reaching the fleet service. Try again."
-                : "Add the drivers who pick up and deliver packages for Routely."}
-            </p>
-            {loadError ? (
-              <Button size="sm" variant="outline" className="mt-2 h-9" onClick={loadDrivers}>
-                Retry
-              </Button>
-            ) : (
-              <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
-                <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first driver
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
-          {/* ── Toolbar — lives INSIDE the card, separated by border-b ── */}
-          <div className="flex flex-col gap-2 border-border/60 border-b px-3 py-2.5 sm:flex-row sm:items-center">
-            <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
-              <Search className="size-3.5 shrink-0 text-primary/60" aria-hidden="true" />
+      {/* ═══ LEFT COLUMN — the list ═══ */}
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
+        {/* Toolbar */}
+        <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 dark:bg-input/30">
+              <Search className="size-3.5 shrink-0 text-muted-foreground/40" aria-hidden="true" />
               <input
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  resetPage();
-                }}
-                placeholder="Search drivers by name, phone, or email…"
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search drivers…"
                 aria-label="Search drivers"
-                className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-[13px]"
+                className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/40"
               />
             </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(v as "active" | "inactive" | "all");
-                resetPage();
-              }}
+            <Button size="sm" className="h-9 shrink-0" onClick={openAdd}>
+              <Plus className="mr-1 size-4" aria-hidden="true" /> New
+            </Button>
+          </div>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as "active" | "inactive" | "all")}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 w-full border-border/60 bg-background text-[13px]"
+              aria-label="Filter by status"
             >
-              <SelectTrigger
-                size="sm"
-                className="h-9 w-[140px] border-border/60 text-[13px]"
-                aria-label="Filter by status"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive{inactiveCount ? ` (${inactiveCount})` : ""}</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive{inactiveCount ? ` (${inactiveCount})` : ""}</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* ── Desktop table ── */}
-          <div className="hidden sm:block">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-4">Driver</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Hubs</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((driver) => {
-                  const inactive = driver.status !== "active";
-                  const ids = Array.isArray(driver.hub_ids)
-                    ? driver.hub_ids
-                    : driver.hub_id
-                      ? [driver.hub_id]
-                      : [];
-                  return (
-                    <TableRow
-                      key={driver.id}
-                      className={cn(
-                        "cursor-pointer",
-                        inactive && "opacity-55",
-                        selectedId === driver.id && "bg-primary/5",
-                      )}
-                      onClick={() => setSelectedId(driver.id)}
-                    >
-                      <TableCell className="pl-4">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={
-                              inactive
-                                ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                                : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                            }
-                          >
-                            <Users className="size-4" aria-hidden="true" />
-                          </span>
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm">{driver.name}</p>
-                            {vehicleText(driver.vehicle) && (
-                              <p className="truncate text-muted-foreground text-xs">{vehicleText(driver.vehicle)}</p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-sm tabular-nums">{formatPhone(driver.phone)}</span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {driver.all_hubs ? (
-                          <Badge variant="outline" className="bg-primary/10 text-primary">
-                            All hubs
-                          </Badge>
-                        ) : (
-                          hubNames(ids)
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {inactive ? (
-                          <Badge variant="outline" className="bg-muted text-muted-foreground">
-                            Inactive
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                            Active
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <RowMenu
-                          driver={driver}
-                          onEdit={() => openEdit(driver)}
-                          onStatus={() => setStatusTarget(driver)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* ── Mobile rows (same card, divided) ── */}
-          <div className="divide-y divide-border/40 sm:hidden">
-            {rows.map((driver) => {
-              const inactive = driver.status !== "active";
-              const ids = Array.isArray(driver.hub_ids)
-                ? driver.hub_ids
-                : driver.hub_id
-                  ? [driver.hub_id]
-                  : [];
-              return (
-                <div
-                  key={driver.id}
-                  className={cn(
-                    "flex items-center gap-3 p-3",
-                    inactive && "opacity-55",
-                    selectedId === driver.id && "bg-primary/5",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(driver.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                  >
-                    <span
-                      className={
-                        inactive
-                          ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                          : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                      }
-                    >
-                      <Users className="size-4" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate font-medium text-sm">{driver.name}</span>
-                        {inactive ? (
-                          <Badge variant="outline" className="bg-muted text-muted-foreground">
-                            Inactive
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-primary/10 text-primary">
-                            Active
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="mt-0.5 block font-mono text-[13px] text-muted-foreground tabular-nums">
-                        {formatPhone(driver.phone)}
-                      </span>
-                      {driver.email && (
-                        <span className="mt-0.5 inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-                          <Mail className="size-3.5" aria-hidden="true" /> {driver.email}
-                        </span>
-                      )}
-                      <span className="mt-0.5 block truncate text-muted-foreground text-xs">
-                        {driver.all_hubs ? "All hubs" : hubNames(ids)}
-                      </span>
-                    </span>
-                  </button>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <RowMenu
-                      driver={driver}
-                      onEdit={() => openEdit(driver)}
-                      onStatus={() => setStatusTarget(driver)}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Footer: empty-filter state + pagination inside the card ── */}
-          {filtered.length === 0 && (
-            <p className="px-4 py-8 text-center text-muted-foreground text-sm">No drivers match those filters.</p>
+        {/* List — independent scroll */}
+        <div className="flex-1 overflow-y-auto">
+          {error && !statusTarget && (
+            <p className="px-3 pt-3 text-destructive text-xs">{error}</p>
           )}
-          {filtered.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-border/60 border-t px-3 py-2">
-              <p className="text-[11px] text-muted-foreground tabular-nums">
-                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+          {!drivers ? (
+            <div className="space-y-2 p-3">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={`drv-${i}`} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : drivers.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
+                <Users className="size-6" aria-hidden="true" />
+              </span>
+              <p className="font-medium text-sm">{loadError ? "Couldn't load drivers" : "No drivers yet"}</p>
+              <p className="max-w-xs text-muted-foreground text-xs">
+                {loadError
+                  ? "There was a problem reaching the fleet service. Try again."
+                  : "Add the drivers who pick up and deliver packages for Routely."}
               </p>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1 border-border/60"
-                  disabled={safePage === 0}
-                  onClick={() => setPage(safePage - 1)}
-                >
-                  <ChevronLeft className="size-3.5" aria-hidden="true" />
-                  Prev
+              {loadError ? (
+                <Button size="sm" variant="outline" className="mt-2 h-9" onClick={() => loadDrivers()}>
+                  Retry
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1 border-border/60"
-                  disabled={safePage >= pages - 1}
-                  onClick={() => setPage(safePage + 1)}
-                >
-                  Next
-                  <ChevronRight className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Button size="sm" className="mt-2 h-9" onClick={openAdd}>
+                  <Plus className="mr-1.5 size-4" aria-hidden="true" /> Add your first driver
                 </Button>
-              </div>
+              )}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-4 py-10 text-center text-muted-foreground text-[13px]">
+              No drivers match those filters.
+            </p>
+          ) : (
+            <div>
+              {filtered.map((driver) => (
+                <DriverRow
+                  key={driver.id}
+                  driver={driver}
+                  hubNames={hubNames}
+                  selected={selectedId === driver.id}
+                  onSelect={() => setSelectedId(driver.id)}
+                />
+              ))}
             </div>
           )}
         </div>
-      )}
-        </div>
-
-        {/* ── Detail panel — full-screen overlay on mobile, side panel on desktop ── */}
-        <AnimatePresence>
-          {selectedDriver && (
-            <motion.aside
-              key={selectedDriver.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="fixed inset-0 z-40 overflow-y-auto bg-background lg:sticky lg:top-4 lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-6rem)] lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:rounded-xl lg:border lg:border-border/60 lg:bg-card"
-            >
-              <DriverDetailPanel
-                driver={selectedDriver}
-                hubs={hubs}
-                onClose={() => setSelectedId(null)}
-                onEdit={() => openEdit(selectedDriver)}
-                onStatus={() => setStatusTarget(selectedDriver)}
-              />
-            </motion.aside>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* ═══ CENTER COLUMN — detail panel (desktop) ═══ */}
+      <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
+        {selectedDriver ? (
+          <DriverDetailPanel
+            driver={selectedDriver}
+            hubs={hubs}
+            onClose={() => setSelectedId(null)}
+            onEdit={() => openEdit(selectedDriver)}
+            onStatus={() => setStatusTarget(selectedDriver)}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
+            <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
+              <Users className="size-7 text-muted-foreground/30" aria-hidden="true" />
+            </div>
+            <p className="font-bold text-sm text-foreground">No driver selected</p>
+            <p className="mt-1.5 max-w-[200px] text-muted-foreground text-xs leading-relaxed">
+              Click a driver from the list to view details
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
+      <div className="hidden overflow-hidden bg-muted/20 lg:block lg:flex-1">
+        <DriverMapPanel driver={selectedDriver} hubs={hubs} />
+      </div>
+
+      {/* ═══ MOBILE — full-screen overlay: detail + map stacked ═══ */}
+      <AnimatePresence>
+        {selectedDriver && (
+          <motion.div
+            key={selectedDriver.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
+          >
+            <DriverDetailPanel
+              driver={selectedDriver}
+              hubs={hubs}
+              onClose={() => setSelectedId(null)}
+              onEdit={() => openEdit(selectedDriver)}
+              onStatus={() => setStatusTarget(selectedDriver)}
+            />
+            <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
+              <DriverMapPanel driver={selectedDriver} hubs={hubs} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Status change confirm — rendered regardless of view */}
       <StatusConfirm
@@ -1034,6 +835,116 @@ export function DriversTab() {
         setStatusTarget={setStatusTarget}
         confirmStatusChange={confirmStatusChange}
       />
+    </div>
+  );
+}
+
+// ── Compact list row (Stops-density) ──────────────────────────────────────────
+function DriverRow({
+  driver,
+  hubNames,
+  selected,
+  onSelect,
+}: {
+  driver: Driver;
+  hubNames: (ids: string[]) => string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const inactive = driver.status !== "active";
+  const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 border-border/20 border-b border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
+        inactive && "opacity-55",
+        selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
+      )}
+    >
+      <span
+        className={
+          inactive
+            ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+            : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+        }
+      >
+        <Users className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-medium text-[13px]">{driver.name}</span>
+          {inactive ? (
+            <Badge variant="outline" className="bg-muted text-muted-foreground">
+              Inactive
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-primary/10 text-primary">
+              Active
+            </Badge>
+          )}
+        </span>
+        <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground tabular-nums">
+          {formatPhone(driver.phone)}
+        </span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          {driver.all_hubs ? "All hubs" : hubNames(ids)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// ── Persistent map panel — empty state when nothing selected ──────────────────
+function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }) {
+  if (!driver) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border/60">
+          <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
+        </div>
+        <div className="text-center">
+          <p className="font-bold text-[13px] text-foreground/70">Fleet map</p>
+          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+            Select a driver to see
+            <br />
+            the route
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const driverAddr = fullAddress(driver.address);
+  const defaultHub = resolveDefaultHub(driver, hubs);
+  const hubAddr = defaultHub ? fullAddress(defaultHub.address) : "";
+  const hubName = defaultHub?.name;
+
+  // Real A→B route when the driver has an address; otherwise a single hub point
+  // with a hint prompting the user to add one.
+  const showRoute = Boolean(driverAddr && hubAddr);
+  const mapHint = !driverAddr && hubAddr ? "Add a driver address to see the route." : "";
+
+  return (
+    <div className="relative h-full w-full">
+      {showRoute ? (
+        <FleetRouteMap
+          originAddr={driverAddr}
+          originName={driver.name}
+          destinationAddr={hubAddr}
+          destinationName={hubName}
+        />
+      ) : (
+        <FleetRouteMap singlePoint destinationAddr={hubAddr} destinationName={hubName} />
+      )}
+      {mapHint && (
+        <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-3 py-1.5 text-muted-foreground text-xs shadow-sm backdrop-blur-sm">
+            <Navigation className="size-3.5" aria-hidden="true" /> {mapHint}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1166,7 +1077,7 @@ function DetailRow({ label, value, mono }: { label: string; value: React.ReactNo
   );
 }
 
-// ── Driver detail panel: read-only info + map + Edit / status ──
+// ── Driver detail panel: read-only info + Edit / status (map lives in its own column) ──
 function DriverDetailPanel({
   driver,
   hubs,
@@ -1188,13 +1099,6 @@ function DriverDetailPanel({
 
   const driverAddr = fullAddress(driver.address);
   const defaultHub = resolveDefaultHub(driver, hubs);
-  const hubAddr = defaultHub ? fullAddress(defaultHub.address) : "";
-  const hubName = defaultHub?.name;
-
-  // Real A→B route when the driver has an address; otherwise a single hub point
-  // with a hint prompting the user to add one.
-  const showRoute = Boolean(driverAddr && hubAddr);
-  const mapHint = !driverAddr && hubAddr ? "Add a driver address to see the route." : "";
 
   return (
     <div className="flex min-h-full flex-col bg-card lg:min-h-0">
@@ -1234,7 +1138,7 @@ function DriverDetailPanel({
       </div>
 
       {/* Body */}
-      <div className="space-y-4 p-4">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {/* Title + status */}
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -1261,22 +1165,9 @@ function DriverDetailPanel({
           {vehicleText(driver.vehicle) && <p className="type-desc pl-10">{vehicleText(driver.vehicle)}</p>}
         </div>
 
-        {/* Map — A→B route when the driver has an address, else a single hub point */}
-        <div className="h-56 overflow-hidden rounded-xl border border-border/60">
-          {showRoute ? (
-            <FleetRouteMap
-              originAddr={driverAddr}
-              originName={driver.name}
-              destinationAddr={hubAddr}
-              destinationName={hubName}
-            />
-          ) : (
-            <FleetRouteMap singlePoint destinationAddr={hubAddr} destinationName={hubName} />
-          )}
-        </div>
-        {mapHint && (
-          <p className="-mt-2 inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Navigation className="size-3.5" aria-hidden="true" /> {mapHint}
+        {driver.email && (
+          <p className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Mail className="size-3.5" aria-hidden="true" /> {driver.email}
           </p>
         )}
 

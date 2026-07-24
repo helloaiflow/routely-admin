@@ -24,7 +24,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("drivers")
     .select(
-      "id, tenant_id, name, phone, email, hub_id, all_hubs, vehicle, status, external_circuit_id, doc, driver_hubs(hub_id), created_at, updated_at",
+      "id, tenant_id, name, phone, email, address, geo, hub_id, all_hubs, vehicle, status, external_circuit_id, doc, driver_hubs(hub_id), created_at, updated_at",
     )
     .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
     .order("status", { ascending: true }) // active before inactive

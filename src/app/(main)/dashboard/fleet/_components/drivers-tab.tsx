@@ -15,7 +15,6 @@ import {
   Contact,
   Loader2,
   Mail,
-  MapPin,
   MoreVertical,
   Navigation,
   Pencil,
@@ -81,6 +80,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+
+import { FleetRouteMap } from "./fleet-route-map";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
 
@@ -1152,33 +1153,6 @@ function AddressField({
   );
 }
 
-// ── Embedded Google Maps iframe with a graceful fallback ──
-function FleetMap({ src, fallback }: { src: string | null; fallback: string }) {
-  if (!src) {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
-        <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
-        <p className="max-w-[200px] px-3 text-center text-[11px] leading-snug text-muted-foreground/55">
-          {fallback}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-muted">
-      <iframe
-        title="Driver route map"
-        width="100%"
-        height="100%"
-        style={{ border: 0, display: "block", minHeight: "100%" }}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        src={src}
-      />
-    </div>
-  );
-}
-
 // A read-only label/value row for the detail panel.
 function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   if (value == null || value === "" || value === "—") return null;
@@ -1206,7 +1180,6 @@ function DriverDetailPanel({
   onEdit: () => void;
   onStatus: () => void;
 }) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const inactive = driver.status !== "active";
   const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
   const assignedNames = driver.all_hubs
@@ -1216,20 +1189,12 @@ function DriverDetailPanel({
   const driverAddr = fullAddress(driver.address);
   const defaultHub = resolveDefaultHub(driver, hubs);
   const hubAddr = defaultHub ? fullAddress(defaultHub.address) : "";
+  const hubName = defaultHub?.name;
 
-  let mapSrc: string | null = null;
-  let mapHint = "";
-  if (apiKey && driverAddr && hubAddr) {
-    mapSrc = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(driverAddr)}&destination=${encodeURIComponent(hubAddr)}&mode=driving`;
-  } else if (apiKey && hubAddr) {
-    mapSrc = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(hubAddr)}&zoom=13`;
-    if (!driverAddr) mapHint = "Add a driver address to see the route.";
-  }
-  const mapFallback = !apiKey
-    ? "Map preview unavailable — no Maps API key configured."
-    : !hubAddr
-      ? "No hub address available to map yet."
-      : "";
+  // Real A→B route when the driver has an address; otherwise a single hub point
+  // with a hint prompting the user to add one.
+  const showRoute = Boolean(driverAddr && hubAddr);
+  const mapHint = !driverAddr && hubAddr ? "Add a driver address to see the route." : "";
 
   return (
     <div className="flex min-h-full flex-col bg-card lg:min-h-0">
@@ -1296,9 +1261,18 @@ function DriverDetailPanel({
           {vehicleText(driver.vehicle) && <p className="type-desc pl-10">{vehicleText(driver.vehicle)}</p>}
         </div>
 
-        {/* Map */}
-        <div className="h-48 overflow-hidden rounded-xl border border-border/60">
-          <FleetMap src={mapSrc} fallback={mapFallback} />
+        {/* Map — A→B route when the driver has an address, else a single hub point */}
+        <div className="h-56 overflow-hidden rounded-xl border border-border/60">
+          {showRoute ? (
+            <FleetRouteMap
+              originAddr={driverAddr}
+              originName={driver.name}
+              destinationAddr={hubAddr}
+              destinationName={hubName}
+            />
+          ) : (
+            <FleetRouteMap singlePoint destinationAddr={hubAddr} destinationName={hubName} />
+          )}
         </div>
         {mapHint && (
           <p className="-mt-2 inline-flex items-center gap-1.5 text-muted-foreground text-xs">

@@ -105,14 +105,6 @@ export const sidebarItems: NavGroup[] = [
             permission: "orders",
             comingSoon: true,
           },
-        ],
-      },
-      {
-        title: "Fleet",
-        url: "/dashboard/hubs",
-        icon: Warehouse,
-        permission: "settings",
-        subItems: [
           {
             title: "Hubs",
             url: "/dashboard/hubs",
@@ -126,6 +118,12 @@ export const sidebarItems: NavGroup[] = [
             permission: "settings",
           },
         ],
+      },
+      {
+        title: "Fleet",
+        url: "/dashboard/fleet",
+        icon: Warehouse,
+        permission: "settings",
       },
     ],
   },

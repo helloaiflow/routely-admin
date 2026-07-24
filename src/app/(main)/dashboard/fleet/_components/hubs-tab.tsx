@@ -58,6 +58,8 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+import { FleetRouteMap } from "./fleet-route-map";
+
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
 
 type RouteDefaults = {
@@ -869,33 +871,6 @@ export function HubsTab() {
   );
 }
 
-// ── Embedded Google Maps iframe with a graceful no-key / no-address fallback ──
-function FleetMap({ src, fallback }: { src: string | null; fallback: string }) {
-  if (!src) {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
-        <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
-        <p className="max-w-[200px] px-3 text-center text-[11px] leading-snug text-muted-foreground/55">
-          {fallback}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-muted">
-      <iframe
-        title="Hub location map"
-        width="100%"
-        height="100%"
-        style={{ border: 0, display: "block", minHeight: "100%" }}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        src={src}
-      />
-    </div>
-  );
-}
-
 // A read-only label/value row for the detail panel.
 function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   if (value == null || value === "" || value === "—") return null;
@@ -919,18 +894,9 @@ function HubDetailPanel({
   onClose: () => void;
   onEdit: () => void;
 }) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const addr = fullAddress(hub.address);
   const rd = hub.route_defaults ?? {};
   const c = routeCells(hub.route_defaults);
-
-  const mapSrc =
-    apiKey && addr
-      ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(addr)}&zoom=14`
-      : null;
-  const mapFallback = apiKey
-    ? addr || "No address on file for this hub."
-    : "Map preview unavailable — no Maps API key configured.";
 
   return (
     <div className="flex min-h-full flex-col bg-card lg:min-h-0">
@@ -975,9 +941,9 @@ function HubDetailPanel({
           {addr && <p className="type-desc pl-10">{addr}</p>}
         </div>
 
-        {/* Map */}
-        <div className="h-48 overflow-hidden rounded-xl border border-border/60">
-          <FleetMap src={mapSrc} fallback={mapFallback} />
+        {/* Map — single point centered on the hub */}
+        <div className="h-56 overflow-hidden rounded-xl border border-border/60">
+          <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />
         </div>
 
         {/* Read rows */}

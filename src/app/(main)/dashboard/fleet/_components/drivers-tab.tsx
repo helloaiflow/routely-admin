@@ -2,17 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   Ban,
   Building2,
   Car,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
+  CircleCheck,
   Contact,
   Loader2,
   Mail,
+  MapPin,
   MoreVertical,
+  Navigation,
   Pencil,
   Plus,
   RotateCcw,
@@ -21,6 +26,10 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  AddressAutocomplete,
+  type PlaceDetails,
+} from "@/components/ui/address-autocomplete";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,9 +82,14 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+type Address = { line1?: string; city?: string; state?: string; zip?: string };
+
 type Hub = {
   id: string;
   name: string;
+  address?: Address | null;
+  geo?: { lat?: number; lng?: number } | null;
+  is_default?: boolean;
 };
 
 type Driver = {
@@ -90,6 +104,9 @@ type Driver = {
   vehicle: { description?: string } | Record<string, unknown> | null;
   status: "active" | "inactive";
   external_circuit_id: string | null;
+  // Optional — the backend will start returning these; treat absence as empty.
+  address?: Address | null;
+  geo?: { lat?: number; lng?: number } | null;
   doc?: { display_name?: string; circuit_depots?: unknown; recruiting?: unknown };
   created_at?: string;
   updated_at?: string;
@@ -102,6 +119,15 @@ type FormState = {
   allHubs: boolean;
   hubIds: string[];
   vehicle: string;
+  // Optional address (maps to payload.address + payload.geo only when filled).
+  addressValue: string;
+  addressSelected: boolean;
+  line1: string;
+  city: string;
+  state: string;
+  zip: string;
+  lat: string;
+  lng: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -111,6 +137,14 @@ const EMPTY_FORM: FormState = {
   allHubs: false,
   hubIds: [],
   vehicle: "",
+  addressValue: "",
+  addressSelected: false,
+  line1: "",
+  city: "",
+  state: "",
+  zip: "",
+  lat: "",
+  lng: "",
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -137,6 +171,48 @@ function vehicleText(v: Driver["vehicle"]): string {
   if (!v || typeof v !== "object") return "";
   const desc = (v as { description?: unknown }).description;
   return typeof desc === "string" ? desc : "";
+}
+
+function hasAddr(a?: Address | null): boolean {
+  return Boolean(a && (a.line1 || a.city || a.state || a.zip));
+}
+
+// Joined display string to pre-fill the autocomplete on edit.
+function formatAddr(a?: Address | null): string {
+  if (!a) return "";
+  return [a.line1, a.city, a.state, a.zip].filter(Boolean).join(", ");
+}
+
+// Full one-line address for map queries: "line1, City, ST zip".
+function fullAddress(a?: Address | null): string {
+  if (!a) return "";
+  const cityState = [a.city, a.state].filter(Boolean).join(", ");
+  const tail = [cityState, a.zip].filter(Boolean).join(" ").trim();
+  return [a.line1, tail].filter(Boolean).join(", ");
+}
+
+// Build an Address from four inputs, or undefined when they're all empty.
+function buildAddress(line1: string, city: string, state: string, zip: string): Address | undefined {
+  const addr: Address = {
+    line1: line1.trim() || undefined,
+    city: city.trim() || undefined,
+    state: state.trim() || undefined,
+    zip: zip.trim() || undefined,
+  };
+  return Object.values(addr).some(Boolean) ? addr : undefined;
+}
+
+// Resolve a driver's default hub: the hub matching hub_id (unless all_hubs),
+// otherwise the tenant's is_default hub.
+function resolveDefaultHub(driver: Driver, hubs: Hub[]): Hub | null {
+  if (!driver.all_hubs) {
+    const primaryId = driver.hub_id ?? driver.hub_ids?.[0];
+    if (primaryId) {
+      const match = hubs.find((h) => h.id === primaryId);
+      if (match) return match;
+    }
+  }
+  return hubs.find((h) => h.is_default) ?? null;
 }
 
 // ── Searchable multi-select of hubs (Popover + Command) ──────────────────────
@@ -289,6 +365,9 @@ export function DriversTab() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
 
+  // Selected driver → opens the read-only detail + map panel (not the edit modal).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   function loadDrivers() {
     setLoadError(false);
     fetch("/api/client/drivers")
@@ -351,6 +430,9 @@ export function DriversTab() {
   const safePage = Math.min(page, pages - 1);
   const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
+  // Resolve the selected driver from the loaded list (stays in sync on reload).
+  const selectedDriver = selectedId ? (drivers ?? []).find((d) => d.id === selectedId) ?? null : null;
+
   const resetPage = () => setPage(0);
 
   function openAdd() {
@@ -375,10 +457,46 @@ export function DriversTab() {
       allHubs: Boolean(driver.all_hubs),
       hubIds: ids,
       vehicle: vehicleText(driver.vehicle),
+      addressValue: formatAddr(driver.address),
+      addressSelected: hasAddr(driver.address),
+      line1: driver.address?.line1 ?? "",
+      city: driver.address?.city ?? "",
+      state: driver.address?.state ?? "",
+      zip: driver.address?.zip ?? "",
+      lat: driver.geo?.lat != null ? String(driver.geo.lat) : "",
+      lng: driver.geo?.lng != null ? String(driver.geo.lng) : "",
     });
     setError("");
     setAttempted(false);
     setFormOpen(true);
+  }
+
+  // ── Address handlers ──
+  function onAddressPlace(d: PlaceDetails) {
+    setForm((f) => ({
+      ...f,
+      addressValue: d.formatted_address || d.street || f.addressValue,
+      line1: d.street ?? "",
+      city: d.city ?? "",
+      state: d.state ?? "",
+      zip: d.zip ?? "",
+      lat: d.lat != null ? String(d.lat) : "",
+      lng: d.lng != null ? String(d.lng) : "",
+      addressSelected: true,
+    }));
+  }
+  function clearAddress() {
+    setForm((f) => ({
+      ...f,
+      addressValue: "",
+      line1: "",
+      city: "",
+      state: "",
+      zip: "",
+      lat: "",
+      lng: "",
+      addressSelected: false,
+    }));
   }
 
   const phoneDigits = form.phone.replace(/\D/g, "");
@@ -412,6 +530,21 @@ export function DriversTab() {
       // FastAPI expects a dict for vehicle — send {} (not null) when empty, or it 422s.
       vehicle: form.vehicle.trim() ? { description: form.vehicle.trim() } : {},
     };
+
+    // Optional address — include address + geo ONLY when the user filled it in.
+    // When empty, both keys are omitted so existing saves stay byte-identical.
+    const driverAddress = buildAddress(form.line1, form.city, form.state, form.zip);
+    if (driverAddress) {
+      payload.address = driverAddress;
+      const lat = form.lat.trim() ? Number(form.lat) : undefined;
+      const lng = form.lng.trim() ? Number(form.lng) : undefined;
+      if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
+        payload.geo = {
+          lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
+          lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
+        };
+      }
+    }
 
     setSaving(true);
     setError("");
@@ -529,6 +662,16 @@ export function DriversTab() {
                     />
                   </div>
                 </Field>
+                <Field label="Address" hint="Optional — used to map the route to the driver's home hub.">
+                  <AddressField
+                    value={form.addressValue}
+                    selected={form.addressSelected}
+                    placeholder="Search driver address…"
+                    onChange={(v) => setForm((f) => ({ ...f, addressValue: v, addressSelected: false }))}
+                    onPlaceDetails={onAddressPlace}
+                    onClear={clearAddress}
+                  />
+                </Field>
               </section>
 
               {/* ── Hubs ── */}
@@ -597,7 +740,9 @@ export function DriversTab() {
 
       {error && !statusTarget && <p className="text-destructive text-sm">{error}</p>}
 
-      {/* List */}
+      {/* List + detail panel (Stops-style responsive split) */}
+      <div className="flex gap-5 lg:items-start">
+        <div className="min-w-0 flex-1">
       {!drivers ? (
         <div className="space-y-3">
           {[0, 1, 2, 3].map((i) => (
@@ -689,8 +834,12 @@ export function DriversTab() {
                   return (
                     <TableRow
                       key={driver.id}
-                      className={cn("cursor-pointer", inactive && "opacity-55")}
-                      onClick={() => openEdit(driver)}
+                      className={cn(
+                        "cursor-pointer",
+                        inactive && "opacity-55",
+                        selectedId === driver.id && "bg-primary/5",
+                      )}
+                      onClick={() => setSelectedId(driver.id)}
                     >
                       <TableCell className="pl-4">
                         <div className="flex items-center gap-2.5">
@@ -760,11 +909,15 @@ export function DriversTab() {
               return (
                 <div
                   key={driver.id}
-                  className={cn("flex items-center gap-3 p-3", inactive && "opacity-55")}
+                  className={cn(
+                    "flex items-center gap-3 p-3",
+                    inactive && "opacity-55",
+                    selectedId === driver.id && "bg-primary/5",
+                  )}
                 >
                   <button
                     type="button"
-                    onClick={() => openEdit(driver)}
+                    onClick={() => setSelectedId(driver.id)}
                     className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                   >
                     <span
@@ -849,6 +1002,30 @@ export function DriversTab() {
           )}
         </div>
       )}
+        </div>
+
+        {/* ── Detail panel — full-screen overlay on mobile, side panel on desktop ── */}
+        <AnimatePresence>
+          {selectedDriver && (
+            <motion.aside
+              key={selectedDriver.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-0 z-40 overflow-y-auto bg-background lg:sticky lg:top-4 lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-6rem)] lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:rounded-xl lg:border lg:border-border/60 lg:bg-card"
+            >
+              <DriverDetailPanel
+                driver={selectedDriver}
+                hubs={hubs}
+                onClose={() => setSelectedId(null)}
+                onEdit={() => openEdit(selectedDriver)}
+                onStatus={() => setStatusTarget(selectedDriver)}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Status change confirm — rendered regardless of view */}
       <StatusConfirm
@@ -902,11 +1079,13 @@ function StatusConfirm({
 function Field({
   label,
   required,
+  hint,
   error,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   error?: string;
   children: React.ReactNode;
 }) {
@@ -916,8 +1095,228 @@ function Field({
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
+      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
       {children}
       {error && <p className="text-destructive text-xs">{error}</p>}
+    </div>
+  );
+}
+
+// Stops-styled address input: emerald border + check when a place is chosen,
+// with a clear button. Wraps the shared AddressAutocomplete (borderless inside).
+function AddressField({
+  value,
+  selected,
+  placeholder,
+  onChange,
+  onPlaceDetails,
+  onClear,
+}: {
+  value: string;
+  selected: boolean;
+  placeholder: string;
+  onChange: (v: string) => void;
+  onPlaceDetails: (d: PlaceDetails) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15",
+        selected ? "border-emerald-400 bg-emerald-50/30" : "border-input",
+      )}
+    >
+      <div className="relative flex items-center">
+        <AddressAutocomplete
+          value={value}
+          onChange={onChange}
+          onPlaceDetails={onPlaceDetails}
+          placeholder={placeholder}
+          className="h-9 border-0 bg-transparent pr-16 text-sm focus-visible:border-0 focus-visible:ring-0"
+        />
+        <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
+          {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}
+          {value && (
+            <button
+              type="button"
+              aria-label="Clear address"
+              onClick={onClear}
+              className="pointer-events-auto text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Embedded Google Maps iframe with a graceful fallback ──
+function FleetMap({ src, fallback }: { src: string | null; fallback: string }) {
+  if (!src) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
+        <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
+        <p className="max-w-[200px] px-3 text-center text-[11px] leading-snug text-muted-foreground/55">
+          {fallback}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-muted">
+      <iframe
+        title="Driver route map"
+        width="100%"
+        height="100%"
+        style={{ border: 0, display: "block", minHeight: "100%" }}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        src={src}
+      />
+    </div>
+  );
+}
+
+// A read-only label/value row for the detail panel.
+function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  if (value == null || value === "" || value === "—") return null;
+  return (
+    <div className="flex items-start justify-between gap-4 border-border/[0.12] border-b py-2 last:border-0">
+      <span className="shrink-0 text-muted-foreground text-xs">{label}</span>
+      <span className={cn("min-w-0 text-right text-foreground text-xs", mono && "font-mono tabular-nums")}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ── Driver detail panel: read-only info + map + Edit / status ──
+function DriverDetailPanel({
+  driver,
+  hubs,
+  onClose,
+  onEdit,
+  onStatus,
+}: {
+  driver: Driver;
+  hubs: Hub[];
+  onClose: () => void;
+  onEdit: () => void;
+  onStatus: () => void;
+}) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const inactive = driver.status !== "active";
+  const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
+  const assignedNames = driver.all_hubs
+    ? "All hubs"
+    : ids.map((id) => hubs.find((h) => h.id === id)?.name ?? "Unknown hub").join(", ") || "—";
+
+  const driverAddr = fullAddress(driver.address);
+  const defaultHub = resolveDefaultHub(driver, hubs);
+  const hubAddr = defaultHub ? fullAddress(defaultHub.address) : "";
+
+  let mapSrc: string | null = null;
+  let mapHint = "";
+  if (apiKey && driverAddr && hubAddr) {
+    mapSrc = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(driverAddr)}&destination=${encodeURIComponent(hubAddr)}&mode=driving`;
+  } else if (apiKey && hubAddr) {
+    mapSrc = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(hubAddr)}&zoom=13`;
+    if (!driverAddr) mapHint = "Add a driver address to see the route.";
+  }
+  const mapFallback = !apiKey
+    ? "Map preview unavailable — no Maps API key configured."
+    : !hubAddr
+      ? "No hub address available to map yet."
+      : "";
+
+  return (
+    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-4 py-2.5 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Back to list"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
+          <X className="hidden size-4 lg:block" aria-hidden="true" />
+        </button>
+        <span className="text-muted-foreground/60 text-xs">Driver details</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            onClick={onStatus}
+          >
+            {inactive ? (
+              <>
+                <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" /> Reactivate
+              </>
+            ) : (
+              <>
+                <Ban className="mr-1.5 size-3.5" aria-hidden="true" /> Deactivate
+              </>
+            )}
+          </Button>
+          <Button size="sm" className="h-8" onClick={onEdit}>
+            <Pencil className="mr-1.5 size-3.5" aria-hidden="true" /> Edit
+          </Button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="space-y-4 p-4">
+        {/* Title + status */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                inactive
+                  ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+                  : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+              }
+            >
+              <Users className="size-4" aria-hidden="true" />
+            </span>
+            <h4 className="type-card-title">{driver.name}</h4>
+            {inactive ? (
+              <Badge variant="outline" className="bg-muted text-muted-foreground">
+                Inactive
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-primary/10 text-primary">
+                Active
+              </Badge>
+            )}
+          </div>
+          {vehicleText(driver.vehicle) && <p className="type-desc pl-10">{vehicleText(driver.vehicle)}</p>}
+        </div>
+
+        {/* Map */}
+        <div className="h-48 overflow-hidden rounded-xl border border-border/60">
+          <FleetMap src={mapSrc} fallback={mapFallback} />
+        </div>
+        {mapHint && (
+          <p className="-mt-2 inline-flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Navigation className="size-3.5" aria-hidden="true" /> {mapHint}
+          </p>
+        )}
+
+        {/* Read rows */}
+        <div className="rounded-xl border border-border/60 bg-card px-3 py-1">
+          <DetailRow label="Phone" value={formatPhone(driver.phone)} mono />
+          <DetailRow label="Email" value={driver.email || "—"} />
+          <DetailRow label="Vehicle" value={vehicleText(driver.vehicle) || "—"} />
+          <DetailRow label="Assigned hubs" value={assignedNames} />
+          <DetailRow label="Default hub" value={defaultHub?.name || "—"} />
+          <DetailRow label="Address" value={driverAddr || "—"} />
+          <DetailRow label="Driver ID" value={driver.id} mono />
+        </div>
+      </div>
     </div>
   );
 }

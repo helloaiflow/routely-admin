@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   Building2,
   Check,
   ChevronLeft,
@@ -11,6 +13,7 @@ import {
   Clock,
   Loader2,
   MapPin,
+  Pencil,
   Plus,
   Repeat,
   Search,
@@ -161,6 +164,14 @@ function hasAddr(a?: Address | null): boolean {
   return Boolean(a && (a.line1 || a.city || a.state || a.zip));
 }
 
+// Full one-line address string for map queries: "line1, City, ST zip".
+function fullAddress(a?: Address | null): string {
+  if (!a) return "";
+  const cityState = [a.city, a.state].filter(Boolean).join(", ");
+  const tail = [cityState, a.zip].filter(Boolean).join(" ").trim();
+  return [a.line1, tail].filter(Boolean).join(", ");
+}
+
 // Derive the list/table display values from a hub's route defaults.
 function routeCells(rd?: RouteDefaults | null) {
   return {
@@ -198,6 +209,9 @@ export function HubsTab() {
   const [query, setQuery] = useState("");
   const [rtFilter, setRtFilter] = useState<"all" | "roundtrip" | "oneway">("all");
   const [page, setPage] = useState(0);
+
+  // Selected hub → opens the read-only detail + map panel (not the edit modal).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   function load() {
     setLoadError(false);
@@ -399,6 +413,9 @@ export function HubsTab() {
   const safePage = Math.min(page, pages - 1);
   const rows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
+  // Resolve the currently selected hub from the loaded list (stays in sync on reload).
+  const selectedHub = selectedId ? (hubs ?? []).find((h) => h.id === selectedId) ?? null : null;
+
   // ── Add/Edit form dialog (shared by New + Edit) ──
   const formDialog = (
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -591,7 +608,9 @@ export function HubsTab() {
         </Button>
       </div>
 
-      {/* List */}
+      {/* List + detail panel (Stops-style responsive split) */}
+      <div className="flex gap-5 lg:items-start">
+        <div className="min-w-0 flex-1">
       {!hubs ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
@@ -678,7 +697,14 @@ export function HubsTab() {
                 {rows.map((hub) => {
                   const c = routeCells(hub.route_defaults);
                   return (
-                    <TableRow key={hub.id} className="cursor-pointer" onClick={() => openEdit(hub)}>
+                    <TableRow
+                      key={hub.id}
+                      className={cn(
+                        "cursor-pointer",
+                        selectedId === hub.id && "bg-primary/5",
+                      )}
+                      onClick={() => setSelectedId(hub.id)}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           <span
@@ -732,8 +758,11 @@ export function HubsTab() {
                 <button
                   key={hub.id}
                   type="button"
-                  onClick={() => openEdit(hub)}
-                  className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/30"
+                  onClick={() => setSelectedId(hub.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/30",
+                    selectedId === hub.id && "bg-primary/5",
+                  )}
                 >
                   <span
                     className={
@@ -814,6 +843,155 @@ export function HubsTab() {
           )}
         </div>
       )}
+        </div>
+
+        {/* ── Detail panel — full-screen overlay on mobile, side panel on desktop ── */}
+        <AnimatePresence>
+          {selectedHub && (
+            <motion.aside
+              key={selectedHub.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-0 z-40 overflow-y-auto bg-background lg:sticky lg:top-4 lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-6rem)] lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:rounded-xl lg:border lg:border-border/60 lg:bg-card"
+            >
+              <HubDetailPanel
+                hub={selectedHub}
+                onClose={() => setSelectedId(null)}
+                onEdit={() => openEdit(selectedHub)}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ── Embedded Google Maps iframe with a graceful no-key / no-address fallback ──
+function FleetMap({ src, fallback }: { src: string | null; fallback: string }) {
+  if (!src) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
+        <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
+        <p className="max-w-[200px] px-3 text-center text-[11px] leading-snug text-muted-foreground/55">
+          {fallback}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-muted">
+      <iframe
+        title="Hub location map"
+        width="100%"
+        height="100%"
+        style={{ border: 0, display: "block", minHeight: "100%" }}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        src={src}
+      />
+    </div>
+  );
+}
+
+// A read-only label/value row for the detail panel.
+function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  if (value == null || value === "" || value === "—") return null;
+  return (
+    <div className="flex items-start justify-between gap-4 border-border/[0.12] border-b py-2 last:border-0">
+      <span className="shrink-0 text-muted-foreground text-xs">{label}</span>
+      <span className={cn("min-w-0 text-right text-foreground text-xs", mono && "font-mono tabular-nums")}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ── Hub detail panel: read-only info + map + Edit ──
+function HubDetailPanel({
+  hub,
+  onClose,
+  onEdit,
+}: {
+  hub: Hub;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const addr = fullAddress(hub.address);
+  const rd = hub.route_defaults ?? {};
+  const c = routeCells(hub.route_defaults);
+
+  const mapSrc =
+    apiKey && addr
+      ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(addr)}&zoom=14`
+      : null;
+  const mapFallback = apiKey
+    ? addr || "No address on file for this hub."
+    : "Map preview unavailable — no Maps API key configured.";
+
+  return (
+    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-4 py-2.5 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Back to list"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
+          <X className="hidden size-4 lg:block" aria-hidden="true" />
+        </button>
+        <span className="text-muted-foreground/60 text-xs">Hub details</span>
+        <Button size="sm" className="ml-auto h-8" onClick={onEdit}>
+          <Pencil className="mr-1.5 size-3.5" aria-hidden="true" /> Edit
+        </Button>
+      </div>
+
+      {/* Body */}
+      <div className="space-y-4 p-4">
+        {/* Title + default badge */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                hub.is_default
+                  ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+                  : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+              }
+            >
+              <Building2 className="size-4" aria-hidden="true" />
+            </span>
+            <h4 className="type-card-title">{hub.name}</h4>
+            {hub.is_default && (
+              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
+                <Star className="size-3" aria-hidden="true" /> Default
+              </Badge>
+            )}
+          </div>
+          {addr && <p className="type-desc pl-10">{addr}</p>}
+        </div>
+
+        {/* Map */}
+        <div className="h-48 overflow-hidden rounded-xl border border-border/60">
+          <FleetMap src={mapSrc} fallback={mapFallback} />
+        </div>
+
+        {/* Read rows */}
+        <div className="rounded-xl border border-border/60 bg-card px-3 py-1">
+          <DetailRow label="Address" value={addr || "—"} />
+          <DetailRow label="Timezone" value={hub.timezone || "—"} />
+          <DetailRow label="Start time" value={c.start} mono />
+          <DetailRow label="End time" value={c.end} mono />
+          <DetailRow label="Min per stop" value={c.minPerStop} mono />
+          <DetailRow label="Max stops" value={c.maxStops} mono />
+          <DetailRow label="Round-trip" value={rd.round_trip ? "Yes" : "No"} />
+          <DetailRow label="Hub ID" value={hub.id} mono />
+        </div>
+      </div>
     </div>
   );
 }

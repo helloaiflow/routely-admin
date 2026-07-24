@@ -7437,7 +7437,6 @@ export default function StopsPage() {
     <div
       className="flex h-full overflow-hidden"
       style={{
-        zoom: "var(--panel-zoom, 1)" as string,
         backgroundColor: "hsl(var(--muted) / 0.4)",
         backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)",
         backgroundSize: "20px 20px",

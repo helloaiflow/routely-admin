@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Minus, Plus, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,24 +25,6 @@ import { applyThemePreset } from "@/lib/preferences/theme-utils";
 import { readScanPreference, type ScanPreference, writeScanPreference } from "@/lib/ocr/scan-preference";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
-// ── Panel Zoom (scoped to StopDetailPanel body only) ─────────────────────────
-const PANEL_ZOOM_KEY = "routely_panel_zoom";
-const ZOOM_STEPS = [80, 85, 90, 95, 100, 105, 110] as const;
-type PanelZoom = (typeof ZOOM_STEPS)[number];
-
-function readPanelZoom(): PanelZoom {
-  if (typeof window === "undefined") return 90;
-  const v = Number(localStorage.getItem(PANEL_ZOOM_KEY) ?? "90");
-  return (ZOOM_STEPS.includes(v as PanelZoom) ? v : 90) as PanelZoom;
-}
-
-function applyPanelZoom(zoom: PanelZoom) {
-  // Only sets a CSS variable — consumed exclusively by StopDetailPanel's
-  // scrollable body via style={{ zoom: 'var(--panel-zoom, 1)' }}.
-  // Nothing else in the layout is affected.
-  document.documentElement.style.setProperty("--panel-zoom", (zoom / 100).toString());
-}
-
 export function LayoutControls() {
   const themeMode = usePreferencesStore((s) => s.themeMode);
   const resolvedThemeMode = usePreferencesStore((s) => s.resolvedThemeMode);
@@ -59,21 +41,14 @@ export function LayoutControls() {
   const setSidebarCollapsible = usePreferencesStore((s) => s.setSidebarCollapsible);
   const setFont = usePreferencesStore((s) => s.setFont);
 
-  const [panelZoom, setPanelZoom] = useState<PanelZoom>(90);
   const [scanPreference, setScanPreference] = useState<ScanPreference>("qwen");
 
   useEffect(() => {
-    const saved = readPanelZoom();
-    setPanelZoom(saved);
-    applyPanelZoom(saved);
+    // Panel-zoom mechanism removed: purge the stale persisted value so no
+    // future reader can resurrect a cached 90%.
+    localStorage.removeItem("routely_panel_zoom");
     setScanPreference(readScanPreference());
   }, []);
-
-  const onPanelZoomChange = (zoom: PanelZoom) => {
-    setPanelZoom(zoom);
-    applyPanelZoom(zoom);
-    localStorage.setItem(PANEL_ZOOM_KEY, String(zoom));
-  };
 
   const onScanPreferenceChange = (value: ScanPreference | "") => {
     if (!value) return;
@@ -136,7 +111,6 @@ export function LayoutControls() {
     onSidebarStyleChange(PREFERENCE_DEFAULTS.sidebar_variant);
     onSidebarCollapseModeChange(PREFERENCE_DEFAULTS.sidebar_collapsible);
     onFontChange(PREFERENCE_DEFAULTS.font);
-    onPanelZoomChange(90);
     onScanPreferenceChange("qwen");
   };
 
@@ -277,63 +251,6 @@ export function LayoutControls() {
                   OffCanvas
                 </ToggleGroupItem>
               </ToggleGroup>
-            </div>
-
-            {/* ── Panel Zoom ────────────────────────────── */}
-            <div className="space-y-1.5 border-t border-border/40 pt-3">
-              <div className="flex items-center justify-between">
-                <Label className="font-medium text-xs">Panel Zoom</Label>
-                <span className="tabular-nums font-semibold text-[11px] text-muted-foreground">{panelZoom}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="size-7 shrink-0"
-                  disabled={panelZoom <= ZOOM_STEPS[0]}
-                  onClick={() => {
-                    const i = ZOOM_STEPS.indexOf(panelZoom);
-                    if (i > 0) onPanelZoomChange(ZOOM_STEPS[i - 1]);
-                  }}
-                  aria-label="Decrease panel zoom"
-                >
-                  <Minus className="size-3" aria-hidden="true" />
-                </Button>
-                <div className="flex flex-1 items-center gap-0.5">
-                  {ZOOM_STEPS.map((step) => (
-                    <button
-                      key={step}
-                      type="button"
-                      onClick={() => onPanelZoomChange(step)}
-                      title={`${step}%`}
-                      className={[
-                        "h-1.5 flex-1 rounded-full transition-all",
-                        step === panelZoom
-                          ? "bg-primary scale-y-[1.8]"
-                          : step < panelZoom
-                            ? "bg-primary/40"
-                            : "bg-border",
-                      ].join(" ")}
-                    />
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="size-7 shrink-0"
-                  disabled={panelZoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
-                  onClick={() => {
-                    const i = ZOOM_STEPS.indexOf(panelZoom);
-                    if (i < ZOOM_STEPS.length - 1) onPanelZoomChange(ZOOM_STEPS[i + 1]);
-                  }}
-                  aria-label="Increase panel zoom"
-                >
-                  <Plus className="size-3" aria-hidden="true" />
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground/55">Adjusts the stop detail panel density.</p>
             </div>
 
             <div className="space-y-1.5 border-t border-border/40 pt-3">

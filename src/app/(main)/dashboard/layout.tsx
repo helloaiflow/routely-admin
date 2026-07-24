@@ -28,15 +28,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
   return (
-    <SidebarProvider
-      defaultOpen={defaultOpen}
-      className="h-svh"
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 68)",
-        } as React.CSSProperties
-      }
-    >
+    <SidebarProvider defaultOpen={defaultOpen} className="h-svh">
       <AppSidebar variant={variant} collapsible={collapsible} />
       <SidebarInset
         className={cn(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -11,12 +11,14 @@ import {
   ChevronsUpDown,
   CircleCheck,
   Contact,
+  Copy,
   Loader2,
   Map as MapIcon,
   Navigation,
   Plus,
   RotateCcw,
   Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -169,6 +171,38 @@ function buildAddress(line1: string, city: string, state: string, zip: string): 
     zip: zip.trim() || undefined,
   };
   return Object.values(addr).some(Boolean) ? addr : undefined;
+}
+
+// Serialize the form → API payload. Pure so manual save and autosave produce
+// byte-identical bodies (autosave compares serializations to detect changes).
+// Payload shape is unchanged: vehicle {} when empty, address/geo only when filled.
+function payloadFromForm(f: FormState): Record<string, unknown> {
+  const digits = f.phone.replace(/\D/g, "");
+  const payload: Record<string, unknown> = {
+    name: f.name.trim(),
+    phone: digits,
+    email: f.email.trim() || null,
+    all_hubs: f.allHubs,
+    hub_ids: f.allHubs ? [] : f.hubIds,
+    // FastAPI expects a dict for vehicle — send {} (not null) when empty, or it 422s.
+    vehicle: f.vehicle.trim() ? { description: f.vehicle.trim() } : {},
+  };
+
+  // Optional address — include address + geo ONLY when the user filled it in.
+  // When empty, both keys are omitted so existing saves stay byte-identical.
+  const driverAddress = buildAddress(f.line1, f.city, f.state, f.zip);
+  if (driverAddress) {
+    payload.address = driverAddress;
+    const lat = f.lat.trim() ? Number(f.lat) : undefined;
+    const lng = f.lng.trim() ? Number(f.lng) : undefined;
+    if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
+      payload.geo = {
+        lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
+        lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
+      };
+    }
+  }
+  return payload;
 }
 
 // Resolve a driver's default hub: the hub matching hub_id (unless all_hubs),
@@ -412,12 +446,27 @@ export function DriversTab() {
     setAttempted(false);
   }
 
-  // Select a row → load it into the inline editor.
+  // Select a row → load it into the inline editor. The autosave baseline is the
+  // record's own serialized payload — edits are detected against it.
   function selectDriver(driver: Driver) {
     setCreating(false);
     setSelectedId(driver.id);
     setEditing(driver);
-    setForm(formFromDriver(driver));
+    const f = formFromDriver(driver);
+    setForm(f);
+    lastSavedRef.current = JSON.stringify(payloadFromForm(f));
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Duplicate: open the create form pre-filled from the selected driver (no id).
+  function duplicateDriver() {
+    if (!editing) return;
+    setCreating(true);
+    setSelectedId(null);
+    setEditing(null);
+    setForm({ ...form });
     setError("");
     setSavedTick(false);
     setAttempted(false);
@@ -497,31 +546,7 @@ export function DriversTab() {
       return;
     }
 
-    const hubIds = form.allHubs ? [] : form.hubIds;
-    const payload: Record<string, unknown> = {
-      name: form.name.trim(),
-      phone: phoneDigits,
-      email: form.email.trim() || null,
-      all_hubs: form.allHubs,
-      hub_ids: hubIds,
-      // FastAPI expects a dict for vehicle — send {} (not null) when empty, or it 422s.
-      vehicle: form.vehicle.trim() ? { description: form.vehicle.trim() } : {},
-    };
-
-    // Optional address — include address + geo ONLY when the user filled it in.
-    // When empty, both keys are omitted so existing saves stay byte-identical.
-    const driverAddress = buildAddress(form.line1, form.city, form.state, form.zip);
-    if (driverAddress) {
-      payload.address = driverAddress;
-      const lat = form.lat.trim() ? Number(form.lat) : undefined;
-      const lng = form.lng.trim() ? Number(form.lng) : undefined;
-      if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
-        payload.geo = {
-          lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
-          lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
-        };
-      }
-    }
+    const serialized = JSON.stringify(payloadFromForm(form));
 
     setSaving(true);
     setError("");
@@ -529,7 +554,7 @@ export function DriversTab() {
     const res = await fetch(url, {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: serialized,
     }).catch(() => null);
     setSaving(false);
     if (!res || !res.ok) {
@@ -541,12 +566,49 @@ export function DriversTab() {
       setCreating(false);
       setEditing(null);
       setForm(EMPTY_FORM);
+    } else {
+      lastSavedRef.current = serialized;
     }
     setSavedTick(true);
     setAttempted(false);
     setTimeout(() => setSavedTick(false), 2500);
     loadDrivers();
   }
+
+  // ── Autosave (existing records only) ──────────────────────────────────────
+  // Debounced 1.2s after the last change; compares the serialized payload to
+  // the last-saved baseline, PATCHes silently, and shows Saving…/Saved inline.
+  // New records save only via the button. Invalid states never autosave.
+  const lastSavedRef = useRef("");
+  useEffect(() => {
+    if (!editing || creating || saving) return;
+    const digits = form.phone.replace(/\D/g, "");
+    if (!form.name.trim() || digits.length !== 10) return;
+    if (form.email.trim() !== "" && !EMAIL_RE.test(form.email.trim())) return;
+    const serialized = JSON.stringify(payloadFromForm(form));
+    if (serialized === lastSavedRef.current) return;
+    const t = setTimeout(async () => {
+      setSaving(true);
+      setError("");
+      const res = await fetch(`/api/client/drivers/${encodeURIComponent(editing.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: serialized,
+      }).catch(() => null);
+      setSaving(false);
+      if (!res || !res.ok) {
+        const j = res ? await res.json().catch(() => ({})) : {};
+        setError(j.error || "Autosave failed — your latest change is not saved yet.");
+        return;
+      }
+      lastSavedRef.current = serialized;
+      setSavedTick(true);
+      setTimeout(() => setSavedTick(false), 2500);
+      loadDrivers();
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, editing, creating, saving]);
 
   async function confirmStatusChange() {
     if (!statusTarget) return;
@@ -561,6 +623,12 @@ export function DriversTab() {
     setBusyId(null);
     setStatusTarget(null);
     if (res?.ok) {
+      // Keep the open editor's header badge in sync with the new status.
+      setEditing((prev) =>
+        prev && prev.id === driver.id
+          ? { ...prev, status: deactivating ? "inactive" : "active" }
+          : prev,
+      );
       loadDrivers();
     } else {
       // Optimistic-free: surface a transient error inline via the form error banner.
@@ -584,10 +652,14 @@ export function DriversTab() {
     .join(", ")
     .replace(/, (\d)/, " $1");
 
+  // Stops detail-header icon-button recipe (shared by every header command).
+  const HEADER_BTN =
+    "flex size-7 items-center justify-center rounded-md transition-all text-muted-foreground/60 hover:bg-muted hover:text-foreground";
+
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
-    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header — accent bar + identity block (Stops detail pattern) */}
+    <div className="flex min-h-full flex-col bg-card sm:min-h-0">
+      {/* Header — accent bar + identity block + command row (Stops detail pattern) */}
       <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
         <div className={cn("h-[3px] w-full", inactive ? "bg-muted-foreground/40" : "bg-primary")} />
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
@@ -598,11 +670,36 @@ export function DriversTab() {
             {editing && (
               <button
                 type="button"
+                onClick={duplicateDriver}
+                title="Duplicate driver"
+                aria-label="Duplicate driver"
+                className={HEADER_BTN}
+              >
+                <Copy className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+            {/* Delete = the existing deactivate flow (no driver DELETE API) — only
+                offered while active; the confirm dialog stays the gate. */}
+            {editing && !inactive && (
+              <button
+                type="button"
+                onClick={() => setStatusTarget(editing)}
+                disabled={busyId === editing.id}
+                title="Delete (deactivate) driver"
+                aria-label="Delete driver"
+                className={cn(HEADER_BTN, "hover:bg-rose-500/10 hover:text-rose-500 disabled:opacity-50")}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+            {editing && (
+              <button
+                type="button"
                 onClick={() => setStatusTarget(editing)}
                 disabled={busyId === editing.id}
                 title={inactive ? "Reactivate" : "Deactivate"}
                 aria-label={inactive ? "Reactivate" : "Deactivate"}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className={cn(HEADER_BTN, "disabled:opacity-50")}
               >
                 {inactive ? (
                   <RotateCcw className="size-3.5" aria-hidden="true" />
@@ -611,14 +708,10 @@ export function DriversTab() {
                 )}
               </button>
             )}
-            <button
-              type="button"
-              onClick={closeForm}
-              aria-label="Close"
-              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
-              <X className="hidden size-3.5 lg:block" aria-hidden="true" />
+            <div className="mx-1 h-4 w-px bg-border/60" />
+            <button type="button" onClick={closeForm} aria-label="Close" className={HEADER_BTN}>
+              <ArrowLeft className="size-3.5 sm:hidden" aria-hidden="true" />
+              <X className="hidden size-3.5 sm:block" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -739,23 +832,39 @@ export function DriversTab() {
         </Group>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
-        <div className="min-w-0 flex-1">
-          {error ? (
-            <p className="truncate text-[11px] text-rose-500">{error}</p>
-          ) : savedTick ? (
-            <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
-              <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
-            </p>
-          ) : null}
+      {/* Sticky action bar — full-width primary Save (Stops "Submit Order" recipe),
+          inline Saving…/Saved status + small ghost Cancel above it. */}
+      <div className="sticky bottom-0 z-10 space-y-1.5 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <div className="flex min-h-4 items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {error ? (
+              <p className="truncate text-[11px] text-rose-500">{error}</p>
+            ) : saving ? (
+              <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Saving…
+              </p>
+            ) : savedTick ? (
+              <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+                <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={cancelForm}
+            disabled={saving}
+            className="shrink-0 text-[11px] text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
         </div>
-        <Button variant="outline" size="sm" className="h-8" onClick={cancelForm} disabled={saving}>
-          Cancel
-        </Button>
-        <Button size="sm" className="h-8" onClick={submit} disabled={saving}>
-          {saving && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />}
-          {editing ? "Save changes" : "Create driver"}
+        <Button
+          onClick={submit}
+          disabled={saving}
+          className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-xs text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
+        >
+          {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+          Save driver
         </Button>
       </div>
     </div>
@@ -771,8 +880,8 @@ export function DriversTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {/* ═══ LEFT COLUMN — the list ═══ */}
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
+      {/* ═══ LEFT COLUMN — the list (Stops split: 20% / min 260px) ═══ */}
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:w-[20%] sm:min-w-[260px] sm:shrink-0">
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -858,8 +967,8 @@ export function DriversTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — inline editable form (desktop) ═══ */}
-      <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
+      {/* ═══ CENTER COLUMN — inline editable form (Stops split: 25%) ═══ */}
+      <div className="hidden h-full flex-col overflow-hidden border-r border-border/50 bg-card sm:flex sm:w-[25%] sm:shrink-0">
         {showForm ? (
           centerForm
         ) : (
@@ -875,8 +984,8 @@ export function DriversTab() {
         )}
       </div>
 
-      {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
-      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 lg:block lg:flex-1">
+      {/* ═══ MAP COLUMN — persistent (flex-1, Stops split) ═══ */}
+      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 sm:block sm:flex-1">
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />
       </div>
 
@@ -889,7 +998,7 @@ export function DriversTab() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
+            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background sm:hidden"
           >
             {centerForm}
             <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">

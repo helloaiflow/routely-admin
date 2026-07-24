@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   CircleCheck,
   Clock,
+  Copy,
   Loader2,
   Map as MapIcon,
   MapPin,
@@ -172,6 +173,53 @@ function buildAddress(line1: string, city: string, state: string, zip: string): 
   return Object.values(addr).some(Boolean) ? addr : undefined;
 }
 
+// Serialize the form → API payload. Pure so manual save and autosave produce
+// byte-identical bodies (autosave compares serializations to detect changes).
+function payloadFromForm(f: FormState): Record<string, unknown> {
+  const lat = f.lat.trim() ? Number(f.lat) : undefined;
+  const lng = f.lng.trim() ? Number(f.lng) : undefined;
+
+  const payload: Record<string, unknown> = {
+    name: f.name.trim(),
+    address: {
+      line1: f.line1.trim() || undefined,
+      city: f.city.trim() || undefined,
+      state: f.state.trim() || undefined,
+      zip: f.zip.trim() || undefined,
+    },
+    timezone: f.timezone.trim() || "America/New_York",
+    is_default: f.is_default,
+  };
+  if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
+    payload.geo = {
+      lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
+      lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
+    };
+  }
+
+  // Route defaults — include only the fields the user filled in. start_address
+  // is intentionally omitted (it defaults to the hub address).
+  const routeDefaults: RouteDefaults = {};
+  if (f.rdStartTime.trim()) routeDefaults.start_time = f.rdStartTime.trim();
+  if (f.rdMinutesPerStop.trim()) {
+    const minutes = Number(f.rdMinutesPerStop);
+    if (!Number.isNaN(minutes)) routeDefaults.default_time_at_stop = Math.round(minutes * 60);
+  }
+  if (f.rdEndTime.trim()) routeDefaults.end_time = f.rdEndTime.trim();
+  if (f.rdMaxStops.trim()) {
+    const maxStops = Number(f.rdMaxStops);
+    if (!Number.isNaN(maxStops) && maxStops > 0) routeDefaults.max_stops = Math.round(maxStops);
+  }
+  if (f.rdRoundTrip) {
+    routeDefaults.round_trip = true;
+  } else {
+    const endAddress = buildAddress(f.rdEndLine1, f.rdEndCity, f.rdEndState, f.rdEndZip);
+    if (endAddress) routeDefaults.end_address = endAddress;
+  }
+  payload.route_defaults = routeDefaults;
+  return payload;
+}
+
 export function HubsTab() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -255,12 +303,28 @@ export function HubsTab() {
     setAttempted(false);
   }
 
-  // Select a row → load it into the inline editor.
+  // Select a row → load it into the inline editor. The autosave baseline is the
+  // record's own serialized payload — edits are detected against it.
   function selectHub(hub: Hub) {
     setCreating(false);
     setSelectedId(hub.id);
     setEditing(hub);
-    setForm(formFromHub(hub));
+    const f = formFromHub(hub);
+    setForm(f);
+    lastSavedRef.current = JSON.stringify(payloadFromForm(f));
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Duplicate: open the create form pre-filled from the selected hub (no id).
+  // The copy never steals the default flag.
+  function duplicateHub() {
+    if (!editing) return;
+    setCreating(true);
+    setSelectedId(null);
+    setEditing(null);
+    setForm({ ...form, is_default: false });
     setError("");
     setSavedTick(false);
     setAttempted(false);
@@ -349,47 +413,7 @@ export function HubsTab() {
       setError("Hub name is required.");
       return;
     }
-    const lat = form.lat.trim() ? Number(form.lat) : undefined;
-    const lng = form.lng.trim() ? Number(form.lng) : undefined;
-
-    const payload: Record<string, unknown> = {
-      name: form.name.trim(),
-      address: {
-        line1: form.line1.trim() || undefined,
-        city: form.city.trim() || undefined,
-        state: form.state.trim() || undefined,
-        zip: form.zip.trim() || undefined,
-      },
-      timezone: form.timezone.trim() || "America/New_York",
-      is_default: form.is_default,
-    };
-    if ((lat != null && !Number.isNaN(lat)) || (lng != null && !Number.isNaN(lng))) {
-      payload.geo = {
-        lat: lat != null && !Number.isNaN(lat) ? lat : undefined,
-        lng: lng != null && !Number.isNaN(lng) ? lng : undefined,
-      };
-    }
-
-    // Route defaults — include only the fields the user filled in. start_address
-    // is intentionally omitted (it defaults to the hub address).
-    const routeDefaults: RouteDefaults = {};
-    if (form.rdStartTime.trim()) routeDefaults.start_time = form.rdStartTime.trim();
-    if (form.rdMinutesPerStop.trim()) {
-      const minutes = Number(form.rdMinutesPerStop);
-      if (!Number.isNaN(minutes)) routeDefaults.default_time_at_stop = Math.round(minutes * 60);
-    }
-    if (form.rdEndTime.trim()) routeDefaults.end_time = form.rdEndTime.trim();
-    if (form.rdMaxStops.trim()) {
-      const maxStops = Number(form.rdMaxStops);
-      if (!Number.isNaN(maxStops) && maxStops > 0) routeDefaults.max_stops = Math.round(maxStops);
-    }
-    if (form.rdRoundTrip) {
-      routeDefaults.round_trip = true;
-    } else {
-      const endAddress = buildAddress(form.rdEndLine1, form.rdEndCity, form.rdEndState, form.rdEndZip);
-      if (endAddress) routeDefaults.end_address = endAddress;
-    }
-    payload.route_defaults = routeDefaults;
+    const serialized = JSON.stringify(payloadFromForm(form));
 
     setSaving(true);
     setError("");
@@ -397,7 +421,7 @@ export function HubsTab() {
     const res = await fetch(url, {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: serialized,
     }).catch(() => null);
     setSaving(false);
     if (!res || !res.ok) {
@@ -409,6 +433,8 @@ export function HubsTab() {
       setCreating(false);
       setEditing(null);
       setForm(EMPTY_FORM);
+    } else {
+      lastSavedRef.current = serialized;
     }
     setSavedTick(true);
     setAttempted(false);
@@ -420,6 +446,39 @@ export function HubsTab() {
   const endBeforeStart =
     Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
   const nameError = attempted && !form.name.trim();
+
+  // ── Autosave (existing records only) ──────────────────────────────────────
+  // Debounced 1.2s after the last change; compares the serialized payload to
+  // the last-saved baseline, PATCHes silently, and shows Saving…/Saved inline.
+  // New records save only via the button. Invalid states never autosave.
+  const lastSavedRef = useRef("");
+  useEffect(() => {
+    if (!editing || creating || saving) return;
+    if (!form.name.trim() || endBeforeStart) return;
+    const serialized = JSON.stringify(payloadFromForm(form));
+    if (serialized === lastSavedRef.current) return;
+    const t = setTimeout(async () => {
+      setSaving(true);
+      setError("");
+      const res = await fetch(`/api/client/hubs/${encodeURIComponent(editing.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: serialized,
+      }).catch(() => null);
+      setSaving(false);
+      if (!res || !res.ok) {
+        const j = res ? await res.json().catch(() => ({})) : {};
+        setError(j.error || "Autosave failed — your latest change is not saved yet.");
+        return;
+      }
+      lastSavedRef.current = serialized;
+      setSavedTick(true);
+      setTimeout(() => setSavedTick(false), 2500);
+      load();
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, editing, creating, saving, endBeforeStart]);
 
   // Filter the list (Stops-style — the left column scrolls the full result set).
   const filtered = useMemo(() => {
@@ -446,25 +505,39 @@ export function HubsTab() {
     .join(", ")
     .replace(/, (\d)/, " $1");
 
+  // Stops detail-header icon-button recipe (shared by every header command).
+  const HEADER_BTN =
+    "flex size-7 items-center justify-center rounded-md transition-all text-muted-foreground/60 hover:bg-muted hover:text-foreground";
+
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
-    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header — accent bar + identity block (Stops detail pattern) */}
+    <div className="flex min-h-full flex-col bg-card sm:min-h-0">
+      {/* Header — accent bar + identity block + command row (Stops detail pattern) */}
       <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
         <div className="h-[3px] w-full bg-primary" />
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <span className="font-mono text-[10px] text-primary dark:text-white/80">
             {editing ? "Hub" : "New hub"}
           </span>
-          <button
-            type="button"
-            onClick={closeForm}
-            aria-label="Close"
-            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
-            <X className="hidden size-3.5 lg:block" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-1">
+            {editing && (
+              <button
+                type="button"
+                onClick={duplicateHub}
+                title="Duplicate hub"
+                aria-label="Duplicate hub"
+                className={HEADER_BTN}
+              >
+                <Copy className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+            {/* No Delete: /api/client/hubs/{id} does not expose DELETE (hidden per spec). */}
+            <div className="mx-1 h-4 w-px bg-border/60" />
+            <button type="button" onClick={closeForm} aria-label="Close" className={HEADER_BTN}>
+              <ArrowLeft className="size-3.5 sm:hidden" aria-hidden="true" />
+              <X className="hidden size-3.5 sm:block" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div className="px-4 pb-3">
           <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
@@ -615,23 +688,39 @@ export function HubsTab() {
         </Group>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
-        <div className="min-w-0 flex-1">
-          {error ? (
-            <p className="truncate text-[11px] text-rose-500">{error}</p>
-          ) : savedTick ? (
-            <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
-              <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
-            </p>
-          ) : null}
+      {/* Sticky action bar — full-width primary Save (Stops "Submit Order" recipe),
+          inline Saving…/Saved status + small ghost Cancel above it. */}
+      <div className="sticky bottom-0 z-10 space-y-1.5 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <div className="flex min-h-4 items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {error ? (
+              <p className="truncate text-[11px] text-rose-500">{error}</p>
+            ) : saving ? (
+              <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Saving…
+              </p>
+            ) : savedTick ? (
+              <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+                <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={cancelForm}
+            disabled={saving}
+            className="shrink-0 text-[11px] text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
         </div>
-        <Button variant="outline" size="sm" className="h-8" onClick={cancelForm} disabled={saving}>
-          Cancel
-        </Button>
-        <Button size="sm" className="h-8" onClick={submit} disabled={saving}>
-          {saving && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />}
-          {editing ? "Save changes" : "Create hub"}
+        <Button
+          onClick={submit}
+          disabled={saving}
+          className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-xs text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
+        >
+          {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+          Save hub
         </Button>
       </div>
     </div>
@@ -647,8 +736,8 @@ export function HubsTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {/* ═══ LEFT COLUMN — the list ═══ */}
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
+      {/* ═══ LEFT COLUMN — the list (Stops split: 20% / min 260px) ═══ */}
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:w-[20%] sm:min-w-[260px] sm:shrink-0">
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -733,8 +822,8 @@ export function HubsTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — inline editable form (desktop) ═══ */}
-      <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
+      {/* ═══ CENTER COLUMN — inline editable form (Stops split: 25%) ═══ */}
+      <div className="hidden h-full flex-col overflow-hidden border-r border-border/50 bg-card sm:flex sm:w-[25%] sm:shrink-0">
         {showForm ? (
           centerForm
         ) : (
@@ -750,8 +839,8 @@ export function HubsTab() {
         )}
       </div>
 
-      {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
-      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 lg:block lg:flex-1">
+      {/* ═══ MAP COLUMN — persistent (flex-1, Stops split) ═══ */}
+      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 sm:block sm:flex-1">
         <HubMapPanel hub={selectedHub} />
       </div>
 
@@ -764,7 +853,7 @@ export function HubsTab() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
+            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background sm:hidden"
           >
             {centerForm}
             <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">

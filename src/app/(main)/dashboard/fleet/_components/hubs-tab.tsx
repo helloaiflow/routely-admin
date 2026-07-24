@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Building2,
+  ChevronDown,
   CircleCheck,
   Clock,
   Loader2,
@@ -22,7 +23,6 @@ import {
   AddressAutocomplete,
   type PlaceDetails,
 } from "@/components/ui/address-autocomplete";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -440,36 +440,59 @@ export function HubsTab() {
   const selectedHub = selectedId ? (hubs ?? []).find((h) => h.id === selectedId) ?? null : null;
   const showForm = creating || Boolean(selectedHub);
 
+  // City/state/zip line for the detail header identity block.
+  const headerAddr = [form.city, form.state, form.zip]
+    .filter(Boolean)
+    .join(", ")
+    .replace(/, (\d)/, " $1");
+
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
     <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-2.5 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={closeForm}
-          aria-label="Close"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
-          <X className="hidden size-4 lg:block" aria-hidden="true" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="type-body-sm font-semibold leading-tight">
-            {editing ? "Edit hub" : "New hub"}
+      {/* Header — accent bar + identity block (Stops detail pattern) */}
+      <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
+        <div className="h-[3px] w-full bg-primary" />
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
+          <span className="font-mono text-[10px] text-primary dark:text-white/80">
+            {editing ? "Hub" : "New hub"}
+          </span>
+          <button
+            type="button"
+            onClick={closeForm}
+            aria-label="Close"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
+            <X className="hidden size-3.5 lg:block" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="px-4 pb-3">
+          <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
+            {form.name.trim() || "Untitled hub"}
           </p>
-          {editing ? (
-            <p className="type-id truncate text-[11px] text-muted-foreground leading-tight">
-              {editing.id}
+          {form.line1 && (
+            <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground/70 leading-tight">
+              {form.line1}
             </p>
-          ) : (
-            <p className="type-caption leading-tight">Add a depot where routes start and end.</p>
           )}
+          {headerAddr && (
+            <p className="truncate text-[11px] text-muted-foreground/55">{headerAddr}</p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {form.is_default && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+                <Star className="size-3" aria-hidden="true" /> Default
+              </span>
+            )}
+            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+              {form.rdRoundTrip ? "Round-trip" : "One-way"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+      {/* Body — borderless collapsible sections */}
+      <div className="flex-1 overflow-y-auto">
         {/* ── Location ── */}
         <Group icon={MapPin} title="Location">
           <FieldRow label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
@@ -696,7 +719,7 @@ export function HubsTab() {
               No hubs match those filters.
             </p>
           ) : (
-            <div className="divide-y divide-border/40">
+            <div>
               {filtered.map((hub) => (
                 <HubRow
                   key={hub.id}
@@ -754,7 +777,7 @@ export function HubsTab() {
   );
 }
 
-// ── Compact list row (Stops-density) ──────────────────────────────────────────
+// ── Compact list row — literal Stops row layout (3-line block + right badge) ──
 function HubRow({
   hub,
   selected,
@@ -765,52 +788,66 @@ function HubRow({
   onSelect: () => void;
 }) {
   const c = routeCells(hub.route_defaults);
-  const addr = addressLine(hub);
+  const a = hub.address ?? {};
+  const cityLine = [a.city, a.state, a.zip]
+    .filter(Boolean)
+    .join(", ")
+    .replace(/, (\d)/, " $1");
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        "flex w-full items-center gap-2.5 border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
-        selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
+        "flex w-full cursor-pointer items-start gap-2.5 border-b border-l-2 border-border/50 px-2.5 py-2 text-left transition-colors",
+        selected
+          ? "border-l-primary bg-blue-50 dark:bg-primary/20"
+          : "border-l-transparent bg-card hover:bg-muted/30",
       )}
     >
       <span
-        className={
-          hub.is_default
-            ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-            : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-        }
+        className={cn(
+          "mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg",
+          hub.is_default ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+        )}
       >
         <Building2 className="size-4" aria-hidden="true" />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate font-medium text-[13px]">{hub.name}</span>
-          {hub.is_default && (
-            <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-              <Star className="size-3" aria-hidden="true" /> Default
-            </Badge>
-          )}
-        </span>
-        {addr && <span className="type-caption mt-0.5 block truncate">{addr}</span>}
-        <span className="type-caption mt-0.5 flex flex-wrap items-center gap-x-2">
-          <span className="font-mono tabular-nums">
-            {c.start}–{c.end}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-semibold text-foreground leading-tight">{hub.name}</p>
+        {a.line1 && (
+          <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">{a.line1}</p>
+        )}
+        {cityLine && (
+          <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">{cityLine}</p>
+        )}
+        <p className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-muted-foreground/50">
+          {c.start}–{c.end} · max {c.maxStops}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1 self-center">
+        {hub.is_default ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+            <Star className="size-3" aria-hidden="true" /> Default
           </span>
-          <span>·</span>
-          <span className="font-mono tabular-nums">max {c.maxStops}</span>
-          {c.roundtrip && (
-            <>
-              <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                <Repeat className="size-3" aria-hidden="true" /> roundtrip
-              </span>
-            </>
-          )}
-        </span>
-      </span>
-    </button>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+            Hub
+          </span>
+        )}
+        {c.roundtrip && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60">
+            <Repeat className="size-3" aria-hidden="true" /> RT
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -837,27 +874,47 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
   return <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />;
 }
 
-// Section wrapper: token eyebrow + dense card body (matches Stops' grouped panels).
+// Collapsible section — borderless, divider-separated (matches Stops detail sections).
 function Group({
   icon: Icon,
   title,
   note,
+  defaultOpen = true,
   children,
 }: {
   icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: string;
   note?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="space-y-2">
-      <div className="flex items-center gap-1.5 px-0.5">
-        <Icon className="size-3.5 text-muted-foreground/60" aria-hidden={true} />
-        <span className="type-label text-muted-foreground/60">{title}</span>
-      </div>
-      {note && <p className="type-caption -mt-1 px-0.5">{note}</p>}
-      <div className="space-y-3 rounded-xl border border-border/60 bg-card p-3">{children}</div>
-    </section>
+    <div className="border-b border-border/10 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          <Icon className="size-3.5 text-muted-foreground/50" aria-hidden={true} />
+          <span className="text-xs font-semibold tracking-[-0.01em] text-foreground/80">{title}</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-muted-foreground/35 transition-transform duration-200",
+            open && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div className="px-3 pb-2">
+          {note && <p className="mb-1 text-[11px] text-muted-foreground/55 leading-snug">{note}</p>}
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 

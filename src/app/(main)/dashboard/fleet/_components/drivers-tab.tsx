@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Ban,
   Building2,
+  ChevronDown,
   ChevronsUpDown,
   CircleCheck,
   Contact,
@@ -577,55 +578,85 @@ export function DriversTab() {
 
   const inactive = editing ? editing.status !== "active" : false;
 
+  // City/state/zip line for the detail header identity block.
+  const headerAddr = [form.city, form.state, form.zip]
+    .filter(Boolean)
+    .join(", ")
+    .replace(/, (\d)/, " $1");
+
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
     <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-2.5 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={closeForm}
-          aria-label="Close"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
-          <X className="hidden size-4 lg:block" aria-hidden="true" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="type-body-sm font-semibold leading-tight">
-            {editing ? "Edit driver" : "New driver"}
-          </p>
-          {editing ? (
-            <p className="type-id truncate text-[11px] text-muted-foreground leading-tight">
-              {editing.id}
-            </p>
-          ) : (
-            <p className="type-caption leading-tight">Add a driver to the Routely fleet.</p>
-          )}
-        </div>
-        {editing && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 shrink-0"
-            onClick={() => setStatusTarget(editing)}
-            disabled={busyId === editing.id}
-          >
-            {inactive ? (
-              <>
-                <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" /> Reactivate
-              </>
-            ) : (
-              <>
-                <Ban className="mr-1.5 size-3.5" aria-hidden="true" /> Deactivate
-              </>
+      {/* Header — accent bar + identity block (Stops detail pattern) */}
+      <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
+        <div className={cn("h-[3px] w-full", inactive ? "bg-muted-foreground/40" : "bg-primary")} />
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
+          <span className="font-mono text-[10px] text-primary dark:text-white/80">
+            {editing ? "Driver" : "New driver"}
+          </span>
+          <div className="flex items-center gap-1">
+            {editing && (
+              <button
+                type="button"
+                onClick={() => setStatusTarget(editing)}
+                disabled={busyId === editing.id}
+                title={inactive ? "Reactivate" : "Deactivate"}
+                aria-label={inactive ? "Reactivate" : "Deactivate"}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {inactive ? (
+                  <RotateCcw className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <Ban className="size-3.5" aria-hidden="true" />
+                )}
+              </button>
             )}
-          </Button>
-        )}
+            <button
+              type="button"
+              onClick={closeForm}
+              aria-label="Close"
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
+              <X className="hidden size-3.5 lg:block" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div className="px-4 pb-3">
+          <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
+            {form.name.trim() || "Untitled driver"}
+          </p>
+          {form.phone && (
+            <p className="mt-0.5 truncate font-mono text-xs font-medium text-muted-foreground/70 leading-tight tabular-nums">
+              {form.phone}
+            </p>
+          )}
+          {(form.line1 || headerAddr) && (
+            <p className="truncate text-[11px] text-muted-foreground/55">
+              {[form.line1, headerAddr].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {inactive ? (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-border">
+                Inactive
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+                Active
+              </span>
+            )}
+            {form.vehicle.trim() && (
+              <span className="inline-flex max-w-[160px] items-center truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                {form.vehicle.trim()}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+      {/* Body — borderless collapsible sections */}
+      <div className="flex-1 overflow-y-auto">
         {/* ── Details ── */}
         <Group icon={Contact} title="Details">
           <FieldRow label="Full name" required error={nameError ? "Driver name is required." : undefined}>
@@ -878,7 +909,7 @@ export function DriversTab() {
   );
 }
 
-// ── Compact list row (Stops-density) ──────────────────────────────────────────
+// ── Compact list row — literal Stops row layout (3-line block + right badge) ──
 function DriverRow({
   driver,
   hubNames,
@@ -892,46 +923,58 @@ function DriverRow({
 }) {
   const inactive = driver.status !== "active";
   const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
+  const vehicle = vehicleText(driver.vehicle);
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        "flex w-full items-center gap-2.5 border-border/20 border-b border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
-        inactive && "opacity-55",
-        selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
+        "flex w-full cursor-pointer items-start gap-2.5 border-b border-l-2 border-border/50 px-2.5 py-2 text-left transition-colors",
+        inactive && "opacity-60",
+        selected
+          ? "border-l-primary bg-blue-50 dark:bg-primary/20"
+          : "border-l-transparent bg-card hover:bg-muted/30",
       )}
     >
       <span
-        className={
-          inactive
-            ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-            : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-        }
+        className={cn(
+          "mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg",
+          inactive ? "bg-muted text-muted-foreground" : "bg-primary/15 text-primary",
+        )}
       >
         <Users className="size-4" aria-hidden="true" />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate font-medium text-[13px]">{driver.name}</span>
-          {inactive ? (
-            <Badge variant="outline" className="bg-muted text-muted-foreground">
-              Inactive
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-primary/10 text-primary">
-              Active
-            </Badge>
-          )}
-        </span>
-        <span className="type-caption mt-0.5 block font-mono tabular-nums">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-semibold text-foreground leading-tight">{driver.name}</p>
+        <p className="mt-0.5 truncate font-mono text-[11px] tabular-nums text-foreground/65 leading-tight">
           {formatPhone(driver.phone)}
-        </span>
-        <span className="type-caption mt-0.5 block truncate">
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">
           {driver.all_hubs ? "All hubs" : hubNames(ids)}
-        </span>
-      </span>
-    </button>
+        </p>
+        {vehicle && (
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground/50 leading-tight">{vehicle}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1 self-center">
+        {inactive ? (
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-border">
+            Inactive
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+            Active
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1027,27 +1070,47 @@ function StatusConfirm({
   );
 }
 
-// Section wrapper: token eyebrow + dense card body (matches Stops' grouped panels).
+// Collapsible section — borderless, divider-separated (matches Stops detail sections).
 function Group({
   icon: Icon,
   title,
   note,
+  defaultOpen = true,
   children,
 }: {
   icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: string;
   note?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="space-y-2">
-      <div className="flex items-center gap-1.5 px-0.5">
-        <Icon className="size-3.5 text-muted-foreground/60" aria-hidden={true} />
-        <span className="type-label text-muted-foreground/60">{title}</span>
-      </div>
-      {note && <p className="type-caption -mt-1 px-0.5">{note}</p>}
-      <div className="space-y-3 rounded-xl border border-border/60 bg-card p-3">{children}</div>
-    </section>
+    <div className="border-b border-border/10 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          <Icon className="size-3.5 text-muted-foreground/50" aria-hidden={true} />
+          <span className="text-xs font-semibold tracking-[-0.01em] text-foreground/80">{title}</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-muted-foreground/35 transition-transform duration-200",
+            open && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div className="px-3 pb-2">
+          {note && <p className="mb-1 text-[11px] text-muted-foreground/55 leading-snug">{note}</p>}
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Ban,
   Building2,
-  Car,
   ChevronsUpDown,
   CircleCheck,
   Contact,
@@ -45,8 +44,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -631,59 +628,52 @@ export function DriversTab() {
       <div className="flex-1 space-y-5 overflow-y-auto p-3">
         {/* ── Details ── */}
         <Group icon={Contact} title="Details">
-          <Field label="Full name" required error={nameError ? "Driver name is required." : undefined}>
-            <Input
+          <FieldRow label="Full name" required error={nameError ? "Driver name is required." : undefined}>
+            <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Jane Doe"
               aria-invalid={nameError || undefined}
-              className="h-8 text-[13px]"
+              className={cn(ROW_INPUT, "w-full")}
             />
-          </Field>
+          </FieldRow>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field
-              label="Phone"
-              required
-              error={phoneError ? "Enter a 10-digit phone number." : undefined}
-            >
-              <Input
-                value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
-                placeholder="(305) 555-0100"
-                inputMode="tel"
-                aria-invalid={phoneError || undefined}
-                className="h-8 font-mono text-[13px] tabular-nums"
-              />
-            </Field>
-            <Field label="Email" error={emailInvalid ? "Enter a valid email." : undefined}>
-              <Input
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="jane@example.com"
-                type="email"
-                aria-invalid={emailInvalid || undefined}
-                className="h-8 text-[13px]"
-              />
-            </Field>
-          </div>
+          <FieldRow
+            label="Phone"
+            required
+            error={phoneError ? "Enter a 10-digit phone number." : undefined}
+          >
+            <input
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
+              placeholder="(305) 555-0100"
+              inputMode="tel"
+              aria-invalid={phoneError || undefined}
+              className={cn(ROW_INPUT, "w-[150px] font-mono tabular-nums")}
+            />
+          </FieldRow>
 
-          <Field label="Vehicle">
-            <div className="relative">
-              <Car
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={form.vehicle}
-                onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
-                placeholder="White Ford Transit"
-                className="h-8 pl-8 text-[13px]"
-              />
-            </div>
-          </Field>
+          <FieldRow label="Email" error={emailInvalid ? "Enter a valid email." : undefined}>
+            <input
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              placeholder="jane@example.com"
+              type="email"
+              aria-invalid={emailInvalid || undefined}
+              className={cn(ROW_INPUT, "w-full")}
+            />
+          </FieldRow>
 
-          <Field label="Address" hint="Optional — used to map the route to the driver's home hub.">
+          <FieldRow label="Vehicle">
+            <input
+              value={form.vehicle}
+              onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
+              placeholder="White Ford Transit"
+              className={cn(ROW_INPUT, "w-full")}
+            />
+          </FieldRow>
+
+          <StackRow label="Address" hint="Optional">
             <AddressField
               value={form.addressValue}
               selected={form.addressSelected}
@@ -692,27 +682,20 @@ export function DriversTab() {
               onPlaceDetails={onAddressPlace}
               onClear={clearAddress}
             />
-          </Field>
+          </StackRow>
         </Group>
 
         {/* ── Hubs ── */}
         <Group icon={Building2} title="Hubs">
-          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              <div>
-                <p className="type-body-sm font-medium">All hubs</p>
-                <p className="type-caption">Available at every hub in the fleet.</p>
-              </div>
-            </div>
+          <FieldRow label="All hubs">
             <Switch
               checked={form.allHubs}
               onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))}
             />
-          </div>
+          </FieldRow>
 
           {!form.allHubs && (
-            <Field label="Assigned hubs">
+            <StackRow label="Assigned hubs">
               {hubs.length === 0 ? (
                 <p className="rounded-lg border border-border/60 px-3 py-2 type-caption">
                   No hubs available yet.
@@ -720,7 +703,7 @@ export function DriversTab() {
               ) : (
                 <HubMultiSelect hubs={hubs} selected={form.hubIds} onToggle={toggleHub} />
               )}
-            </Field>
+            </StackRow>
           )}
         </Group>
       </div>
@@ -862,7 +845,7 @@ export function DriversTab() {
       </div>
 
       {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
-      <div className="hidden overflow-hidden bg-muted/20 lg:block lg:flex-1">
+      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 lg:block lg:flex-1">
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />
       </div>
 
@@ -1068,28 +1051,55 @@ function Group({
   );
 }
 
-function Field({
+// Shared borderless, right-aligned control style for FieldRow inputs — mirrors
+// the Stops detail form (h-7, underline-on-focus, 13px medium, right-aligned).
+const ROW_INPUT =
+  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-[13px] font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
+
+// Stops FieldRow: label LEFT, control RIGHT, thin divider between rows.
+function FieldRow({
   label,
   required,
-  hint,
   error,
   children,
 }: {
   label: string;
   required?: boolean;
-  hint?: string;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="font-medium text-[11px] text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-rose-500">*</span>}
-      </Label>
-      {hint && <p className="type-caption">{hint}</p>}
+    <div className="border-b border-border/[0.07] py-2 last:border-0">
+      <div className="flex items-center justify-between gap-4">
+        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+          {label}
+          {required && <span className="ml-0.5 text-rose-500">*</span>}
+        </span>
+        <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
+      </div>
+      {error && <p className="mt-1 text-right text-[11px] text-rose-500">{error}</p>}
+    </div>
+  );
+}
+
+// Wide variant for long controls (address autocomplete, hub multi-select): label
+// on top, control full-width beneath — same divider rhythm as FieldRow.
+function StackRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 border-b border-border/[0.07] py-2 last:border-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+        {hint && <span className="type-caption truncate">{hint}</span>}
+      </div>
       {children}
-      {error && <p className="text-[11px] text-rose-500">{error}</p>}
     </div>
   );
 }

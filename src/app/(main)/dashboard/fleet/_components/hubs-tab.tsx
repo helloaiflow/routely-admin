@@ -24,8 +24,6 @@ import {
 } from "@/components/ui/address-autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -474,17 +472,17 @@ export function HubsTab() {
       <div className="flex-1 space-y-5 overflow-y-auto p-3">
         {/* ── Location ── */}
         <Group icon={MapPin} title="Location">
-          <Field label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
-            <Input
+          <FieldRow label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
+            <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Central FL Depot"
               aria-invalid={nameError || undefined}
-              className="h-8 text-[13px]"
+              className={cn(ROW_INPUT, "w-full")}
             />
-          </Field>
+          </FieldRow>
 
-          <Field label="Start From" hint="Where the route starts — the hub's origin.">
+          <StackRow label="Start From" hint="Route origin">
             <AddressField
               value={form.startValue}
               selected={form.startSelected}
@@ -493,10 +491,10 @@ export function HubsTab() {
               onPlaceDetails={onStartPlace}
               onClear={clearStart}
             />
-          </Field>
+          </StackRow>
 
           {!form.rdRoundTrip && (
-            <Field label="End To" hint="Where the route ends.">
+            <StackRow label="End To" hint="Route end">
               <AddressField
                 value={form.endValue}
                 selected={form.endSelected}
@@ -505,37 +503,33 @@ export function HubsTab() {
                 onPlaceDetails={onEndPlace}
                 onClear={clearEnd}
               />
-            </Field>
+            </StackRow>
           )}
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field label="Timezone">
-              <Select
-                value={form.timezone}
-                onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
-              >
-                <SelectTrigger size="sm" className="h-8 w-full text-[13px]">
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEZONES.map((tz) => (
-                    <SelectItem key={tz.value} value={tz.value}>
-                      {tz.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Default hub">
-              <div className="flex h-8 items-center justify-between rounded-lg border border-border/60 px-2.5">
-                <span className="type-caption">Use when unspecified</span>
-                <Switch
-                  checked={form.is_default}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-                />
-              </div>
-            </Field>
-          </div>
+          <FieldRow label="Timezone">
+            <Select
+              value={form.timezone}
+              onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
+            >
+              <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-[13px] text-foreground focus:ring-0">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value} className="text-[13px]">
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldRow>
+
+          <FieldRow label="Default hub">
+            <Switch
+              checked={form.is_default}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
+            />
+          </FieldRow>
         </Group>
 
         {/* ── Route defaults ── */}
@@ -544,70 +538,57 @@ export function HubsTab() {
           title="Route defaults"
           note="Defaults a route inherits from this hub — overridable per route."
         >
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field label="Start time">
-              <Input
-                type="time"
-                value={form.rdStartTime}
-                onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
-                placeholder="07:00"
-                className="h-8 font-mono text-[13px] tabular-nums"
-              />
-            </Field>
-            <Field label="End time">
-              <Input
-                type="time"
-                value={form.rdEndTime}
-                onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
-                placeholder="HH:MM"
-                className="h-8 font-mono text-[13px] tabular-nums"
-              />
-            </Field>
-          </div>
+          <FieldRow label="Start time">
+            <input
+              type="time"
+              value={form.rdStartTime}
+              onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
+              className={cn(ROW_INPUT, "w-[130px] font-mono tabular-nums")}
+            />
+          </FieldRow>
+          <FieldRow label="End time">
+            <input
+              type="time"
+              value={form.rdEndTime}
+              onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
+              className={cn(ROW_INPUT, "w-[130px] font-mono tabular-nums")}
+            />
+          </FieldRow>
           {endBeforeStart && (
             <p className="text-[11px] text-amber-600 dark:text-amber-500">
               End time is at or before the start time — the route may not fit in the day.
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field label="Minutes per stop">
-              <Input
-                type="number"
-                min={0}
-                value={form.rdMinutesPerStop}
-                onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
-                placeholder="5"
-                inputMode="numeric"
-                className="h-8 text-[13px] tabular-nums"
-              />
-            </Field>
-            <Field label="Max stops">
-              <Input
-                type="number"
-                min={0}
-                value={form.rdMaxStops}
-                onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
-                placeholder="0 = unlimited"
-                inputMode="numeric"
-                className="h-8 text-[13px] tabular-nums"
-              />
-            </Field>
-          </div>
+          <FieldRow label="Minutes per stop">
+            <input
+              type="number"
+              min={0}
+              value={form.rdMinutesPerStop}
+              onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
+              placeholder="5"
+              inputMode="numeric"
+              className={cn(ROW_INPUT, "w-[110px] tabular-nums")}
+            />
+          </FieldRow>
+          <FieldRow label="Max stops">
+            <input
+              type="number"
+              min={0}
+              value={form.rdMaxStops}
+              onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
+              placeholder="0 = unlimited"
+              inputMode="numeric"
+              className={cn(ROW_INPUT, "w-[130px] tabular-nums")}
+            />
+          </FieldRow>
 
-          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Repeat className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              <div>
-                <p className="type-body-sm font-medium">Round-trip</p>
-                <p className="type-caption">Route ends where it starts.</p>
-              </div>
-            </div>
+          <FieldRow label="Round-trip">
             <Switch
               checked={form.rdRoundTrip}
               onCheckedChange={(v) => setForm((f) => ({ ...f, rdRoundTrip: v }))}
             />
-          </div>
+          </FieldRow>
         </Group>
       </div>
 
@@ -747,7 +728,7 @@ export function HubsTab() {
       </div>
 
       {/* ═══ MAP COLUMN — persistent (desktop, flex-1) ═══ */}
-      <div className="hidden overflow-hidden bg-muted/20 lg:block lg:flex-1">
+      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 lg:block lg:flex-1">
         <HubMapPanel hub={selectedHub} />
       </div>
 
@@ -930,28 +911,55 @@ function AddressField({
   );
 }
 
-function Field({
+// Shared borderless, right-aligned control style for FieldRow inputs — mirrors
+// the Stops detail form (h-7, underline-on-focus, 13px medium, right-aligned).
+const ROW_INPUT =
+  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-[13px] font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
+
+// Stops FieldRow: label LEFT, control RIGHT, thin divider between rows.
+function FieldRow({
   label,
   required,
-  hint,
   error,
   children,
 }: {
   label: string;
   required?: boolean;
-  hint?: string;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="font-medium text-[11px] text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-rose-500">*</span>}
-      </Label>
-      {hint && <p className="type-caption">{hint}</p>}
+    <div className="border-b border-border/[0.07] py-2 last:border-0">
+      <div className="flex items-center justify-between gap-4">
+        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+          {label}
+          {required && <span className="ml-0.5 text-rose-500">*</span>}
+        </span>
+        <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
+      </div>
+      {error && <p className="mt-1 text-right text-[11px] text-rose-500">{error}</p>}
+    </div>
+  );
+}
+
+// Wide variant for long controls (address autocompletes): label on top, control
+// full-width beneath — same divider rhythm as FieldRow.
+function StackRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 border-b border-border/[0.07] py-2 last:border-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+        {hint && <span className="type-caption truncate">{hint}</span>}
+      </div>
       {children}
-      {error && <p className="text-[11px] text-rose-500">{error}</p>}
     </div>
   );
 }

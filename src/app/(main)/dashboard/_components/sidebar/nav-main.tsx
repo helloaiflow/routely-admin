@@ -199,7 +199,7 @@ export function NavMain({ items }: NavMainProps) {
   return (
     <>
       <SidebarGroup>
-        <SidebarGroupContent className="flex flex-col gap-2">
+        <SidebarGroupContent className="flex flex-col gap-1">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -220,7 +220,7 @@ export function NavMain({ items }: NavMainProps) {
       {items.map((group) => (
         <SidebarGroup key={group.id}>
           {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-          <SidebarGroupContent className="flex flex-col gap-2">
+          <SidebarGroupContent className="flex flex-col gap-1">
             <SidebarMenu>
               {group.items.map((item) => {
                 if (state === "collapsed" && !isMobile) {

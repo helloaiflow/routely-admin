@@ -26,7 +26,7 @@ import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "15rem"
 // Mobile drawer width. Applied INLINE on the Sheet content (see below) because
 // shadcn's SheetContent sets the width via `data-[side=…]:w-3/4` (75vw) — a
 // variant selector with higher CSS specificity than a plain `w-(--sidebar-width)`

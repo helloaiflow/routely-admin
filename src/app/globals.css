@@ -297,7 +297,7 @@ These serve as the fallback; there is no separate default.css file. */
 
 html {
   overscroll-behavior: none;
-  font-size: 15px; /* Compact HD scale — down from 16px default */
+  font-size: 13.5px; /* Dense data-desk scale (Webull-style) — the global zoom dial: all rem-based sizing scales from here */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

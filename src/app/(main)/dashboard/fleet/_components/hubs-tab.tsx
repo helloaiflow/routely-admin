@@ -11,7 +11,6 @@ import {
   Loader2,
   Map as MapIcon,
   MapPin,
-  Pencil,
   Plus,
   Repeat,
   Search,
@@ -25,14 +24,6 @@ import {
 } from "@/components/ui/address-autocomplete";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -161,7 +151,7 @@ function fullAddress(a?: Address | null): string {
   return [a.line1, tail].filter(Boolean).join(", ");
 }
 
-// Derive the list/table display values from a hub's route defaults.
+// Derive the list display values from a hub's route defaults.
 function routeCells(rd?: RouteDefaults | null) {
   return {
     start: rd?.start_time || "—",
@@ -187,10 +177,15 @@ function buildAddress(line1: string, city: string, state: string, zip: string): 
 export function HubsTab() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
+
+  // Inline center form: `creating` opens a blank form; otherwise a selected hub
+  // is edited in place. `editing` mirrors the record backing the form (drives
+  // POST vs PATCH + the header/id chip).
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Hub | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(false);
   const [error, setError] = useState("");
   const [attempted, setAttempted] = useState(false);
 
@@ -198,7 +193,7 @@ export function HubsTab() {
   const [query, setQuery] = useState("");
   const [rtFilter, setRtFilter] = useState<"all" | "roundtrip" | "oneway">("all");
 
-  // Selected hub → drives the center detail panel + the right map column.
+  // Selected hub → drives the center form + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Resilient load: on a transient failure at mount, retry once after a short
@@ -222,18 +217,10 @@ export function HubsTab() {
     load();
   }, []);
 
-  function openAdd() {
-    setEditing(null);
-    setForm({ ...EMPTY_FORM, is_default: (hubs ?? []).length === 0 });
-    setError("");
-    setAttempted(false);
-    setFormOpen(true);
-  }
-
-  function openEdit(hub: Hub) {
-    setEditing(hub);
+  // Map a hub record → the editable form state.
+  function formFromHub(hub: Hub): FormState {
     const rd = hub.route_defaults ?? {};
-    setForm({
+    return {
       name: hub.name ?? "",
       startValue: formatAddr(hub.address),
       startSelected: hasAddr(hub.address),
@@ -257,10 +244,52 @@ export function HubsTab() {
       rdEndCity: rd.end_address?.city ?? "",
       rdEndState: rd.end_address?.state ?? "",
       rdEndZip: rd.end_address?.zip ?? "",
-    });
+    };
+  }
+
+  function openAdd() {
+    setCreating(true);
+    setSelectedId(null);
+    setEditing(null);
+    setForm({ ...EMPTY_FORM, is_default: (hubs ?? []).length === 0 });
     setError("");
+    setSavedTick(false);
     setAttempted(false);
-    setFormOpen(true);
+  }
+
+  // Select a row → load it into the inline editor.
+  function selectHub(hub: Hub) {
+    setCreating(false);
+    setSelectedId(hub.id);
+    setEditing(hub);
+    setForm(formFromHub(hub));
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Cancel: discard edits (revert to record) or drop the blank create form.
+  function cancelForm() {
+    if (creating) {
+      setCreating(false);
+      setForm(EMPTY_FORM);
+    } else if (editing) {
+      setForm(formFromHub(editing));
+    }
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Close the center panel entirely (back to empty state).
+  function closeForm() {
+    setCreating(false);
+    setSelectedId(null);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
   }
 
   // ── Start From handlers ──
@@ -317,6 +346,7 @@ export function HubsTab() {
 
   async function submit() {
     setAttempted(true);
+    setSavedTick(false);
     if (!form.name.trim()) {
       setError("Hub name is required.");
       return;
@@ -377,7 +407,14 @@ export function HubsTab() {
       setError(j.error || "Could not save the hub. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setFormOpen(false);
+    if (creating) {
+      setCreating(false);
+      setEditing(null);
+      setForm(EMPTY_FORM);
+    }
+    setSavedTick(true);
+    setAttempted(false);
+    setTimeout(() => setSavedTick(false), 2500);
     load();
   }
 
@@ -403,182 +440,197 @@ export function HubsTab() {
 
   // Resolve the currently selected hub from the loaded list (stays in sync on reload).
   const selectedHub = selectedId ? (hubs ?? []).find((h) => h.id === selectedId) ?? null : null;
+  const showForm = creating || Boolean(selectedHub);
 
-  // ── Add/Edit form dialog (shared by New + Edit) ──
-  const formDialog = (
-    <Dialog open={formOpen} onOpenChange={setFormOpen}>
-      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-[600px]">
-        <DialogHeader className="border-b px-5 py-4">
-          <DialogTitle>{editing ? "Edit hub" : "New hub"}</DialogTitle>
-          <DialogDescription>
-            {editing ? "Update this dispatch origin." : "Add a depot where routes start and end."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5">
-          {/* ── Location ── */}
-          <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <MapPin className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                <h4 className="font-semibold text-sm">Location</h4>
-              </div>
-              <Separator />
-
-              <Field label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Central FL Depot"
-                  aria-invalid={nameError || undefined}
-                  className="h-9"
-                />
-              </Field>
-
-              <Field label="Start From" hint="Where the route starts — the hub's origin.">
-                <AddressField
-                  value={form.startValue}
-                  selected={form.startSelected}
-                  placeholder="Search start address…"
-                  onChange={(v) => setForm((f) => ({ ...f, startValue: v, startSelected: false }))}
-                  onPlaceDetails={onStartPlace}
-                  onClear={clearStart}
-                />
-              </Field>
-
-              {!form.rdRoundTrip && (
-                <Field label="End To" hint="Where the route ends.">
-                  <AddressField
-                    value={form.endValue}
-                    selected={form.endSelected}
-                    placeholder="Search end address…"
-                    onChange={(v) => setForm((f) => ({ ...f, endValue: v, endSelected: false }))}
-                    onPlaceDetails={onEndPlace}
-                    onClear={clearEnd}
-                  />
-                </Field>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Timezone">
-                  <Select
-                    value={form.timezone}
-                    onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
-                  >
-                    <SelectTrigger className="h-9 w-full">
-                      <SelectValue placeholder="Select timezone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIMEZONES.map((tz) => (
-                        <SelectItem key={tz.value} value={tz.value}>
-                          {tz.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Default hub">
-                  <div className="flex h-9 items-center justify-between rounded-lg border px-3">
-                    <span className="text-muted-foreground text-xs">Use when unspecified</span>
-                    <Switch
-                      checked={form.is_default}
-                      onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-                    />
-                  </div>
-                </Field>
-              </div>
-            </section>
-
-            {/* ── Route defaults ── */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                <h4 className="font-semibold text-sm">Route defaults</h4>
-              </div>
-              <p className="-mt-2 text-muted-foreground text-xs">
-                Defaults a route inherits from this hub — overridable per route.
-              </p>
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Start time">
-                  <Input
-                    type="time"
-                    value={form.rdStartTime}
-                    onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
-                    placeholder="07:00"
-                    className="h-9 font-mono tabular-nums"
-                  />
-                </Field>
-                <Field label="End time">
-                  <Input
-                    type="time"
-                    value={form.rdEndTime}
-                    onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
-                    placeholder="HH:MM"
-                    className="h-9 font-mono tabular-nums"
-                  />
-                </Field>
-              </div>
-              {endBeforeStart && (
-                <p className="text-amber-600 text-xs dark:text-amber-500">
-                  End time is at or before the start time — the route may not fit in the day.
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Minutes per stop">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.rdMinutesPerStop}
-                    onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
-                    placeholder="5"
-                    inputMode="numeric"
-                    className="h-9 tabular-nums"
-                  />
-                </Field>
-                <Field label="Max stops">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.rdMaxStops}
-                    onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
-                    placeholder="0 = unlimited"
-                    inputMode="numeric"
-                    className="h-9 tabular-nums"
-                  />
-                </Field>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Repeat className="size-4 text-muted-foreground" aria-hidden="true" />
-                  <div>
-                    <p className="font-medium text-sm">Round-trip</p>
-                    <p className="text-muted-foreground text-xs">Route ends where it starts.</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={form.rdRoundTrip}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, rdRoundTrip: v }))}
-                />
-              </div>
-            </section>
-
-          {error && <p className="text-destructive text-sm">{error}</p>}
+  // ── Inline center form (shared by desktop center + mobile overlay) ──
+  const centerForm = (
+    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={closeForm}
+          aria-label="Close"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
+          <X className="hidden size-4 lg:block" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="type-body-sm font-semibold leading-tight">
+            {editing ? "Edit hub" : "New hub"}
+          </p>
+          {editing ? (
+            <p className="type-id truncate text-[11px] text-muted-foreground leading-tight">
+              {editing.id}
+            </p>
+          ) : (
+            <p className="type-caption leading-tight">Add a depot where routes start and end.</p>
+          )}
         </div>
+      </div>
 
-        <DialogFooter className="border-t px-5 py-3">
-          <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
-            {editing ? "Save changes" : "Create hub"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Body */}
+      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+        {/* ── Location ── */}
+        <Group icon={MapPin} title="Location">
+          <Field label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Central FL Depot"
+              aria-invalid={nameError || undefined}
+              className="h-8 text-[13px]"
+            />
+          </Field>
+
+          <Field label="Start From" hint="Where the route starts — the hub's origin.">
+            <AddressField
+              value={form.startValue}
+              selected={form.startSelected}
+              placeholder="Search start address…"
+              onChange={(v) => setForm((f) => ({ ...f, startValue: v, startSelected: false }))}
+              onPlaceDetails={onStartPlace}
+              onClear={clearStart}
+            />
+          </Field>
+
+          {!form.rdRoundTrip && (
+            <Field label="End To" hint="Where the route ends.">
+              <AddressField
+                value={form.endValue}
+                selected={form.endSelected}
+                placeholder="Search end address…"
+                onChange={(v) => setForm((f) => ({ ...f, endValue: v, endSelected: false }))}
+                onPlaceDetails={onEndPlace}
+                onClear={clearEnd}
+              />
+            </Field>
+          )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label="Timezone">
+              <Select
+                value={form.timezone}
+                onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
+              >
+                <SelectTrigger size="sm" className="h-8 w-full text-[13px]">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Default hub">
+              <div className="flex h-8 items-center justify-between rounded-lg border border-border/60 px-2.5">
+                <span className="type-caption">Use when unspecified</span>
+                <Switch
+                  checked={form.is_default}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
+                />
+              </div>
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── Route defaults ── */}
+        <Group
+          icon={Clock}
+          title="Route defaults"
+          note="Defaults a route inherits from this hub — overridable per route."
+        >
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label="Start time">
+              <Input
+                type="time"
+                value={form.rdStartTime}
+                onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
+                placeholder="07:00"
+                className="h-8 font-mono text-[13px] tabular-nums"
+              />
+            </Field>
+            <Field label="End time">
+              <Input
+                type="time"
+                value={form.rdEndTime}
+                onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
+                placeholder="HH:MM"
+                className="h-8 font-mono text-[13px] tabular-nums"
+              />
+            </Field>
+          </div>
+          {endBeforeStart && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-500">
+              End time is at or before the start time — the route may not fit in the day.
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label="Minutes per stop">
+              <Input
+                type="number"
+                min={0}
+                value={form.rdMinutesPerStop}
+                onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
+                placeholder="5"
+                inputMode="numeric"
+                className="h-8 text-[13px] tabular-nums"
+              />
+            </Field>
+            <Field label="Max stops">
+              <Input
+                type="number"
+                min={0}
+                value={form.rdMaxStops}
+                onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
+                placeholder="0 = unlimited"
+                inputMode="numeric"
+                className="h-8 text-[13px] tabular-nums"
+              />
+            </Field>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Repeat className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <p className="type-body-sm font-medium">Round-trip</p>
+                <p className="type-caption">Route ends where it starts.</p>
+              </div>
+            </div>
+            <Switch
+              checked={form.rdRoundTrip}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, rdRoundTrip: v }))}
+            />
+          </div>
+        </Group>
+      </div>
+
+      {/* Sticky action bar */}
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <div className="min-w-0 flex-1">
+          {error ? (
+            <p className="truncate text-[11px] text-rose-500">{error}</p>
+          ) : savedTick ? (
+            <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+              <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
+            </p>
+          ) : null}
+        </div>
+        <Button variant="outline" size="sm" className="h-8" onClick={cancelForm} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" className="h-8" onClick={submit} disabled={saving}>
+          {saving && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />}
+          {editing ? "Save changes" : "Create hub"}
+        </Button>
+      </div>
+    </div>
   );
 
   // ══ Full-bleed 3-pane shell — a literal clone of /dashboard/stops ══
@@ -591,8 +643,6 @@ export function HubsTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {formDialog}
-
       {/* ═══ LEFT COLUMN — the list ═══ */}
       <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
         {/* Toolbar */}
@@ -644,8 +694,8 @@ export function HubsTab() {
               <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
                 <Building2 className="size-6" aria-hidden="true" />
               </span>
-              <p className="font-medium text-sm">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
-              <p className="max-w-xs text-muted-foreground text-xs">
+              <p className="type-body-sm font-medium">{loadError ? "Couldn't load hubs" : "No hubs yet"}</p>
+              <p className="type-caption max-w-xs">
                 {loadError
                   ? "There was a problem reaching the fleet service. Try again."
                   : "Add the depots where Routely drivers start and finish their routes."}
@@ -661,17 +711,17 @@ export function HubsTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-muted-foreground text-[13px]">
+            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
               No hubs match those filters.
             </p>
           ) : (
-            <div>
+            <div className="divide-y divide-border/40">
               {filtered.map((hub) => (
                 <HubRow
                   key={hub.id}
                   hub={hub}
                   selected={selectedId === hub.id}
-                  onSelect={() => setSelectedId(hub.id)}
+                  onSelect={() => selectHub(hub)}
                 />
               ))}
             </div>
@@ -679,22 +729,18 @@ export function HubsTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — detail panel (desktop) ═══ */}
+      {/* ═══ CENTER COLUMN — inline editable form (desktop) ═══ */}
       <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
-        {selectedHub ? (
-          <HubDetailPanel
-            hub={selectedHub}
-            onClose={() => setSelectedId(null)}
-            onEdit={() => openEdit(selectedHub)}
-          />
+        {showForm ? (
+          centerForm
         ) : (
           <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
             <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
               <Building2 className="size-7 text-muted-foreground/30" aria-hidden="true" />
             </div>
-            <p className="font-bold text-sm text-foreground">No hub selected</p>
-            <p className="mt-1.5 max-w-[200px] text-muted-foreground text-xs leading-relaxed">
-              Click a hub from the list to view details
+            <p className="type-body-sm font-bold text-foreground">No hub selected</p>
+            <p className="type-caption mt-1.5 max-w-[200px] leading-relaxed">
+              Select a hub to edit it, or add a new one
             </p>
           </div>
         )}
@@ -705,22 +751,18 @@ export function HubsTab() {
         <HubMapPanel hub={selectedHub} />
       </div>
 
-      {/* ═══ MOBILE — full-screen overlay: detail + map stacked ═══ */}
+      {/* ═══ MOBILE — full-screen overlay: form + map stacked ═══ */}
       <AnimatePresence>
-        {selectedHub && (
+        {showForm && (
           <motion.div
-            key={selectedHub.id}
+            key={editing?.id ?? "new"}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
           >
-            <HubDetailPanel
-              hub={selectedHub}
-              onClose={() => setSelectedId(null)}
-              onEdit={() => openEdit(selectedHub)}
-            />
+            {centerForm}
             <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
               <HubMapPanel hub={selectedHub} />
             </div>
@@ -748,7 +790,7 @@ function HubRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-2.5 border-border/20 border-b border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
+        "flex w-full items-center gap-2.5 border-l-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30",
         selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
       )}
     >
@@ -770,10 +812,8 @@ function HubRow({
             </Badge>
           )}
         </span>
-        {addr && (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{addr}</span>
-        )}
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+        {addr && <span className="type-caption mt-0.5 block truncate">{addr}</span>}
+        <span className="type-caption mt-0.5 flex flex-wrap items-center gap-x-2">
           <span className="font-mono tabular-nums">
             {c.start}–{c.end}
           </span>
@@ -802,8 +842,8 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
           <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
         </div>
         <div className="text-center">
-          <p className="font-bold text-[13px] text-foreground/70">Fleet map</p>
-          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+          <p className="type-body-sm font-bold text-foreground/70">Fleet map</p>
+          <p className="type-caption mt-1 leading-relaxed">
             Select a hub to see
             <br />
             it on the map
@@ -816,89 +856,27 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
   return <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />;
 }
 
-// A read-only label/value row for the detail panel.
-function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  if (value == null || value === "" || value === "—") return null;
-  return (
-    <div className="flex items-start justify-between gap-4 border-border/[0.12] border-b py-2 last:border-0">
-      <span className="shrink-0 text-muted-foreground text-xs">{label}</span>
-      <span className={cn("min-w-0 text-right text-foreground text-xs", mono && "font-mono tabular-nums")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ── Hub detail panel: read-only info + Edit (map lives in its own column) ──
-function HubDetailPanel({
-  hub,
-  onClose,
-  onEdit,
+// Section wrapper: token eyebrow + dense card body (matches Stops' grouped panels).
+function Group({
+  icon: Icon,
+  title,
+  note,
+  children,
 }: {
-  hub: Hub;
-  onClose: () => void;
-  onEdit: () => void;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
 }) {
-  const addr = fullAddress(hub.address);
-  const rd = hub.route_defaults ?? {};
-  const c = routeCells(hub.route_defaults);
-
   return (
-    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-4 py-2.5 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Back to list"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
-          <X className="hidden size-4 lg:block" aria-hidden="true" />
-        </button>
-        <span className="text-muted-foreground/60 text-xs">Hub details</span>
-        <Button size="sm" className="ml-auto h-8" onClick={onEdit}>
-          <Pencil className="mr-1.5 size-3.5" aria-hidden="true" /> Edit
-        </Button>
+    <section className="space-y-2">
+      <div className="flex items-center gap-1.5 px-0.5">
+        <Icon className="size-3.5 text-muted-foreground/60" aria-hidden={true} />
+        <span className="type-label text-muted-foreground/60">{title}</span>
       </div>
-
-      {/* Body */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* Title + default badge */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={
-                hub.is_default
-                  ? "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-                  : "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-              }
-            >
-              <Building2 className="size-4" aria-hidden="true" />
-            </span>
-            <h4 className="type-card-title">{hub.name}</h4>
-            {hub.is_default && (
-              <Badge variant="outline" className="gap-1 bg-primary/10 text-primary">
-                <Star className="size-3" aria-hidden="true" /> Default
-              </Badge>
-            )}
-          </div>
-          {addr && <p className="type-desc pl-10">{addr}</p>}
-        </div>
-
-        {/* Read rows */}
-        <div className="rounded-xl border border-border/60 bg-card px-3 py-1">
-          <DetailRow label="Address" value={addr || "—"} />
-          <DetailRow label="Timezone" value={hub.timezone || "—"} />
-          <DetailRow label="Start time" value={c.start} mono />
-          <DetailRow label="End time" value={c.end} mono />
-          <DetailRow label="Min per stop" value={c.minPerStop} mono />
-          <DetailRow label="Max stops" value={c.maxStops} mono />
-          <DetailRow label="Round-trip" value={rd.round_trip ? "Yes" : "No"} />
-          <DetailRow label="Hub ID" value={hub.id} mono />
-        </div>
-      </div>
-    </div>
+      {note && <p className="type-caption -mt-1 px-0.5">{note}</p>}
+      <div className="space-y-3 rounded-xl border border-border/60 bg-card p-3">{children}</div>
+    </section>
   );
 }
 
@@ -932,7 +910,7 @@ function AddressField({
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}
           placeholder={placeholder}
-          className="h-9 border-0 bg-transparent pr-16 text-sm focus-visible:border-0 focus-visible:ring-0"
+          className="h-8 border-0 bg-transparent pr-16 text-[13px] focus-visible:border-0 focus-visible:ring-0"
         />
         <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
           {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}
@@ -967,13 +945,13 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="font-medium text-sm">
+      <Label className="font-medium text-[11px] text-muted-foreground">
         {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
+        {required && <span className="ml-0.5 text-rose-500">*</span>}
       </Label>
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      {hint && <p className="type-caption">{hint}</p>}
       {children}
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {error && <p className="text-[11px] text-rose-500">{error}</p>}
     </div>
   );
 }

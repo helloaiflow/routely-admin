@@ -106,6 +106,12 @@ export const sidebarItems: NavGroup[] = [
             comingSoon: true,
           },
           {
+            title: "Fleet",
+            url: "/dashboard/fleet",
+            icon: Warehouse,
+            permission: "settings",
+          },
+          {
             title: "Hubs",
             url: "/dashboard/hubs",
             icon: Building2,
@@ -118,12 +124,6 @@ export const sidebarItems: NavGroup[] = [
             permission: "settings",
           },
         ],
-      },
-      {
-        title: "Fleet",
-        url: "/dashboard/fleet",
-        icon: Warehouse,
-        permission: "settings",
       },
     ],
   },

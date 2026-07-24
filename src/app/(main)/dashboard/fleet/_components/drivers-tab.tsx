@@ -12,10 +12,8 @@ import {
   CircleCheck,
   Contact,
   Loader2,
-  Mail,
   Map as MapIcon,
   Navigation,
-  Pencil,
   Plus,
   RotateCcw,
   Search,
@@ -47,19 +45,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -222,10 +211,10 @@ function HubMultiSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-9 w-full justify-between font-normal"
+            className="h-8 w-full justify-between font-normal text-[13px]"
           >
             <span className="flex items-center gap-2 truncate">
-              <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               {selected.length > 0 ? (
                 <span>
                   Select hubs <span className="text-muted-foreground">· {selected.length} selected</span>
@@ -234,7 +223,7 @@ function HubMultiSelect({
                 <span className="text-muted-foreground">Select hubs</span>
               )}
             </span>
-            <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
+            <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
@@ -289,11 +278,14 @@ export function DriversTab() {
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [loadError, setLoadError] = useState(false);
 
-  // Add/Edit form opens in a modal Dialog (shared by New + Edit).
-  const [formOpen, setFormOpen] = useState(false);
+  // Inline center form: `creating` opens a blank form; otherwise a selected
+  // driver is edited in place. `editing` mirrors the record backing the form
+  // (drives POST vs PATCH + the header/id chip + status actions).
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(false);
   const [error, setError] = useState("");
   const [attempted, setAttempted] = useState(false);
 
@@ -304,7 +296,7 @@ export function DriversTab() {
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [query, setQuery] = useState("");
 
-  // Selected driver → drives the center detail panel + the right map column.
+  // Selected driver → drives the center form + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Resilient load: on a transient failure at mount, retry once after a short
@@ -385,23 +377,16 @@ export function DriversTab() {
 
   // Resolve the selected driver from the loaded list (stays in sync on reload).
   const selectedDriver = selectedId ? (drivers ?? []).find((d) => d.id === selectedId) ?? null : null;
+  const showForm = creating || Boolean(selectedDriver);
 
-  function openAdd() {
-    setEditing(null);
-    setForm(EMPTY_FORM);
-    setError("");
-    setAttempted(false);
-    setFormOpen(true);
-  }
-
-  function openEdit(driver: Driver) {
-    setEditing(driver);
+  // Map a driver record → the editable form state.
+  function formFromDriver(driver: Driver): FormState {
     const ids = Array.isArray(driver.hub_ids)
       ? driver.hub_ids
       : driver.hub_id
         ? [driver.hub_id]
         : [];
-    setForm({
+    return {
       name: driver.name ?? "",
       phone: formatPhoneInput(driver.phone ?? ""),
       email: driver.email ?? "",
@@ -416,10 +401,52 @@ export function DriversTab() {
       zip: driver.address?.zip ?? "",
       lat: driver.geo?.lat != null ? String(driver.geo.lat) : "",
       lng: driver.geo?.lng != null ? String(driver.geo.lng) : "",
-    });
+    };
+  }
+
+  function openAdd() {
+    setCreating(true);
+    setSelectedId(null);
+    setEditing(null);
+    setForm(EMPTY_FORM);
     setError("");
+    setSavedTick(false);
     setAttempted(false);
-    setFormOpen(true);
+  }
+
+  // Select a row → load it into the inline editor.
+  function selectDriver(driver: Driver) {
+    setCreating(false);
+    setSelectedId(driver.id);
+    setEditing(driver);
+    setForm(formFromDriver(driver));
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Cancel: discard edits (revert to record) or drop the blank create form.
+  function cancelForm() {
+    if (creating) {
+      setCreating(false);
+      setForm(EMPTY_FORM);
+    } else if (editing) {
+      setForm(formFromDriver(editing));
+    }
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
+  }
+
+  // Close the center panel entirely (back to empty state).
+  function closeForm() {
+    setCreating(false);
+    setSelectedId(null);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setError("");
+    setSavedTick(false);
+    setAttempted(false);
   }
 
   // ── Address handlers ──
@@ -458,6 +485,7 @@ export function DriversTab() {
 
   async function submit() {
     setAttempted(true);
+    setSavedTick(false);
     if (!form.name.trim()) {
       setError("Driver name is required.");
       return;
@@ -511,7 +539,14 @@ export function DriversTab() {
       setError(j.error || "Could not save the driver. The fleet service may be unavailable — try again shortly.");
       return;
     }
-    setFormOpen(false);
+    if (creating) {
+      setCreating(false);
+      setEditing(null);
+      setForm(EMPTY_FORM);
+    }
+    setSavedTick(true);
+    setAttempted(false);
+    setTimeout(() => setSavedTick(false), 2500);
     loadDrivers();
   }
 
@@ -530,7 +565,7 @@ export function DriversTab() {
     if (res?.ok) {
       loadDrivers();
     } else {
-      // Optimistic-free: surface a transient error inline via the list error banner.
+      // Optimistic-free: surface a transient error inline via the form error banner.
       const j = res ? await res.json().catch(() => ({})) : {};
       setError(j.error || "Could not update the driver's status. Try again shortly.");
     }
@@ -543,135 +578,173 @@ export function DriversTab() {
     }));
   }
 
-  // ── Add/Edit form dialog (shared by New + Edit) ──
-  const formDialog = (
-    <Dialog open={formOpen} onOpenChange={setFormOpen}>
-      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-[600px]">
-        <DialogHeader className="border-b px-5 py-4">
-          <DialogTitle>{editing ? "Edit driver" : "New driver"}</DialogTitle>
-          <DialogDescription>
-            {editing ? "Update this driver's details." : "Add a driver to the Routely fleet."}
-          </DialogDescription>
-        </DialogHeader>
+  const inactive = editing ? editing.status !== "active" : false;
 
-        {/* Body */}
-        <div className="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5">
-          {/* ── Details ── */}
-          <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Contact className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  <h4 className="font-semibold text-sm">Details</h4>
-                </div>
-                <Separator />
-
-                <Field label="Full name" required error={nameError ? "Driver name is required." : undefined}>
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Jane Doe"
-                    aria-invalid={nameError || undefined}
-                    className="h-9"
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    label="Phone"
-                    required
-                    error={phoneError ? "Enter a 10-digit phone number." : undefined}
-                  >
-                    <Input
-                      value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
-                      placeholder="(305) 555-0100"
-                      inputMode="tel"
-                      aria-invalid={phoneError || undefined}
-                      className="h-9 font-mono tabular-nums"
-                    />
-                  </Field>
-                  <Field label="Email" error={emailInvalid ? "Enter a valid email." : undefined}>
-                    <Input
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      placeholder="jane@example.com"
-                      type="email"
-                      aria-invalid={emailInvalid || undefined}
-                      className="h-9"
-                    />
-                  </Field>
-                </div>
-                <Field label="Vehicle">
-                  <div className="relative">
-                    <Car
-                      className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <Input
-                      value={form.vehicle}
-                      onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
-                      placeholder="White Ford Transit"
-                      className="h-9 pl-9"
-                    />
-                  </div>
-                </Field>
-                <Field label="Address" hint="Optional — used to map the route to the driver's home hub.">
-                  <AddressField
-                    value={form.addressValue}
-                    selected={form.addressSelected}
-                    placeholder="Search driver address…"
-                    onChange={(v) => setForm((f) => ({ ...f, addressValue: v, addressSelected: false }))}
-                    onPlaceDetails={onAddressPlace}
-                    onClear={clearAddress}
-                  />
-                </Field>
-              </section>
-
-              {/* ── Hubs ── */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  <h4 className="font-semibold text-sm">Hubs</h4>
-                </div>
-                <Separator />
-
-                <div className="flex items-center justify-between rounded-lg border px-3.5 py-2.5">
-                  <div>
-                    <p className="font-medium text-sm">All hubs</p>
-                    <p className="text-muted-foreground text-xs">Available at every hub in the fleet.</p>
-                  </div>
-                  <Switch
-                    checked={form.allHubs}
-                    onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))}
-                  />
-                </div>
-
-                {!form.allHubs && (
-                  <Field label="Assigned hubs">
-                    {hubs.length === 0 ? (
-                      <p className="rounded-lg border px-3.5 py-2.5 text-muted-foreground text-sm">
-                        No hubs available yet.
-                      </p>
-                    ) : (
-                      <HubMultiSelect hubs={hubs} selected={form.hubIds} onToggle={toggleHub} />
-                    )}
-                  </Field>
-                )}
-              </section>
-
-          {error && <p className="text-destructive text-sm">{error}</p>}
+  // ── Inline center form (shared by desktop center + mobile overlay) ──
+  const centerForm = (
+    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={closeForm}
+          aria-label="Close"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
+          <X className="hidden size-4 lg:block" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="type-body-sm font-semibold leading-tight">
+            {editing ? "Edit driver" : "New driver"}
+          </p>
+          {editing ? (
+            <p className="type-id truncate text-[11px] text-muted-foreground leading-tight">
+              {editing.id}
+            </p>
+          ) : (
+            <p className="type-caption leading-tight">Add a driver to the Routely fleet.</p>
+          )}
         </div>
+        {editing && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0"
+            onClick={() => setStatusTarget(editing)}
+            disabled={busyId === editing.id}
+          >
+            {inactive ? (
+              <>
+                <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" /> Reactivate
+              </>
+            ) : (
+              <>
+                <Ban className="mr-1.5 size-3.5" aria-hidden="true" /> Deactivate
+              </>
+            )}
+          </Button>
+        )}
+      </div>
 
-        {/* Footer */}
-        <DialogFooter className="border-t px-5 py-3">
-          <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={saving}>
-            {saving && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
-            {editing ? "Save changes" : "Create driver"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Body */}
+      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+        {/* ── Details ── */}
+        <Group icon={Contact} title="Details">
+          <Field label="Full name" required error={nameError ? "Driver name is required." : undefined}>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Jane Doe"
+              aria-invalid={nameError || undefined}
+              className="h-8 text-[13px]"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field
+              label="Phone"
+              required
+              error={phoneError ? "Enter a 10-digit phone number." : undefined}
+            >
+              <Input
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
+                placeholder="(305) 555-0100"
+                inputMode="tel"
+                aria-invalid={phoneError || undefined}
+                className="h-8 font-mono text-[13px] tabular-nums"
+              />
+            </Field>
+            <Field label="Email" error={emailInvalid ? "Enter a valid email." : undefined}>
+              <Input
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="jane@example.com"
+                type="email"
+                aria-invalid={emailInvalid || undefined}
+                className="h-8 text-[13px]"
+              />
+            </Field>
+          </div>
+
+          <Field label="Vehicle">
+            <div className="relative">
+              <Car
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={form.vehicle}
+                onChange={(e) => setForm((f) => ({ ...f, vehicle: e.target.value }))}
+                placeholder="White Ford Transit"
+                className="h-8 pl-8 text-[13px]"
+              />
+            </div>
+          </Field>
+
+          <Field label="Address" hint="Optional — used to map the route to the driver's home hub.">
+            <AddressField
+              value={form.addressValue}
+              selected={form.addressSelected}
+              placeholder="Search driver address…"
+              onChange={(v) => setForm((f) => ({ ...f, addressValue: v, addressSelected: false }))}
+              onPlaceDetails={onAddressPlace}
+              onClear={clearAddress}
+            />
+          </Field>
+        </Group>
+
+        {/* ── Hubs ── */}
+        <Group icon={Building2} title="Hubs">
+          <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <p className="type-body-sm font-medium">All hubs</p>
+                <p className="type-caption">Available at every hub in the fleet.</p>
+              </div>
+            </div>
+            <Switch
+              checked={form.allHubs}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))}
+            />
+          </div>
+
+          {!form.allHubs && (
+            <Field label="Assigned hubs">
+              {hubs.length === 0 ? (
+                <p className="rounded-lg border border-border/60 px-3 py-2 type-caption">
+                  No hubs available yet.
+                </p>
+              ) : (
+                <HubMultiSelect hubs={hubs} selected={form.hubIds} onToggle={toggleHub} />
+              )}
+            </Field>
+          )}
+        </Group>
+      </div>
+
+      {/* Sticky action bar */}
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 border-border/50 border-t bg-card/95 px-3 py-2.5 backdrop-blur-sm">
+        <div className="min-w-0 flex-1">
+          {error ? (
+            <p className="truncate text-[11px] text-rose-500">{error}</p>
+          ) : savedTick ? (
+            <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+              <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
+            </p>
+          ) : null}
+        </div>
+        <Button variant="outline" size="sm" className="h-8" onClick={cancelForm} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" className="h-8" onClick={submit} disabled={saving}>
+          {saving && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />}
+          {editing ? "Save changes" : "Create driver"}
+        </Button>
+      </div>
+    </div>
   );
 
   // ══ Full-bleed 3-pane shell — a literal clone of /dashboard/stops ══
@@ -684,8 +757,6 @@ export function DriversTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {formDialog}
-
       {/* ═══ LEFT COLUMN — the list ═══ */}
       <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:w-[360px] lg:shrink-0 lg:border-r">
         {/* Toolbar */}
@@ -726,9 +797,6 @@ export function DriversTab() {
 
         {/* List — independent scroll */}
         <div className="flex-1 overflow-y-auto">
-          {error && !statusTarget && (
-            <p className="px-3 pt-3 text-destructive text-xs">{error}</p>
-          )}
           {!drivers ? (
             <div className="space-y-2 p-3">
               {[0, 1, 2, 3].map((i) => (
@@ -740,8 +808,8 @@ export function DriversTab() {
               <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
                 <Users className="size-6" aria-hidden="true" />
               </span>
-              <p className="font-medium text-sm">{loadError ? "Couldn't load drivers" : "No drivers yet"}</p>
-              <p className="max-w-xs text-muted-foreground text-xs">
+              <p className="type-body-sm font-medium">{loadError ? "Couldn't load drivers" : "No drivers yet"}</p>
+              <p className="type-caption max-w-xs">
                 {loadError
                   ? "There was a problem reaching the fleet service. Try again."
                   : "Add the drivers who pick up and deliver packages for Routely."}
@@ -757,7 +825,7 @@ export function DriversTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-muted-foreground text-[13px]">
+            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
               No drivers match those filters.
             </p>
           ) : (
@@ -768,7 +836,7 @@ export function DriversTab() {
                   driver={driver}
                   hubNames={hubNames}
                   selected={selectedId === driver.id}
-                  onSelect={() => setSelectedId(driver.id)}
+                  onSelect={() => selectDriver(driver)}
                 />
               ))}
             </div>
@@ -776,24 +844,18 @@ export function DriversTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — detail panel (desktop) ═══ */}
+      {/* ═══ CENTER COLUMN — inline editable form (desktop) ═══ */}
       <div className="hidden h-full flex-col overflow-hidden border-border/50 bg-card lg:flex lg:w-[440px] lg:shrink-0 lg:border-r">
-        {selectedDriver ? (
-          <DriverDetailPanel
-            driver={selectedDriver}
-            hubs={hubs}
-            onClose={() => setSelectedId(null)}
-            onEdit={() => openEdit(selectedDriver)}
-            onStatus={() => setStatusTarget(selectedDriver)}
-          />
+        {showForm ? (
+          centerForm
         ) : (
           <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
             <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
               <Users className="size-7 text-muted-foreground/30" aria-hidden="true" />
             </div>
-            <p className="font-bold text-sm text-foreground">No driver selected</p>
-            <p className="mt-1.5 max-w-[200px] text-muted-foreground text-xs leading-relaxed">
-              Click a driver from the list to view details
+            <p className="type-body-sm font-bold text-foreground">No driver selected</p>
+            <p className="type-caption mt-1.5 max-w-[200px] leading-relaxed">
+              Select a driver to edit it, or add a new one
             </p>
           </div>
         )}
@@ -804,24 +866,18 @@ export function DriversTab() {
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />
       </div>
 
-      {/* ═══ MOBILE — full-screen overlay: detail + map stacked ═══ */}
+      {/* ═══ MOBILE — full-screen overlay: form + map stacked ═══ */}
       <AnimatePresence>
-        {selectedDriver && (
+        {showForm && (
           <motion.div
-            key={selectedDriver.id}
+            key={editing?.id ?? "new"}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background lg:hidden"
           >
-            <DriverDetailPanel
-              driver={selectedDriver}
-              hubs={hubs}
-              onClose={() => setSelectedId(null)}
-              onEdit={() => openEdit(selectedDriver)}
-              onStatus={() => setStatusTarget(selectedDriver)}
-            />
+            {centerForm}
             <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
               <DriverMapPanel driver={selectedDriver} hubs={hubs} />
             </div>
@@ -885,10 +941,10 @@ function DriverRow({
             </Badge>
           )}
         </span>
-        <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground tabular-nums">
+        <span className="type-caption mt-0.5 block font-mono tabular-nums">
           {formatPhone(driver.phone)}
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+        <span className="type-caption mt-0.5 block truncate">
           {driver.all_hubs ? "All hubs" : hubNames(ids)}
         </span>
       </span>
@@ -905,8 +961,8 @@ function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }
           <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
         </div>
         <div className="text-center">
-          <p className="font-bold text-[13px] text-foreground/70">Fleet map</p>
-          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+          <p className="type-body-sm font-bold text-foreground/70">Fleet map</p>
+          <p className="type-caption mt-1 leading-relaxed">
             Select a driver to see
             <br />
             the route
@@ -940,7 +996,7 @@ function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }
       )}
       {mapHint && (
         <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-3 py-1.5 text-muted-foreground text-xs shadow-sm backdrop-blur-sm">
+          <p className="type-caption inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-3 py-1.5 shadow-sm backdrop-blur-sm">
             <Navigation className="size-3.5" aria-hidden="true" /> {mapHint}
           </p>
         </div>
@@ -988,6 +1044,30 @@ function StatusConfirm({
   );
 }
 
+// Section wrapper: token eyebrow + dense card body (matches Stops' grouped panels).
+function Group({
+  icon: Icon,
+  title,
+  note,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-1.5 px-0.5">
+        <Icon className="size-3.5 text-muted-foreground/60" aria-hidden={true} />
+        <span className="type-label text-muted-foreground/60">{title}</span>
+      </div>
+      {note && <p className="type-caption -mt-1 px-0.5">{note}</p>}
+      <div className="space-y-3 rounded-xl border border-border/60 bg-card p-3">{children}</div>
+    </section>
+  );
+}
+
 function Field({
   label,
   required,
@@ -1003,13 +1083,13 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="font-medium text-sm">
+      <Label className="font-medium text-[11px] text-muted-foreground">
         {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
+        {required && <span className="ml-0.5 text-rose-500">*</span>}
       </Label>
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      {hint && <p className="type-caption">{hint}</p>}
       {children}
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {error && <p className="text-[11px] text-rose-500">{error}</p>}
     </div>
   );
 }
@@ -1044,7 +1124,7 @@ function AddressField({
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}
           placeholder={placeholder}
-          className="h-9 border-0 bg-transparent pr-16 text-sm focus-visible:border-0 focus-visible:ring-0"
+          className="h-8 border-0 bg-transparent pr-16 text-[13px] focus-visible:border-0 focus-visible:ring-0"
         />
         <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
           {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}
@@ -1058,128 +1138,6 @@ function AddressField({
               <X className="size-3.5" aria-hidden="true" />
             </button>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// A read-only label/value row for the detail panel.
-function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  if (value == null || value === "" || value === "—") return null;
-  return (
-    <div className="flex items-start justify-between gap-4 border-border/[0.12] border-b py-2 last:border-0">
-      <span className="shrink-0 text-muted-foreground text-xs">{label}</span>
-      <span className={cn("min-w-0 text-right text-foreground text-xs", mono && "font-mono tabular-nums")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ── Driver detail panel: read-only info + Edit / status (map lives in its own column) ──
-function DriverDetailPanel({
-  driver,
-  hubs,
-  onClose,
-  onEdit,
-  onStatus,
-}: {
-  driver: Driver;
-  hubs: Hub[];
-  onClose: () => void;
-  onEdit: () => void;
-  onStatus: () => void;
-}) {
-  const inactive = driver.status !== "active";
-  const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
-  const assignedNames = driver.all_hubs
-    ? "All hubs"
-    : ids.map((id) => hubs.find((h) => h.id === id)?.name ?? "Unknown hub").join(", ") || "—";
-
-  const driverAddr = fullAddress(driver.address);
-  const defaultHub = resolveDefaultHub(driver, hubs);
-
-  return (
-    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-border/50 border-b bg-card/95 px-4 py-2.5 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Back to list"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4 lg:hidden" aria-hidden="true" />
-          <X className="hidden size-4 lg:block" aria-hidden="true" />
-        </button>
-        <span className="text-muted-foreground/60 text-xs">Driver details</span>
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8"
-            onClick={onStatus}
-          >
-            {inactive ? (
-              <>
-                <RotateCcw className="mr-1.5 size-3.5" aria-hidden="true" /> Reactivate
-              </>
-            ) : (
-              <>
-                <Ban className="mr-1.5 size-3.5" aria-hidden="true" /> Deactivate
-              </>
-            )}
-          </Button>
-          <Button size="sm" className="h-8" onClick={onEdit}>
-            <Pencil className="mr-1.5 size-3.5" aria-hidden="true" /> Edit
-          </Button>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {/* Title + status */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={
-                inactive
-                  ? "grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-                  : "grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
-              }
-            >
-              <Users className="size-4" aria-hidden="true" />
-            </span>
-            <h4 className="type-card-title">{driver.name}</h4>
-            {inactive ? (
-              <Badge variant="outline" className="bg-muted text-muted-foreground">
-                Inactive
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="bg-primary/10 text-primary">
-                Active
-              </Badge>
-            )}
-          </div>
-          {vehicleText(driver.vehicle) && <p className="type-desc pl-10">{vehicleText(driver.vehicle)}</p>}
-        </div>
-
-        {driver.email && (
-          <p className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Mail className="size-3.5" aria-hidden="true" /> {driver.email}
-          </p>
-        )}
-
-        {/* Read rows */}
-        <div className="rounded-xl border border-border/60 bg-card px-3 py-1">
-          <DetailRow label="Phone" value={formatPhone(driver.phone)} mono />
-          <DetailRow label="Email" value={driver.email || "—"} />
-          <DetailRow label="Vehicle" value={vehicleText(driver.vehicle) || "—"} />
-          <DetailRow label="Assigned hubs" value={assignedNames} />
-          <DetailRow label="Default hub" value={defaultHub?.name || "—"} />
-          <DetailRow label="Address" value={driverAddr || "—"} />
-          <DetailRow label="Driver ID" value={driver.id} mono />
         </div>
       </div>
     </div>

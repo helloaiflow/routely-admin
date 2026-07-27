@@ -40,3 +40,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ hu
   const data = await upstream.json().catch(() => ({}));
   return NextResponse.json(data, { status: upstream.status });
 }
+
+/* DELETE /api/client/hubs/[hub_id] — irreversible. Proxies FastAPI so the
+ * hub.deleted event fires and refusals surface structured (409 default_hub /
+ * has_routes). Admin-only. */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ hub_id: string }> }) {
+  const ctx = await getTenantContext();
+  if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ctx.isAdmin) return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  if (!FASTAPI_SECRET) return NextResponse.json({ error: "Fleet service unavailable" }, { status: 503 });
+
+  const { hub_id } = await params;
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `${FASTAPI_BASE}/v1/hubs/${encodeURIComponent(hub_id)}?tenant_id=${ROUTELY_OPS_TENANT_ID}`,
+      { method: "DELETE", headers: { "X-API-Key": FASTAPI_SECRET }, cache: "no-store" },
+    );
+  } catch {
+    return NextResponse.json({ error: "Fleet service unreachable" }, { status: 502 });
+  }
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    const detail = data?.detail;
+    return NextResponse.json(
+      { error: detail?.message ?? detail ?? "Fleet service error", code: detail?.code },
+      { status: upstream.status },
+    );
+  }
+  return NextResponse.json(data);
+}

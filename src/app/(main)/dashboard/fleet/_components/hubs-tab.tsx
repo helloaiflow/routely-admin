@@ -14,11 +14,12 @@ import {
   Copy,
   Loader2,
   Map as MapIcon,
-  MapPin,
   Plus,
   Repeat,
+  Route as RouteIcon,
   Search,
   Star,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -42,6 +43,16 @@ import { Group, FieldRow, StackRow, ROW_INPUT } from "@/components/form-rows";
 import { type Address, addressLine as addressLineOf, buildAddress, formatAddr, fullAddress, hasAddr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 
 import { MobileTabBar, SearchMultiSelect, Stepper, TimeCombobox } from "./field-controls";
@@ -239,6 +250,27 @@ export function HubsTab() {
   const [relations, setRelations] = useState<{ allowed: string[]; blocked: string[] }>({ allowed: [], blocked: [] });
   const [relationsBusy, setRelationsBusy] = useState(false);
 
+  // Delete hub (irreversible) — AlertDialog gate + structured 409 refusals.
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function confirmDeleteHub() {
+    if (!editing) return;
+    setDeleting(true);
+    setDeleteError("");
+    const res = await fetch(`/api/client/hubs/${encodeURIComponent(editing.id)}`, { method: "DELETE" }).catch(() => null);
+    setDeleting(false);
+    if (res?.ok) {
+      setDeleteOpen(false);
+      closeForm();
+      load();
+      return;
+    }
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setDeleteError(j.error || "Could not delete the hub — try again.");
+  }
+
   // Resilient load: on a transient failure at mount, retry once after a short
   // delay before surfacing the error (keeps the list from getting stuck empty).
   function load(retry = true) {
@@ -357,6 +389,7 @@ export function HubsTab() {
   // Select a row → load it into the inline editor. The autosave baseline is the
   // record's own serialized payload — edits are detected against it.
   function selectHub(hub: Hub) {
+    flushPendingSave();
     setMobileTab("detail");
     setCreating(false);
     setSelectedId(hub.id);
@@ -374,6 +407,7 @@ export function HubsTab() {
   // The copy never steals the default flag.
   function duplicateHub() {
     if (!editing) return;
+    flushPendingSave();
     setCreating(true);
     setSelectedId(null);
     setEditing(null);
@@ -398,6 +432,7 @@ export function HubsTab() {
 
   // Close the center panel entirely (back to empty state).
   function closeForm() {
+    flushPendingSave();
     setMobileTab("list");
     setCreating(false);
     setSelectedId(null);
@@ -499,19 +534,40 @@ export function HubsTab() {
   // Client hint only — the server does the real validation.
   const endBeforeStart =
     Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
-  const nameError = attempted && !form.name.trim();
+  const nameError = (attempted || Boolean(editing)) && !form.name.trim();
 
   // ── Autosave (existing records only) ──────────────────────────────────────
   // Debounced 1.2s after the last change; compares the serialized payload to
   // the last-saved baseline, PATCHes silently, and shows Saving…/Saved inline.
   // New records save only via the button. Invalid states never autosave.
   const lastSavedRef = useRef("");
+  // Pending-edit flush: closing/switching mid-debounce must not lose the edit.
+  const pendingSaveRef = useRef<{ hubId: string; serialized: string } | null>(null);
+
+  function flushPendingSave() {
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    lastSavedRef.current = pending.serialized;
+    void fetch(`/api/client/hubs/${encodeURIComponent(pending.hubId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: pending.serialized,
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => flushPendingSave(), []);
+
   useEffect(() => {
     if (!editing || creating || saving) return;
     if (!form.name.trim() || endBeforeStart) return;
     const serialized = JSON.stringify(payloadFromForm(form));
     if (serialized === lastSavedRef.current) return;
+    pendingSaveRef.current = { hubId: editing.id, serialized };
     const t = setTimeout(async () => {
+      pendingSaveRef.current = null;
       setSaving(true);
       setError("");
       const res = await fetch(`/api/client/hubs/${encodeURIComponent(editing.id)}`, {
@@ -588,7 +644,17 @@ export function HubsTab() {
                 <Copy className="size-3.5" aria-hidden="true" />
               </button>
             )}
-            {/* No Delete: /api/client/hubs/{id} does not expose DELETE (hidden per spec). */}
+            {editing && (
+              <button
+                type="button"
+                onClick={() => { setDeleteError(""); setDeleteOpen(true); }}
+                title="Delete hub"
+                aria-label="Delete hub"
+                className={cn(HEADER_BTN, "hover:bg-rose-500/10 hover:text-rose-500")}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
             <div className="mx-1 h-4 w-px bg-border/60" />
             <button type="button" onClick={closeForm} aria-label="Close" className={HEADER_BTN}>
               <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
@@ -597,7 +663,7 @@ export function HubsTab() {
           </div>
         </div>
         <div className="relative px-4 pb-3">
-          <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
+          <p className="truncate pr-24 font-bold text-base text-foreground leading-tight tracking-tight">
             {formatDisplayCase(form.name.trim()) || "Untitled hub"}
           </p>
           {form.line1 && (
@@ -618,13 +684,22 @@ export function HubsTab() {
               {form.rdRoundTrip ? "Round-trip" : "One-way"}
             </span>
           </div>
+          {/* Corner avatar group — this hub's ALLOWED drivers (nothing when empty) */}
+          {editing && relations.allowed.length > 0 && (
+            <div className="absolute right-4 -bottom-1">
+              <AvatarGroup
+                people={driverOpts.filter((d) => relations.allowed.includes(d.id))}
+                max={5}
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Body — borderless collapsible sections */}
       <div className="flex-1 overflow-y-auto">
         {/* ── Location ── */}
-        <Group icon={MapPin} title="Location">
+        <Group icon={RouteIcon} title="Route Setup">
           <FieldRow label="Hub name" required error={nameError ? "Hub name is required." : undefined}>
             <input
               value={form.name}
@@ -724,26 +799,43 @@ export function HubsTab() {
           {/* Forward-compat: stored & displayed only — the optimizer is not
               built yet, so NOTHING routes off this value. null = unset. */}
           <FieldRow label="Optimize type">
-            <Select
-              value={form.optimizeType || undefined}
-              onValueChange={(v) =>
-                setForm((f) => ({ ...f, optimizeType: v === "__clear__" ? "" : (v as FormState["optimizeType"]) }))
-              }
-            >
-              <SelectTrigger className="h-(--spacing-control-h-sm) w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent align="end">
-                {form.optimizeType && (
-                  <SelectItem value="__clear__" className="text-11 text-muted-foreground">Clear</SelectItem>
-                )}
-                <SelectItem value="round_trip" className="text-13">Round trip</SelectItem>
-                <SelectItem value="last_stop" className="text-13">Last stop</SelectItem>
-                <SelectItem value="other" className="text-13">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex overflow-hidden rounded-lg border border-border/60">
+              {([["round_trip", "Round trip"], ["last_stop", "Last stop"], ["other", "Other"]] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() =>
+                    // clicking the active segment clears back to unset ("—")
+                    setForm((f) => ({ ...f, optimizeType: f.optimizeType === v ? "" : v }))
+                  }
+                  className={cn(
+                    "px-3 py-1 text-11 font-semibold transition-colors",
+                    form.optimizeType === v
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-transparent text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </FieldRow>
 
+
+          <FieldRow label="Default hub">
+            <Switch
+              checked={form.is_default}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
+            />
+          </FieldRow>
+        </Group>
+
+        {/* ── Route defaults ── */}
+        <Group
+          icon={Clock}
+          title="Route defaults"
+          note="Defaults a route inherits from this hub — overridable per route."
+        >
           <FieldRow label="Timezone">
             <Select
               value={form.timezone}
@@ -761,26 +853,12 @@ export function HubsTab() {
               </SelectContent>
             </Select>
           </FieldRow>
-
-          <FieldRow label="Default hub">
-            <Switch
-              checked={form.is_default}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-            />
-          </FieldRow>
-        </Group>
-
-        {/* ── Route defaults ── */}
-        <Group
-          icon={Clock}
-          title="Route defaults"
-          note="Defaults a route inherits from this hub — overridable per route."
-        >
           <FieldRow label="Start time">
             <TimeCombobox
               value={form.rdStartTime}
               onChange={(v) => setForm((f) => ({ ...f, rdStartTime: v }))}
               ariaLabel="Start time"
+              placeholder="7:00 AM"
             />
           </FieldRow>
           <FieldRow label="End time">
@@ -788,6 +866,7 @@ export function HubsTab() {
               value={form.rdEndTime}
               onChange={(v) => setForm((f) => ({ ...f, rdEndTime: v }))}
               ariaLabel="End time"
+              placeholder="6:30 PM"
             />
           </FieldRow>
           {endBeforeStart && (
@@ -881,23 +960,27 @@ export function HubsTab() {
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={cancelForm}
-            disabled={saving}
-            className="shrink-0 text-11 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
-          >
-            Cancel
-          </button>
+          {creating && (
+            <button
+              type="button"
+              onClick={cancelForm}
+              disabled={saving}
+              className="shrink-0 text-11 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
         </div>
-        <Button
-          onClick={submit}
-          disabled={saving}
-          className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-xs text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
-        >
-          {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-          Save hub
-        </Button>
+        {creating && (
+          <Button
+            onClick={submit}
+            disabled={saving}
+            className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-xs text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
+          >
+            {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+            Create hub
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -1047,6 +1130,35 @@ export function HubsTab() {
           { key: "map", label: "Map", icon: MapIcon },
         ]}
       />
+
+      {/* Delete hub — irreversible, destructive confirm */}
+      <AlertDialog open={deleteOpen} onOpenChange={(o) => !deleting && setDeleteOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this hub?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This is irreversible — the hub, its route defaults, and its driver
+              assignments will be permanently lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <p className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-11 text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void confirmDeleteHub(); }}
+              disabled={deleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />}
+              Delete hub
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

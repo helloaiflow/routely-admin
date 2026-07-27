@@ -75,10 +75,12 @@ export function TimeCombobox({
   value,
   onChange,
   ariaLabel,
+  placeholder = "—",
 }: {
   value: string;               // HH:MM 24h or ""
   onChange: (v: string) => void;
   ariaLabel: string;
+  placeholder?: string;        // demo the 12h format, e.g. "7:00 AM"
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string | null>(null); // null = not editing
@@ -101,7 +103,7 @@ export function TimeCombobox({
             value={shown}
             aria-label={ariaLabel}
             aria-invalid={invalid || undefined}
-            placeholder="—"
+            placeholder={placeholder}
             onFocus={() => setOpen(true)}
             onChange={(e) => { setDraft(e.target.value); setInvalid(false); }}
             onBlur={(e) => commit(e.target.value)}

@@ -32,7 +32,7 @@ function DetailMap({ lat, lng, address }: { lat:number|null; lng:number|null; ad
         <iframe title="map" width="100%" height="100%"
           style={{ border:0, display:"block", minHeight:"100%" }} loading="lazy"
           src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`} />
-        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1.5 text-[10px] font-medium shadow-md backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1.5 text-10 font-medium shadow-md backdrop-blur-sm">
           <motion.span className="relative flex size-2 shrink-0">
             <motion.span className="absolute inline-flex h-full w-full rounded-full bg-primary/40"
               animate={{ scale:[1,1.8], opacity:[0.8,0] }} transition={{ duration:1.5, repeat:Infinity }} />
@@ -73,27 +73,27 @@ function Gallery({ photos, item, address }: { photos:string[]; item:SearchResult
                 <Package className="size-4 text-muted-foreground/60" />
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">Type</p>
+                <p className="text-10 font-semibold text-muted-foreground/50 uppercase tracking-widest">Type</p>
                 <p className="text-xs font-bold text-foreground">{item.package_type?.toUpperCase() ?? "RX"}</p>
               </div>
             </div>
-            <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
+            <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-10 font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
               <span className={cn("size-1.5 rounded-full", sc.dot)} />{statusLabel(item.status)}
             </span>
           </div>
           <div className="text-center">
-            <p className="text-[10px] font-medium text-muted-foreground/40 mb-2 uppercase tracking-widest">Tracking ID</p>
+            <p className="text-10 font-medium text-muted-foreground/40 mb-2 uppercase tracking-widest">Tracking ID</p>
             <p className="font-mono text-2xl font-black text-foreground tracking-tight leading-none">
               {tid.length > 22 ? "…" + tid.slice(-19) : tid}
             </p>
           </div>
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-medium text-muted-foreground/40 mb-0.5 uppercase tracking-wider">Destination</p>
+              <p className="text-10 font-medium text-muted-foreground/40 mb-0.5 uppercase tracking-wider">Destination</p>
               <p className="text-xs font-semibold text-foreground truncate">{item.delivery_address || "—"}</p>
-              <p className="text-[10px] text-muted-foreground/60 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
+              <p className="text-10 text-muted-foreground/60 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
             </div>
-            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 bg-card/80", src.bg, src.text)}>
+            <span className={cn("rounded-full px-2 py-0.5 text-10 font-semibold shrink-0 bg-card/80", src.bg, src.text)}>
               {item.source === "stop" ? "Stop" : "Draft"}
             </span>
           </div>
@@ -121,13 +121,13 @@ function Gallery({ photos, item, address }: { photos:string[]; item:SearchResult
               className="absolute right-3 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 transition-colors">
               <ChevronRight className="size-4" />
             </button>
-            <div className="absolute bottom-3 right-3 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white font-medium backdrop-blur-sm">
+            <div className="absolute bottom-3 right-3 rounded-full bg-black/40 px-2 py-0.5 text-10 text-white font-medium backdrop-blur-sm">
               {active+1} / {photos.length}
             </div>
           </>
         )}
         <button type="button" onClick={() => window.open(photos[active], "_blank")}
-          className="absolute top-3 right-3 rounded-full bg-black/40 px-2.5 py-1 text-[10px] text-white font-medium backdrop-blur-sm hover:bg-black/60 transition-colors">
+          className="absolute top-3 right-3 rounded-full bg-black/40 px-2.5 py-1 text-10 text-white font-medium backdrop-blur-sm hover:bg-black/60 transition-colors">
           View full
         </button>
       </div>
@@ -155,7 +155,7 @@ function InfoRow({ icon:Icon, label, value, mono }: {
     <div className="flex items-start gap-3 py-2.5 border-b border-border/20 last:border-0">
       <Icon className="size-3.5 shrink-0 text-muted-foreground/35 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-0.5">{label}</p>
         <p className={cn("text-xs font-medium text-foreground leading-snug", mono && "font-mono text-primary")}>{value}</p>
       </div>
     </div>
@@ -166,7 +166,7 @@ function Section({ title, children }: { title:string; children:React.ReactNode }
   return (
     <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border/30 bg-muted/10">
-        <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">{title}</p>
+        <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">{title}</p>
       </div>
       <div className="px-4 py-1">{children}</div>
     </div>
@@ -191,7 +191,7 @@ function HistoryTab({ item }: { item:SearchResult }) {
 
   return (
     <div className="py-2">
-      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-3">
+      <p className="text-10 font-semibold text-muted-foreground/50 uppercase tracking-wider mb-3">
         {history.length > 0 ? `${history.length} previous deliveries near ${item.delivery_city || "this location"}` : "Address History"}
       </p>
       {history.length === 0 ? (
@@ -208,11 +208,11 @@ function HistoryTab({ item }: { item:SearchResult }) {
                 <span className={cn("mt-1 size-2 rounded-full shrink-0", sc.dot)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
-                    <span className={cn("text-[10px] font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
+                    <span className="font-mono text-10 text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
+                    <span className={cn("text-10 font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
                   </div>
-                  <p className="text-[11px] text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
-                  <p className="text-[10px] text-muted-foreground/55 mt-0.5">{formatDate(h.delivery_date ?? h.created_at)}{h.driver_name && ` · ${toTitleCase(h.driver_name)}`}</p>
+                  <p className="text-11 text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
+                  <p className="text-10 text-muted-foreground/55 mt-0.5">{formatDate(h.delivery_date ?? h.created_at)}{h.driver_name && ` · ${toTitleCase(h.driver_name)}`}</p>
                 </div>
               </li>
             );
@@ -250,7 +250,7 @@ function ActivityTab({ item }: { item:SearchResult }) {
               </div>
               <div className="pb-4 pt-1 flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground">{ev.label}</p>
-                <p className="text-[10px] text-muted-foreground/50 mt-0.5">{ev.ts}</p>
+                <p className="text-10 text-muted-foreground/50 mt-0.5">{ev.ts}</p>
               </div>
             </li>
           );
@@ -358,20 +358,20 @@ export function DetailView({ id }: { id:string }) {
           <span className="text-muted-foreground/30 text-sm">/</span>
           <span className="font-mono text-sm font-bold text-foreground tracking-tight">{tid}</span>
           {sc && (
-            <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
+            <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-10 font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
               <motion.span className={cn("size-1.5 rounded-full", sc.dot)}
                 animate={TRANSIT_ST.includes(item.status) ? { scale:[1,1.4,1], opacity:[1,0.5,1] } : {}}
                 transition={{ duration:2, repeat:Infinity }} />
               {statusLabel(item.status)}
             </span>
           )}
-          {src && <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", src.bg, src.text)}>{item.source === "stop" ? "Stop" : "Draft"}</span>}
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">{item.package_type ?? "RX"}</span>
-          {item.is_same_day && <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
-          {item.collect_cod && <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-400">💵 COD</span>}
-          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-400">✍ Sig</span>}
-          {item.return_to_sender && <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
-          <span className="text-[10px] text-muted-foreground/40 ml-auto">{formatDate(item.created_at)}</span>
+          {src && <span className={cn("rounded-full px-2 py-0.5 text-10 font-semibold", src.bg, src.text)}>{item.source === "stop" ? "Stop" : "Draft"}</span>}
+          <span className="rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground uppercase">{item.package_type ?? "RX"}</span>
+          {item.is_same_day && <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-10 font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
+          {item.collect_cod && <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-10 font-semibold text-teal-700 dark:text-teal-400">💵 COD</span>}
+          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-10 font-semibold text-indigo-700 dark:text-indigo-400">✍ Sig</span>}
+          {item.return_to_sender && <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-10 font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
+          <span className="text-10 text-muted-foreground/40 ml-auto">{formatDate(item.created_at)}</span>
         </div>
         {address && <p className="text-xs text-muted-foreground mt-1 truncate">{address}</p>}
       </div>
@@ -392,7 +392,7 @@ export function DetailView({ id }: { id:string }) {
                   ...(item.photos.length > 0 ? [{ v:"media", l:`Media (${item.photos.length})` }] : []),
                 ].map(t => (
                   <TabsTrigger key={t.v} value={t.v}
-                    className="flex-1 h-7 rounded-lg text-[11px] font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground">
+                    className="flex-1 h-7 rounded-lg text-11 font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground">
                     {t.l}
                   </TabsTrigger>
                 ))}
@@ -446,9 +446,9 @@ export function DetailView({ id }: { id:string }) {
             </div>
             <div className="border-t border-border/30 p-4 space-y-4">
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Status</p>
+                <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Status</p>
                 {sc && (
-                  <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
+                  <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-11 font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
                     <span className={cn("size-2 rounded-full", sc.dot)} />{statusLabel(item.status)}
                   </span>
                 )}
@@ -468,7 +468,7 @@ export function DetailView({ id }: { id:string }) {
                         <Icon className="size-3 text-muted-foreground/50" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-medium text-muted-foreground/45 uppercase tracking-wide">{row.label}</p>
+                        <p className="text-10 font-medium text-muted-foreground/45 uppercase tracking-wide">{row.label}</p>
                         <p className="text-xs font-semibold text-foreground leading-snug truncate">{row.value}</p>
                       </div>
                     </div>
@@ -479,12 +479,12 @@ export function DetailView({ id }: { id:string }) {
                 <>
                   <Separator />
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Flags</p>
+                    <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Flags</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {item.is_same_day && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
-                      {item.collect_cod && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-400">💵 {item.collect_amount ? formatCurrency(item.collect_amount) : "COD"}</span>}
-                      {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature</span>}
-                      {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
+                      {item.is_same_day && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-10 font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
+                      {item.collect_cod && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-10 font-semibold text-teal-700 dark:text-teal-400">💵 {item.collect_amount ? formatCurrency(item.collect_amount) : "COD"}</span>}
+                      {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-10 font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature</span>}
+                      {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-10 font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
                     </div>
                   </div>
                 </>
@@ -493,7 +493,7 @@ export function DetailView({ id }: { id:string }) {
                 <>
                   <Separator />
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-1">Proof</p>
+                    <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-1">Proof</p>
                     <p className="text-xs font-semibold text-foreground">{item.photos.length} photo{item.photos.length !== 1 ? "s" : ""} on file</p>
                   </div>
                 </>

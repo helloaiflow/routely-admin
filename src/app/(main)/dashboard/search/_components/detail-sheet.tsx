@@ -52,11 +52,11 @@ function Gallery({ photos, item, address }: { photos: string[]; item: SearchResu
                 <Package className="size-4 text-muted-foreground/60" />
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Package</p>
-                <p className="text-[11px] font-bold text-foreground">{item.package_type?.toUpperCase() ?? "RX"}</p>
+                <p className="text-10 font-semibold text-muted-foreground/50 uppercase tracking-wider">Package</p>
+                <p className="text-11 font-bold text-foreground">{item.package_type?.toUpperCase() ?? "RX"}</p>
               </div>
             </div>
-            <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
+            <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-10 font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
               <span className={cn("size-1.5 rounded-full", sc.dot)} />
               {statusLabel(item.status)}
             </span>
@@ -64,7 +64,7 @@ function Gallery({ photos, item, address }: { photos: string[]; item: SearchResu
 
           {/* Center: tracking number */}
           <div className="text-center">
-            <p className="text-[10px] font-medium text-muted-foreground/45 mb-1 uppercase tracking-widest">Tracking ID</p>
+            <p className="text-10 font-medium text-muted-foreground/45 mb-1 uppercase tracking-widest">Tracking ID</p>
             <p className="font-mono text-xl font-black text-foreground tracking-tight leading-none">
               {(item.stop_id ?? item.id).length > 20 ? "…" + (item.stop_id ?? item.id).slice(-17) : (item.stop_id ?? item.id)}
             </p>
@@ -73,11 +73,11 @@ function Gallery({ photos, item, address }: { photos: string[]; item: SearchResu
           {/* Bottom: address + source */}
           <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-medium text-muted-foreground/45 mb-0.5 uppercase tracking-wider">Destination</p>
-              <p className="text-[11px] font-semibold text-foreground truncate">{item.delivery_address || "—"}</p>
-              <p className="text-[10px] text-muted-foreground/60 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
+              <p className="text-10 font-medium text-muted-foreground/45 mb-0.5 uppercase tracking-wider">Destination</p>
+              <p className="text-11 font-semibold text-foreground truncate">{item.delivery_address || "—"}</p>
+              <p className="text-10 text-muted-foreground/60 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
             </div>
-            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0 bg-card/80 backdrop-blur-sm", src.bg, src.text)}>
+            <span className={cn("rounded-full px-2 py-0.5 text-10 font-semibold shrink-0 bg-card/80 backdrop-blur-sm", src.bg, src.text)}>
               {item.source === "stop" ? "Stop" : "Draft"}
             </span>
           </div>
@@ -117,14 +117,14 @@ function Gallery({ photos, item, address }: { photos: string[]; item: SearchResu
               <ChevronRight className="size-4" />
             </button>
             {/* Counter */}
-            <div className="absolute bottom-2 right-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white font-medium backdrop-blur-sm">
+            <div className="absolute bottom-2 right-2 rounded-full bg-black/40 px-2 py-0.5 text-10 text-white font-medium backdrop-blur-sm">
               {active + 1} / {photos.length}
             </div>
           </>
         )}
         {/* Open full-size */}
         <button type="button" onClick={() => window.open(photos[active], "_blank")}
-          className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-[10px] text-white font-medium backdrop-blur-sm hover:bg-black/60 transition-colors">
+          className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-10 text-white font-medium backdrop-blur-sm hover:bg-black/60 transition-colors">
           View full
         </button>
       </div>
@@ -156,7 +156,7 @@ function RightMap({ lat, lng, address }: { lat: number | null; lng: number | nul
           style={{ border: 0, display: "block", minHeight: "220px" }} loading="lazy"
           src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`} />
         {/* Animated pulse dot overlay */}
-        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1.5 text-[10px] font-medium shadow-md backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1.5 text-10 font-medium shadow-md backdrop-blur-sm">
           <motion.span className="relative flex size-2 shrink-0">
             <motion.span className="absolute inline-flex h-full w-full rounded-full bg-primary/40"
               animate={{ scale: [1, 1.8], opacity: [0.8, 0] }} transition={{ duration: 1.5, repeat: Infinity }} />
@@ -184,7 +184,7 @@ function InfoRow({
     <div className="flex items-start gap-2.5 py-2 border-b border-border/20 last:border-0">
       <Icon className="size-3.5 shrink-0 text-muted-foreground/35 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-medium text-muted-foreground/45 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className="text-10 font-medium text-muted-foreground/45 uppercase tracking-wider mb-0.5">{label}</p>
         <p className={cn("text-xs font-medium text-foreground leading-snug", mono && "font-mono text-primary")}>{value}</p>
       </div>
     </div>
@@ -214,7 +214,7 @@ function HistoryTab({ item }: { item: SearchResult }) {
 
   return (
     <div className="p-4">
-      <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-3">
+      <p className="text-10 font-semibold text-muted-foreground/50 uppercase tracking-wider mb-3">
         {history.length > 0
           ? `${history.length} previous deliveries near ${item.delivery_city || "this location"}`
           : "Address History"}
@@ -233,11 +233,11 @@ function HistoryTab({ item }: { item: SearchResult }) {
                 <span className={cn("mt-1 size-2 rounded-full shrink-0", sc.dot)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
-                    <span className={cn("text-[10px] font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
+                    <span className="font-mono text-10 text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
+                    <span className={cn("text-10 font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
                   </div>
-                  <p className="text-[11px] text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
-                  <p className="text-[10px] text-muted-foreground/55 mt-0.5">
+                  <p className="text-11 text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
+                  <p className="text-10 text-muted-foreground/55 mt-0.5">
                     {formatDate(h.delivery_date ?? h.created_at)}{h.driver_name && ` · ${toTitleCase(h.driver_name)}`}
                   </p>
                 </div>
@@ -278,7 +278,7 @@ function ActivityTab({ item }: { item: SearchResult }) {
               </div>
               <div className="pb-4 pt-1 flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground">{ev.label}</p>
-                <p className="text-[10px] text-muted-foreground/50 mt-0.5">{ev.ts}</p>
+                <p className="text-10 text-muted-foreground/50 mt-0.5">{ev.ts}</p>
               </div>
             </li>
           );
@@ -313,23 +313,23 @@ export function DetailSheet({ item, onClose }: Props) {
                       {trackId}
                     </span>
                     {sc && (
-                      <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 shrink-0", sc.bg, sc.text, sc.ring)}>
+                      <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-10 font-semibold ring-1 shrink-0", sc.bg, sc.text, sc.ring)}>
                         <span className={cn("size-1.5 rounded-full", sc.dot)} />
                         {statusLabel(item.status)}
                       </span>
                     )}
                     {src && (
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", src.bg, src.text)}>
+                      <span className={cn("rounded-full px-2 py-0.5 text-10 font-semibold", src.bg, src.text)}>
                         {item.source === "stop" ? "Stop" : "Draft"}
                       </span>
                     )}
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground uppercase">
                       {item.package_type ?? "RX"}
                     </span>
-                    {item.is_same_day && <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
-                    {item.collect_cod && <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-400">💵 COD</span>}
-                    {item.requires_signature && <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-400">✍ Sig</span>}
-                    {item.return_to_sender && <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
+                    {item.is_same_day && <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-10 font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
+                    {item.collect_cod && <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-10 font-semibold text-teal-700 dark:text-teal-400">💵 COD</span>}
+                    {item.requires_signature && <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-10 font-semibold text-indigo-700 dark:text-indigo-400">✍ Sig</span>}
+                    {item.return_to_sender && <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-10 font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 truncate">{address}</p>
                 </div>
@@ -360,7 +360,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           { v: "activity", l: "Activity" },
                         ].map(t => (
                           <TabsTrigger key={t.v} value={t.v}
-                            className="flex-1 h-7 rounded-md text-[11px] font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground">
+                            className="flex-1 h-7 rounded-md text-11 font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground">
                             {t.l}
                           </TabsTrigger>
                         ))}
@@ -371,7 +371,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           {/* Recipient section */}
                           <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
                             <div className="px-3 py-2 border-b border-border/30 bg-muted/20">
-                              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Recipient</p>
+                              <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">Recipient</p>
                             </div>
                             <div className="px-3 py-1">
                               <InfoRow icon={User}    label="Name"    value={toTitleCase(item.recipient_name) || "—"} />
@@ -383,7 +383,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           {/* Delivery section */}
                           <div className="rounded-xl border border-border/40 bg-card overflow-hidden mt-3">
                             <div className="px-3 py-2 border-b border-border/30 bg-muted/20">
-                              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Delivery</p>
+                              <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">Delivery</p>
                             </div>
                             <div className="px-3 py-1">
                               <InfoRow icon={Tag}      label="Package Type"   value={item.package_type?.toUpperCase() ?? "RX"} />
@@ -398,7 +398,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           {(item.collect_cod || item.requires_signature || item.return_to_sender) && (
                             <div className="rounded-xl border border-border/40 bg-card overflow-hidden mt-3">
                               <div className="px-3 py-2 border-b border-border/30 bg-muted/20">
-                                <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Requirements</p>
+                                <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">Requirements</p>
                               </div>
                               <div className="px-3 py-1">
                                 {item.collect_cod && <InfoRow icon={DollarSign}  label="COD Amount"  value={formatCurrency(item.collect_amount)} />}
@@ -411,7 +411,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           {/* Operational */}
                           <div className="rounded-xl border border-border/40 bg-card overflow-hidden mt-3">
                             <div className="px-3 py-2 border-b border-border/30 bg-muted/20">
-                              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Operational</p>
+                              <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">Operational</p>
                             </div>
                             <div className="px-3 py-1">
                               <InfoRow icon={Truck}    label="Driver"   value={item.driver_name ? toTitleCase(item.driver_name) : "Unassigned"} />
@@ -424,7 +424,7 @@ export function DetailSheet({ item, onClose }: Props) {
                           {/* Meta */}
                           <div className="rounded-xl border border-border/40 bg-card overflow-hidden mt-3">
                             <div className="px-3 py-2 border-b border-border/30 bg-muted/20">
-                              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Record</p>
+                              <p className="text-10 font-semibold text-muted-foreground/60 uppercase tracking-wider">Record</p>
                             </div>
                             <div className="px-3 py-1">
                               <InfoRow icon={Hash}     label="Tracking ID" value={trackId} mono />
@@ -457,8 +457,8 @@ export function DetailSheet({ item, onClose }: Props) {
                     {/* Status */}
                     {sc && (
                       <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Status</p>
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
+                        <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Status</p>
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-11 font-semibold ring-1", sc.bg, sc.text, sc.ring)}>
                           <motion.span className={cn("size-2 rounded-full", sc.dot)}
                             animate={TRANSIT_ST.includes(item.status) ? { scale: [1,1.4,1], opacity: [1,0.5,1] } : {}}
                             transition={{ duration: 2, repeat: Infinity }} />
@@ -482,7 +482,7 @@ export function DetailSheet({ item, onClose }: Props) {
                               <Icon className="size-3 text-muted-foreground/50" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[10px] font-medium text-muted-foreground/45 uppercase tracking-wide">{row.label}</p>
+                              <p className="text-10 font-medium text-muted-foreground/45 uppercase tracking-wide">{row.label}</p>
                               <p className="text-xs font-semibold text-foreground leading-snug truncate">{row.value}</p>
                             </div>
                           </div>
@@ -493,12 +493,12 @@ export function DetailSheet({ item, onClose }: Props) {
                     {/* Badges */}
                     {(item.is_same_day || item.collect_cod || item.requires_signature || item.return_to_sender) && (
                       <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Flags</p>
+                        <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Flags</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {item.is_same_day && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 text-[10px] font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
-                          {item.collect_cod && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400">💵 COD {item.collect_amount ? formatCurrency(item.collect_amount) : ""}</span>}
-                          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature</span>}
-                          {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
+                          {item.is_same_day && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 text-10 font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
+                          {item.collect_cod && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 text-10 font-semibold text-teal-700 dark:text-teal-400">💵 COD {item.collect_amount ? formatCurrency(item.collect_amount) : ""}</span>}
+                          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 text-10 font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature</span>}
+                          {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-10 font-semibold text-rose-600 dark:text-rose-400">↩ RTS</span>}
                         </div>
                       </div>
                     )}
@@ -506,7 +506,7 @@ export function DetailSheet({ item, onClose }: Props) {
                     {/* Photo count (if any) */}
                     {item.photos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Proof</p>
+                        <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-2">Proof</p>
                         <p className="text-xs font-semibold text-foreground">{item.photos.length} photo{item.photos.length !== 1 ? "s" : ""} on file</p>
                       </div>
                     )}

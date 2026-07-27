@@ -62,7 +62,7 @@ function FilterBar({ counts, activeFilter, onFilter }: {
             )}
             {f.label}
             <span className={cn(
-              "tabular-nums text-[10px] font-semibold",
+              "tabular-nums text-10 font-semibold",
               on ? "opacity-70" : "opacity-45",
             )}>{f.count}</span>
           </button>
@@ -204,7 +204,7 @@ export function SearchShell() {
                 onChange={e => setQuery(e.target.value)}
                 onFocus={() => setShowDropdown(true)}
                 placeholder="Name, tracking ID, phone, address, city..."
-                className="h-10 flex-1 border-0 bg-transparent p-0 text-[13px] shadow-none placeholder:text-muted-foreground/35 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-10 flex-1 border-0 bg-transparent p-0 text-13 shadow-none placeholder:text-muted-foreground/35 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               {loading
                 ? <div className="size-4 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
@@ -228,25 +228,25 @@ export function SearchShell() {
                 >
                   {recentSearches.length > 0 && (
                     <div className="border-b border-border/20 p-2">
-                      <p className="mb-1 px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">Recent</p>
+                      <p className="mb-1 px-2 pt-0.5 text-10 font-semibold uppercase tracking-wider text-muted-foreground/40">Recent</p>
                       {recentSearches.map(s => (
                         <button key={s} type="button"
                           onMouseDown={e => { e.preventDefault(); setQuery(s); doSearch(s); }}
                           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-muted/40">
                           <Clock className="size-3.5 shrink-0 text-muted-foreground/30" />
-                          <span className="text-[13px] text-foreground/75 truncate">{s}</span>
+                          <span className="text-13 text-foreground/75 truncate">{s}</span>
                         </button>
                       ))}
                     </div>
                   )}
                   <div className="p-2">
-                    <p className="mb-1 px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">Try searching</p>
+                    <p className="mb-1 px-2 pt-0.5 text-10 font-semibold uppercase tracking-wider text-muted-foreground/40">Try searching</p>
                     {SUGGESTIONS.map(s => (
                       <button key={s} type="button"
                         onMouseDown={e => { e.preventDefault(); setQuery(s); doSearch(s); }}
                         className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-muted/40">
                         <Search className="size-3.5 shrink-0 text-muted-foreground/20" />
-                        <span className="text-[13px] text-muted-foreground truncate">{s}</span>
+                        <span className="text-13 text-muted-foreground truncate">{s}</span>
                       </button>
                     ))}
                   </div>
@@ -269,7 +269,7 @@ export function SearchShell() {
         {/* Content — scrollable, grid with independent scroll */}
         <div className="flex-1 overflow-y-auto bg-background min-h-0">
           {error && (
-            <div className="m-4 flex items-center gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+            <div className="m-4 flex items-center gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-13 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
               <AlertCircle className="size-4 shrink-0" />{error}
               <button type="button" onClick={() => doSearch(query.trim())} className="ml-auto text-xs font-semibold underline">Retry</button>
             </div>
@@ -282,7 +282,7 @@ export function SearchShell() {
                 <Search className="size-6 text-primary/60" />
               </div>
               <p className="text-sm font-semibold text-foreground">Find any shipment</p>
-              <p className="mt-1.5 max-w-[260px] text-[13px] leading-relaxed text-muted-foreground/55">
+              <p className="mt-1.5 max-w-[260px] text-13 leading-relaxed text-muted-foreground/55">
                 Search by tracking ID, recipient name, phone number, or delivery address
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-1.5">
@@ -292,7 +292,7 @@ export function SearchShell() {
                   { l:"In Transit", c:"bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/25" },
                   { l:"Pending",    c:"bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25" },
                 ].map(c => (
-                  <span key={c.l} className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-medium", c.c)}>{c.l}</span>
+                  <span key={c.l} className={cn("rounded-full border px-2.5 py-0.5 text-11 font-medium", c.c)}>{c.l}</span>
                 ))}
               </div>
             </div>
@@ -304,7 +304,7 @@ export function SearchShell() {
               <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-muted/50">
                 <Package className="size-5 text-muted-foreground/30" />
               </div>
-              <p className="text-[13px] font-semibold text-foreground">No results for &ldquo;{query}&rdquo;</p>
+              <p className="text-13 font-semibold text-foreground">No results for &ldquo;{query}&rdquo;</p>
               <p className="mt-1 text-xs text-muted-foreground/50">Try a tracking ID, recipient name, or address</p>
             </div>
           )}

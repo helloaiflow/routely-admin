@@ -62,7 +62,7 @@ function DetailMap({ lat, lng, address }: { lat:number|null; lng:number|null; ad
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
       <MapPin className="size-5 text-muted-foreground/20" />
-      <p className="text-[10px] text-muted-foreground/40 text-center px-3 leading-snug max-w-[160px]">{address || "No coordinates available"}</p>
+      <p className="text-10 text-muted-foreground/40 text-center px-3 leading-snug max-w-[160px]">{address || "No coordinates available"}</p>
     </div>
   );
 }
@@ -91,20 +91,20 @@ function Gallery({ photos, item }: { photos:string[]; item:SearchResult }) {
               <div className="flex size-7 items-center justify-center rounded-lg bg-card/70 border border-border/25 shadow-sm">
                 <Package className="size-3.5 text-muted-foreground/50" />
               </div>
-              <span className="text-[10px] font-bold text-foreground/70 uppercase tracking-wider">{item.package_type?.toUpperCase() ?? "RX"}</span>
+              <span className="text-10 font-bold text-foreground/70 uppercase tracking-wider">{item.package_type?.toUpperCase() ?? "RX"}</span>
             </div>
-            <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
+            <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-10 font-semibold ring-1 bg-card/80 backdrop-blur-sm", sc.text, sc.ring)}>
               <span className={cn("size-1.5 rounded-full", sc.dot)} />{statusLabel(item.status)}
             </span>
           </div>
           <div className="text-center">
-            <p className="text-[10px] font-medium text-muted-foreground/35 mb-1.5 uppercase tracking-[0.15em]">Tracking</p>
+            <p className="text-10 font-medium text-muted-foreground/35 mb-1.5 uppercase tracking-[0.15em]">Tracking</p>
             <p className="font-mono text-base font-black text-foreground tracking-tight leading-none break-all">{tid}</p>
           </div>
           <div>
-            <p className="text-[10px] font-medium text-muted-foreground/35 mb-0.5 uppercase tracking-wider">Destination</p>
-            <p className="text-[10px] font-semibold text-foreground truncate">{item.delivery_address || "—"}</p>
-            <p className="text-[10px] text-muted-foreground/55 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
+            <p className="text-10 font-medium text-muted-foreground/35 mb-0.5 uppercase tracking-wider">Destination</p>
+            <p className="text-10 font-semibold text-foreground truncate">{item.delivery_address || "—"}</p>
+            <p className="text-10 text-muted-foreground/55 truncate">{[item.delivery_city, item.delivery_state].filter(Boolean).join(", ")}</p>
           </div>
         </div>
       </div>
@@ -131,13 +131,13 @@ function Gallery({ photos, item }: { photos:string[]; item:SearchResult }) {
               className="absolute right-2 top-1/2 -translate-y-1/2 flex size-7 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors">
               <ChevronRight className="size-3.5" />
             </button>
-            <div className="absolute bottom-2 right-2 rounded-full bg-black/40 px-1.5 py-0.5 text-[10px] text-white font-medium">
+            <div className="absolute bottom-2 right-2 rounded-full bg-black/40 px-1.5 py-0.5 text-10 text-white font-medium">
               {active+1}/{photos.length}
             </div>
           </>
         )}
         <button type="button" onClick={() => window.open(photos[active], "_blank")}
-          className="absolute top-2 right-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white hover:bg-black/60 transition-colors">
+          className="absolute top-2 right-2 rounded-full bg-black/40 px-2 py-0.5 text-10 text-white hover:bg-black/60 transition-colors">
           View
         </button>
       </div>
@@ -173,8 +173,8 @@ function InfoRow({ icon:Icon, label, value, mono, action }: {
     <div className="flex items-start gap-2.5 py-2 border-b border-border/15 last:border-0">
       <Icon className="size-3 shrink-0 text-muted-foreground/30 mt-[3px]" />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider mb-0.5">{label}</p>
-        <p className={cn("text-xs font-medium text-foreground leading-snug break-words", mono && "font-mono text-[11px] text-primary")}>{value}</p>
+        <p className="text-10 font-semibold text-muted-foreground/40 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className={cn("text-xs font-medium text-foreground leading-snug break-words", mono && "font-mono text-11 text-primary")}>{value}</p>
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -210,11 +210,11 @@ function HistoryTab({ item }: { item:SearchResult }) {
       {history.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8">
           <Clock className="size-6 text-muted-foreground/20" />
-          <p className="text-[11px] text-muted-foreground/40 text-center">No previous deliveries found<br/>for this location</p>
+          <p className="text-11 text-muted-foreground/40 text-center">No previous deliveries found<br/>for this location</p>
         </div>
       ) : (
         <>
-          <p className="text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider mb-2">
+          <p className="text-10 font-semibold text-muted-foreground/40 uppercase tracking-wider mb-2">
             {history.length} previous deliveries near {item.delivery_city || "this address"}
           </p>
           <ol className="space-y-1.5">
@@ -225,11 +225,11 @@ function HistoryTab({ item }: { item:SearchResult }) {
                   <span className={cn("mt-1 size-1.5 rounded-full shrink-0", sc.dot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
-                      <span className={cn("text-[10px] font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
+                      <span className="font-mono text-10 text-primary font-semibold truncate">{h.stop_id ?? h.id}</span>
+                      <span className={cn("text-10 font-semibold rounded-full px-1.5 py-0.5 shrink-0", sc.bg, sc.text)}>{statusLabel(h.status)}</span>
                     </div>
-                    <p className="text-[11px] text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
-                    <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                    <p className="text-11 text-foreground font-medium truncate mt-0.5">{toTitleCase(h.recipient_name) || "—"}</p>
+                    <p className="text-10 text-muted-foreground/50 mt-0.5">
                       {formatDate(h.delivery_date ?? h.created_at)}
                       {h.driver_name && ` · ${toTitleCase(h.driver_name)}`}
                     </p>
@@ -273,8 +273,8 @@ function ActivityTab({ item }: { item:SearchResult }) {
                 {i < events.length - 1 && <div className="w-px flex-1 bg-border/25 my-1" style={{ minHeight:"14px" }} />}
               </div>
               <div className="pb-3.5 pt-0.5 flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-foreground leading-snug">{ev.label}</p>
-                <p className="text-[10px] text-muted-foreground/45 mt-0.5">{ev.ts}</p>
+                <p className="text-11 font-medium text-foreground leading-snug">{ev.label}</p>
+                <p className="text-10 text-muted-foreground/45 mt-0.5">{ev.ts}</p>
               </div>
             </li>
           );
@@ -295,11 +295,11 @@ function PhotoGallery({ photos }: { photos: string[] }) {
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-muted/25 to-card shadow-sm">
         {/* Frame header */}
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 text-11 font-medium text-muted-foreground">
             <Camera className="size-3.5 text-muted-foreground/70" />
             Proof of delivery
           </span>
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 tabular-nums">
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-10 font-medium text-muted-foreground/70 tabular-nums">
             {active + 1} / {photos.length}
           </span>
         </div>
@@ -313,7 +313,7 @@ function PhotoGallery({ photos }: { photos: string[] }) {
               transition={{ duration: 0.15 }} />
           </AnimatePresence>
           <button type="button" onClick={() => window.open(photos[active], "_blank")}
-            className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-lg bg-black/45 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/65">
+            className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-lg bg-black/45 px-2 py-1 text-10 font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/65">
             <ExternalLink className="size-2.5" />View
           </button>
         </div>
@@ -384,7 +384,7 @@ function StatusStepper({ status }: { status: string }) {
       </div>
       <div className="mt-1.5 flex justify-between">
         {steps.map((s, i) => (
-          <span key={s.key} className={cn("text-[10px] font-medium tracking-tight", i <= reached ? "text-foreground/70" : "text-muted-foreground/40")}>
+          <span key={s.key} className={cn("text-10 font-medium tracking-tight", i <= reached ? "text-foreground/70" : "text-muted-foreground/40")}>
             {s.label}
           </span>
         ))}
@@ -404,7 +404,7 @@ function FooterAction({ icon: Icon, label, onClick, disabled }: {
       className="flex flex-col items-center gap-1 rounded-lg py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
     >
       <Icon className="size-4" />
-      <span className="text-[10px] font-medium">{label}</span>
+      <span className="text-10 font-medium">{label}</span>
     </button>
   );
 }
@@ -441,10 +441,10 @@ function PanelRow({ icon: Icon, label, value, mono, muted }: {
   if (!value || value === "—") return null;
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0">
-      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
       <span className={cn(
-        "flex min-w-0 items-center gap-1.5 text-right text-[11px] font-medium leading-snug",
-        mono ? "font-mono text-[11px] text-primary" : "text-foreground",
+        "flex min-w-0 items-center gap-1.5 text-right text-11 font-medium leading-snug",
+        mono ? "font-mono text-11 text-primary" : "text-foreground",
         muted && "font-normal text-muted-foreground/50",
       )}>
         {Icon && <Icon className="size-3 shrink-0 text-muted-foreground/40" />}
@@ -528,7 +528,7 @@ function SpokePanel({ item, onClose }: { item: SearchResult; onClose: () => void
             <motion.div className={cn("size-2 rounded-full", dotColor)}
               animate={isTransit ? { scale:[1,1.5,1], opacity:[1,0.4,1] } : {}}
               transition={{ duration:1.8, repeat:Infinity }} />
-            <span className="text-[11px] font-semibold text-foreground/70">{statusLabel(item.status)}</span>
+            <span className="text-11 font-semibold text-foreground/70">{statusLabel(item.status)}</span>
           </div>
           <div className="flex items-center gap-1">
             <button type="button" title="Open full page" onClick={() => router.push(`/dashboard/search/${encodeURIComponent(tid)}`)} className="flex size-7 items-center justify-center rounded-md text-muted-foreground/50 transition-all hover:bg-muted hover:text-foreground"><ExternalLink className="size-3.5" /></button>
@@ -552,22 +552,22 @@ function SpokePanel({ item, onClose }: { item: SearchResult; onClose: () => void
               </div>
               <span className="text-xs font-medium text-foreground/80">{toTitleCase(item.driver_name)}</span>
               {item.route_title && (
-                <span className="text-[11px] text-muted-foreground/60">· {item.route_title.length > 20 ? item.route_title.slice(0, 20) + "…" : item.route_title}</span>
+                <span className="text-11 text-muted-foreground/60">· {item.route_title.length > 20 ? item.route_title.slice(0, 20) + "…" : item.route_title}</span>
               )}
             </div>
           )}
 
           {/* Pills row */}
           <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground/70">
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-10 font-semibold text-muted-foreground/70">
               <Hash className="size-2.5" />{tid.length > 16 ? "…" + tid.slice(-13) : tid}
             </span>
             {item.source === "stop"
-              ? <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">Stop</span>
-              : <span className="rounded-full bg-warning px-2 py-0.5 text-[10px] font-semibold text-white">Draft</span>}
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground/70">{item.package_type ?? "RX"}</span>
-            {item.is_same_day && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">⚡ Xpress</span>}
-            {item.collect_cod && <span className="rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-600 dark:bg-teal-500/15 dark:text-teal-300">💵 COD</span>}
+              ? <span className="rounded-full bg-primary px-2 py-0.5 text-10 font-semibold text-white">Stop</span>
+              : <span className="rounded-full bg-warning px-2 py-0.5 text-10 font-semibold text-white">Draft</span>}
+            <span className="rounded bg-muted px-1.5 py-0.5 text-10 font-bold uppercase text-muted-foreground/70">{item.package_type ?? "RX"}</span>
+            {item.is_same_day && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-10 font-semibold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">⚡ Xpress</span>}
+            {item.collect_cod && <span className="rounded-full bg-teal-50 px-1.5 py-0.5 text-10 font-semibold text-teal-600 dark:bg-teal-500/15 dark:text-teal-300">💵 COD</span>}
           </div>
         </div>
       </div>
@@ -595,18 +595,18 @@ function SpokePanel({ item, onClose }: { item: SearchResult; onClose: () => void
                   <div className="flex size-6 items-center justify-center rounded-full bg-success/15">
                     <CheckCircle2 className="size-3.5 text-success" />
                   </div>
-                  <span className="text-[13px] font-semibold text-success">Delivered</span>
-                  {item.eta_at && <span className="ml-auto text-[11px] text-success/70 font-medium">{formatTime(item.eta_at)}</span>}
+                  <span className="text-13 font-semibold text-success">Delivered</span>
+                  {item.eta_at && <span className="ml-auto text-11 text-success/70 font-medium">{formatTime(item.eta_at)}</span>}
                 </div>
                 {hasCoords && (
-                  <button type="button" onClick={openMap} className="mt-2 inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-1 text-[10px] font-medium text-success hover:bg-success/20 transition-colors">
+                  <button type="button" onClick={openMap} className="mt-2 inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-1 text-10 font-medium text-success hover:bg-success/20 transition-colors">
                     <MapPin className="size-2.5" />Exact location ›
                   </button>
                 )}
                 <div className="mt-2 space-y-0.5">
                   <div className="flex items-center justify-between py-1">
-                    <span className="text-[11px] text-success/60">Delivered on</span>
-                    <span className="text-[11px] font-semibold text-success">{item.eta_at ? `${formatDate(item.eta_at)} · ${formatTime(item.eta_at)}` : "—"}</span>
+                    <span className="text-11 text-success/60">Delivered on</span>
+                    <span className="text-11 font-semibold text-success">{item.eta_at ? `${formatDate(item.eta_at)} · ${formatTime(item.eta_at)}` : "—"}</span>
                   </div>
                 </div>
                 {/* Proof photos live in the media gallery above — no duplicate here. */}
@@ -616,8 +616,8 @@ function SpokePanel({ item, onClose }: { item: SearchResult; onClose: () => void
                 <div className="flex size-6 items-center justify-center rounded-full bg-destructive/15">
                   <XCircle className="size-3.5 text-destructive" />
                 </div>
-                <span className="text-[13px] font-semibold text-destructive">Delivery failed</span>
-                {item.eta_at && <span className="ml-auto text-[11px] text-destructive/70 font-medium">{formatTime(item.eta_at)}</span>}
+                <span className="text-13 font-semibold text-destructive">Delivery failed</span>
+                {item.eta_at && <span className="ml-auto text-11 text-destructive/70 font-medium">{formatTime(item.eta_at)}</span>}
               </div>
             )}
           </div>
@@ -628,7 +628,7 @@ function SpokePanel({ item, onClose }: { item: SearchResult; onClose: () => void
           <div className="mx-3 mt-3 rounded-xl border border-warning/25 bg-warning/[0.08] px-3 py-2.5">
             <div className="mb-1 flex items-center gap-1.5">
               <FileText className="size-3 text-warning" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-warning/70">Driver Note</span>
+              <span className="text-10 font-semibold uppercase tracking-wider text-warning/70">Driver Note</span>
             </div>
             <p className="text-xs font-medium leading-snug text-foreground/80">{item.notes}</p>
           </div>
@@ -795,7 +795,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
       </div>
       <div className="text-center">
         <p className="text-sm font-semibold text-foreground">{error ?? "Shipment not found"}</p>
-        <p className="text-[11px] text-muted-foreground mt-1 font-mono">{id}</p>
+        <p className="text-11 text-muted-foreground mt-1 font-mono">{id}</p>
       </div>
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={handleClose}>
@@ -832,12 +832,12 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
           {/* Tracking ID */}
           <button type="button" onClick={handleCopy}
             className="flex items-center gap-1.5 group">
-            <span className="font-mono text-[13px] font-bold text-foreground tracking-tight">{tid}</span>
+            <span className="font-mono text-13 font-bold text-foreground tracking-tight">{tid}</span>
             <Copy className={cn("size-3 transition-colors", copied ? "text-emerald-500" : "text-muted-foreground/30 group-hover:text-muted-foreground")} />
           </button>
 
           {/* Status */}
-          <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 shrink-0", sc.bg, sc.text, sc.ring)}>
+          <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-10 font-semibold ring-1 shrink-0", sc.bg, sc.text, sc.ring)}>
             <motion.span className={cn("size-1.5 rounded-full", sc.dot)}
               animate={isInTransit ? { scale:[1,1.5,1], opacity:[1,0.4,1] } : {}}
               transition={{ duration:2, repeat:Infinity }} />
@@ -845,17 +845,17 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
           </span>
 
           {/* Source + Type */}
-          <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold shrink-0", src.bg, src.text)}>
+          <span className={cn("rounded-full px-1.5 py-0.5 text-10 font-semibold shrink-0", src.bg, src.text)}>
             {item.source === "stop" ? "Stop" : "Draft"}
           </span>
-          <span className="rounded-full bg-muted text-muted-foreground/70 px-1.5 py-0.5 text-[10px] font-medium uppercase shrink-0">
+          <span className="rounded-full bg-muted text-muted-foreground/70 px-1.5 py-0.5 text-10 font-medium uppercase shrink-0">
             {item.package_type ?? "RX"}
           </span>
 
           {/* Flag badges */}
-          {item.is_same_day && <span className="rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 px-1.5 py-0.5 text-[10px] font-semibold shrink-0 hidden sm:inline">⚡ Xpress</span>}
-          {item.collect_cod && <span className="rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 text-[10px] font-semibold shrink-0 hidden sm:inline">💵 COD</span>}
-          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 text-[10px] font-semibold shrink-0 hidden md:inline">✍</span>}
+          {item.is_same_day && <span className="rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 px-1.5 py-0.5 text-10 font-semibold shrink-0 hidden sm:inline">⚡ Xpress</span>}
+          {item.collect_cod && <span className="rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 text-10 font-semibold shrink-0 hidden sm:inline">💵 COD</span>}
+          {item.requires_signature && <span className="rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 text-10 font-semibold shrink-0 hidden md:inline">✍</span>}
 
           {/* Actions */}
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -863,7 +863,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button size="sm" variant="outline"
-                    className="h-6 px-2 text-[10px] border-rose-500/25 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:border-rose-300 gap-1">
+                    className="h-6 px-2 text-10 border-rose-500/25 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:border-rose-300 gap-1">
                     <Ban className="size-2.5" />Cancel
                   </Button>
                 </AlertDialogTrigger>
@@ -884,7 +884,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
               </AlertDialog>
             )}
             {isDraft && (
-              <Button size="sm" className="h-6 px-2 text-[10px] gap-1"
+              <Button size="sm" className="h-6 px-2 text-10 gap-1"
                 onClick={() => router.push('/dashboard/stops')}>
                 Process Order
               </Button>
@@ -892,7 +892,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
           </div>
         </div>
         {/* Address subtitle */}
-        {address && <p className="text-[10px] text-muted-foreground/50 mt-1 truncate pl-0.5">{address}</p>}
+        {address && <p className="text-10 text-muted-foreground/50 mt-1 truncate pl-0.5">{address}</p>}
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
@@ -912,14 +912,14 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
           {/* Contact card */}
           <div className="rounded-xl border border-border/35 bg-card overflow-hidden">
             <div className="px-3 py-2 border-b border-border/25 bg-muted/10">
-              <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Contact</p>
+              <p className="text-10 font-semibold text-muted-foreground/50 uppercase tracking-wider">Contact</p>
             </div>
             <div className="px-3 py-0.5">
               <InfoRow icon={User}   label="Name"    value={toTitleCase(item.recipient_name) || "—"} />
               <InfoRow icon={Phone}  label="Phone"   value={formatPhone(item.recipient_phone)}
                 action={item.recipient_phone ? (
                   <a href={`tel:${item.recipient_phone}`}
-                    className="text-[10px] text-primary hover:underline">Call</a>
+                    className="text-10 text-primary hover:underline">Call</a>
                 ) : undefined} />
               <InfoRow icon={MapPin} label="Address" value={address || "—"} />
             </div>
@@ -928,8 +928,8 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
           {/* Notes (if any) */}
           {item.notes && (
             <div className="rounded-xl border border-amber-500/20 bg-amber-50/50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold text-amber-600/70 uppercase tracking-wider mb-1">Notes</p>
-              <p className="text-[11px] text-amber-900/80 leading-relaxed">{item.notes}</p>
+              <p className="text-10 font-semibold text-amber-600/70 uppercase tracking-wider mb-1">Notes</p>
+              <p className="text-11 text-amber-900/80 leading-relaxed">{item.notes}</p>
             </div>
           )}
         </div>
@@ -960,7 +960,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
                   { v:"history",   l:"History" },
                 ].map(t => (
                   <TabsTrigger key={t.v} value={t.v}
-                    className="h-full rounded-none px-3 text-[11px] font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent text-muted-foreground hover:text-foreground transition-none bg-transparent shadow-none">
+                    className="h-full rounded-none px-3 text-11 font-medium border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent text-muted-foreground hover:text-foreground transition-none bg-transparent shadow-none">
                     {t.l}
                   </TabsTrigger>
                 ))}
@@ -983,7 +983,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
                     { label:"Service", value:item.service_type ?? "Standard", dot:null },
                   ].map(c => (
                     <div key={c.label} className="rounded-lg border border-border/30 bg-muted/10 px-3 py-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground/45 uppercase tracking-wider mb-1">{c.label}</p>
+                      <p className="text-10 font-semibold text-muted-foreground/45 uppercase tracking-wider mb-1">{c.label}</p>
                       <div className="flex items-center gap-1.5">
                         {c.dot && <span className={cn("size-1.5 rounded-full shrink-0", c.dot)} />}
                         <p className="text-xs font-semibold text-foreground truncate">{String(c.value)}</p>
@@ -1004,10 +1004,10 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
                 {/* Flags */}
                 {(item.is_same_day || item.collect_cod || item.requires_signature || item.return_to_sender) && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {item.is_same_day      && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
-                    {item.collect_cod      && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-400">💵 COD {item.collect_amount ? formatCurrency(item.collect_amount) : ""}</span>}
-                    {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature required</span>}
-                    {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">↩ Return to sender</span>}
+                    {item.is_same_day      && <span className="rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-10 font-semibold text-violet-700 dark:text-violet-400">⚡ Xpress</span>}
+                    {item.collect_cod      && <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-10 font-semibold text-teal-700 dark:text-teal-400">💵 COD {item.collect_amount ? formatCurrency(item.collect_amount) : ""}</span>}
+                    {item.requires_signature && <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-10 font-semibold text-indigo-700 dark:text-indigo-400">✍ Signature required</span>}
+                    {item.return_to_sender && <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-10 font-semibold text-rose-600 dark:text-rose-400">↩ Return to sender</span>}
                   </div>
                 )}
               </TabsContent>
@@ -1059,7 +1059,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
                 {!item.driver_name && (
                   <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/20 px-3 py-2.5 flex items-center gap-2">
                     <AlertCircle className="size-3.5 text-amber-500 shrink-0" />
-                    <p className="text-[11px] text-amber-700">This stop has not been assigned to a driver yet.</p>
+                    <p className="text-11 text-amber-700">This stop has not been assigned to a driver yet.</p>
                   </div>
                 )}
               </TabsContent>
@@ -1069,7 +1069,7 @@ export function StopDetailView({ id, initialData, mode, onClose }: StopDetailVie
                 {item.photos.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-10">
                     <Package className="size-7 text-muted-foreground/20" />
-                    <p className="text-[11px] text-muted-foreground/40 text-center">No proof photos available<br/>for this stop</p>
+                    <p className="text-11 text-muted-foreground/40 text-center">No proof photos available<br/>for this stop</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-1.5">

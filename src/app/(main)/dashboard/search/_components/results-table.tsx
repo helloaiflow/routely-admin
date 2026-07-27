@@ -63,7 +63,7 @@ function FilterPopover({ results, filters, onApply }: {
   );
   const Sect = ({ title, items, field }: { title:string; items:readonly string[]; field:keyof FilterState }) => (
     <div>
-      <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40">{title}</p>
+      <p className="mb-1 px-2 text-10 font-bold uppercase tracking-wider text-muted-foreground/40">{title}</p>
       {items.map(v=><Row key={v}
         label={field==="statuses"?statusLabel(v):v==="stop"?"Stop":v==="draft"?"Draft":v.toUpperCase()}
         active={local[field].includes(v)}
@@ -75,18 +75,18 @@ function FilterPopover({ results, filters, onApply }: {
     <Popover onOpenChange={open=>{if(open)setLocal(filters);}}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className={cn(
-          "h-7 gap-1.5 text-[11px] border-border/50 transition-all",
+          "h-7 gap-1.5 text-11 border-border/50 transition-all",
           n>0?"border-primary/50 bg-primary/[0.04] text-primary":"text-muted-foreground hover:text-foreground"
         )}>
           <SlidersHorizontal className="size-3"/>Filter
-          {n>0&&<span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">{n}</span>}
+          {n>0&&<span className="flex size-4 items-center justify-center rounded-full bg-primary text-10 font-bold text-white">{n}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-3" align="end">
         <div className="mb-2.5 flex items-center justify-between">
           <p className="text-xs font-semibold text-foreground">Filters</p>
           {n>0&&<button type="button" onClick={()=>{setLocal(EMPTY);onApply(EMPTY);}}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+            className="flex items-center gap-1 text-11 text-muted-foreground hover:text-foreground">
             <X className="size-3"/>Clear</button>}
         </div>
         <div className="max-h-64 space-y-3 overflow-y-auto">
@@ -96,7 +96,7 @@ function FilterPopover({ results, filters, onApply }: {
           {opts.cities.length>1&&<Sect title="City" items={opts.cities as string[]} field="cities"/>}
         </div>
         <div className="mt-3 border-t border-border/30 pt-2.5">
-          <Button size="sm" className="h-7 w-full text-[11px]" onClick={()=>onApply(local)}>Apply</Button>
+          <Button size="sm" className="h-7 w-full text-11" onClick={()=>onApply(local)}>Apply</Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -141,7 +141,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
   // Sort button helper
   const SortBtn = ({ col, label }: { col:SortKey; label:string }) => (
     <button type="button" onClick={()=>handleSort(col)}
-      className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 hover:text-foreground/80 transition-colors">
+      className="inline-flex items-center gap-1 text-11 font-bold uppercase tracking-wider text-muted-foreground/50 hover:text-foreground/80 transition-colors">
       {label}
       {sort.key===col
         ? sort.dir==="asc" ? <ChevronUp className="size-3 text-primary"/> : <ChevronDown className="size-3 text-primary"/>
@@ -191,7 +191,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
           <span className="font-semibold text-foreground/80 tabular-nums">{filtered.length}</span>
           {" "}{filtered.length!==1?"results":"result"}
           {fn>0&&<span className="ml-1 font-medium text-primary">(filtered)</span>}
-          {fromDrafts>0&&<span className="ml-2 text-muted-foreground/50 text-[11px]">{fromStops} stops · {fromDrafts} drafts</span>}
+          {fromDrafts>0&&<span className="ml-2 text-muted-foreground/50 text-11">{fromStops} stops · {fromDrafts} drafts</span>}
         </p>
         <FilterPopover results={results} filters={filters} onApply={f=>{setFilters(f);setPage(1);}}/>
       </div>
@@ -207,13 +207,13 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
               <th className="px-4 py-2.5 text-left"><SortBtn col="delivery_city" label="Address"/></th>
               {/* 3. Phone */}
               <th className="px-4 py-2.5 text-left">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Phone</span>
+                <span className="text-11 font-bold uppercase tracking-wider text-muted-foreground/50">Phone</span>
               </th>
               {/* 4. Status */}
               <th className="px-4 py-2.5 text-left"><SortBtn col="status" label="Status"/></th>
               {/* 5. Driver */}
               <th className="px-4 py-2.5 text-left">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Driver</span>
+                <span className="text-11 font-bold uppercase tracking-wider text-muted-foreground/50">Driver</span>
               </th>
               {/* 6. Date */}
               <th className="px-4 py-2.5 text-right"><SortBtn col="created_at" label="Date"/></th>
@@ -221,7 +221,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
           </thead>
           <tbody className="divide-y divide-border/60">
             {pageData.length===0 ? (
-              <tr><td colSpan={6} className="py-14 text-center text-[13px] text-muted-foreground/50">No results found</td></tr>
+              <tr><td colSpan={6} className="py-14 text-center text-13 text-muted-foreground/50">No results found</td></tr>
             ) : pageData.map(r=>{
               const tid   = r.stop_id??r.id;
               const isSel = !!selectedId&&(tid===selectedId||r.id===selectedId||r.stop_id===selectedId);
@@ -236,21 +236,21 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
 
                   {/* 1. Recipient: name + tracking */}
                   <td className="px-4 py-3.5">
-                    <p className="truncate max-w-[170px] text-[13px] font-semibold leading-tight text-foreground">
+                    <p className="truncate max-w-[170px] text-13 font-semibold leading-tight text-foreground">
                       {toTitleCase(r.recipient_name)||"—"}
                     </p>
-                    <p className="mt-1 truncate max-w-[170px] font-mono text-[11px] text-primary/85">
+                    <p className="mt-1 truncate max-w-[170px] font-mono text-11 text-primary/85">
                       {tid}
                     </p>
                   </td>
 
                   {/* 2. Address — single clean line */}
                   <td className="px-4 py-3.5 max-w-[280px]">
-                    <p className="truncate text-[13px] text-foreground/85" title={r.delivery_address}>
+                    <p className="truncate text-13 text-foreground/85" title={r.delivery_address}>
                       {r.delivery_address||"—"}
                     </p>
                     {(r.delivery_city||r.delivery_state)&&(
-                      <p className="mt-1 truncate text-[11px] text-muted-foreground/55">
+                      <p className="mt-1 truncate text-11 text-muted-foreground/55">
                         {[r.delivery_city,r.delivery_state].filter(Boolean).join(", ")}{r.delivery_zip?` ${r.delivery_zip}`:""}
                       </p>
                     )}
@@ -258,17 +258,17 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
 
                   {/* 3. Phone */}
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <p className="text-[13px] tabular-nums text-foreground/70">{formatPhone(r.recipient_phone)||"—"}</p>
+                    <p className="text-13 tabular-nums text-foreground/70">{formatPhone(r.recipient_phone)||"—"}</p>
                   </td>
 
                   {/* 4. Status — badge + subtle source/type (no chip stack) */}
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",st.bg,st.text)}>
+                      <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-11 font-semibold",st.bg,st.text)}>
                         <span className={cn("size-1.5 rounded-full",st.dot)}/>
                         {statusLabel(r.status)}
                       </span>
-                      <span className="text-[10px] font-medium text-muted-foreground/50">
+                      <span className="text-10 font-medium text-muted-foreground/50">
                         {r.source==="stop"?"Stop":"Draft"} · {(r.package_type??"RX").toUpperCase()}
                         {r.is_same_day?" · ⚡":""}{r.collect_cod?" · 💵":""}
                       </span>
@@ -278,13 +278,13 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
                   {/* 5. Driver — single line */}
                   <td className="px-4 py-3.5 max-w-[150px]">
                     {r.driver_name
-                      ? <p className="truncate text-[13px] font-medium text-foreground/80">{toTitleCase(r.driver_name)}</p>
-                      : <span className="text-[11px] text-muted-foreground/40">Unassigned</span>}
+                      ? <p className="truncate text-13 font-medium text-foreground/80">{toTitleCase(r.driver_name)}</p>
+                      : <span className="text-11 text-muted-foreground/40">Unassigned</span>}
                   </td>
 
                   {/* 6. Date — single line */}
                   <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                    <p className="text-[13px] font-medium text-muted-foreground">
+                    <p className="text-13 font-medium text-muted-foreground">
                       {dt.date}{dt.time?<span className="text-muted-foreground/50"> · {dt.time}</span>:""}
                     </p>
                   </td>
@@ -298,7 +298,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
       {/* ── Mobile: simple list, opens panel (not new page) ──────────────── */}
       <div className="sm:hidden divide-y divide-border/60">
         {pageData.length===0 ? (
-          <div className="py-12 text-center text-[13px] text-muted-foreground/50">No results found</div>
+          <div className="py-12 text-center text-13 text-muted-foreground/50">No results found</div>
         ) : pageData.map(r=>{
           const tid   = r.stop_id??r.id;
           const isSel = !!selectedId&&(tid===selectedId||r.id===selectedId||r.stop_id===selectedId);
@@ -315,19 +315,19 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[13px] font-semibold text-foreground truncate">
+                  <p className="text-13 font-semibold text-foreground truncate">
                     {toTitleCase(r.recipient_name)||"—"}
                   </p>
-                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",st.bg,st.text)}>
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-10 font-semibold",st.bg,st.text)}>
                     {statusLabel(r.status)}
                   </span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/70 truncate">
+                <p className="mt-0.5 text-11 text-muted-foreground/70 truncate">
                   {r.delivery_address||"—"}{r.delivery_city?`, ${r.delivery_city}`:""}
                 </p>
                 <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="font-mono text-[10px] font-bold text-primary truncate">{tid}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground/50">{dt.date}</span>
+                  <span className="font-mono text-10 font-bold text-primary truncate">{tid}</span>
+                  <span className="shrink-0 text-11 text-muted-foreground/50">{dt.date}</span>
                 </div>
               </div>
             </button>
@@ -338,7 +338,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
       {/* Pagination */}
       {sorted.length>0&&(
         <div className="flex items-center justify-between border-t border-border/60 bg-muted/40 px-4 py-2">
-          <p className="text-[11px] text-muted-foreground/50 tabular-nums">
+          <p className="text-11 text-muted-foreground/50 tabular-nums">
             {sorted.length<=PAGE_SIZE
               ? `${sorted.length} total`
               : `${(safePage-1)*PAGE_SIZE+1}–${Math.min(safePage*PAGE_SIZE,sorted.length)} of ${sorted.length}`}
@@ -349,7 +349,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
                 disabled={safePage<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
                 <ChevronLeft className="size-3.5"/>
               </Button>
-              <span className="px-2 text-[11px] text-muted-foreground/70 tabular-nums">{safePage}/{totalPages}</span>
+              <span className="px-2 text-11 text-muted-foreground/70 tabular-nums">{safePage}/{totalPages}</span>
               <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground/50 hover:text-foreground/80"
                 disabled={safePage>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>
                 <ChevronRight className="size-3.5"/>

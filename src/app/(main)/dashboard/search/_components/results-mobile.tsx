@@ -78,14 +78,14 @@ export function ResultsMobile({ results, loading, onSelect }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-foreground">{toTitleCase(r.recipient_name) || "—"}</span>
-                  <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">{tid.length > 18 ? "…" + tid.slice(-15) : tid}</span>
+                  <span className="ml-auto shrink-0 font-mono text-11 text-muted-foreground">{tid.length > 18 ? "…" + tid.slice(-15) : tid}</span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{[r.delivery_address, r.delivery_city].filter(Boolean).join(", ") || "—"}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground/70">{r.package_type ?? "RX"}</span>
-                  {r.route_title && <span className="max-w-[120px] truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{r.route_title}</span>}
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-10 font-medium uppercase text-muted-foreground/70">{r.package_type ?? "RX"}</span>
+                  {r.route_title && <span className="max-w-[120px] truncate rounded bg-muted px-1.5 py-0.5 text-10 text-muted-foreground">{r.route_title}</span>}
                   {r.driver_name && (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1 text-10 text-muted-foreground">
                       <span className="flex size-3.5 items-center justify-center rounded-full bg-primary/10 text-[7.5px] font-bold text-primary">{getInitials(r.driver_name)}</span>
                       {toTitleCase(r.driver_name)}
                     </span>
@@ -93,8 +93,8 @@ export function ResultsMobile({ results, loading, onSelect }: Props) {
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-                <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">{displayDate(r)}</span>
-                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", badge)}>{statusLabel(r.status)}</span>
+                <span className="whitespace-nowrap text-11 tabular-nums text-muted-foreground">{displayDate(r)}</span>
+                <span className={cn("rounded-full px-1.5 py-0.5 text-10 font-semibold", badge)}>{statusLabel(r.status)}</span>
               </div>
             </button>
           );

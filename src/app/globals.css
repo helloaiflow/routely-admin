@@ -19,8 +19,11 @@
   --text-13: calc(13 / 13.5 * 1rem);
   --text-12: calc(12 / 13.5 * 1rem);
   --text-11: calc(11 / 13.5 * 1rem);
-  --text-10: calc(10 / 13.5 * 1rem);
-  --text-9: calc(9 / 13.5 * 1rem);
+  /* Legibility floor: at the smallest dial steps (root 11.5/12px) the two
+   * micro sizes would compress below 9px rendered — max() pins them at the
+   * floor while they keep scaling normally on larger roots. */
+  --text-10: max(calc(10 / 13.5 * 1rem), 9px);
+  --text-9: max(calc(9 / 13.5 * 1rem), 9px);
 
   /* ── Dimension tokens (density system, Phase 1) ──────────────────────────
    * The missing half of the token system: every control/row/panel dimension

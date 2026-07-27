@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
 import { FleetRouteMap } from "./fleet-route-map";
@@ -541,15 +542,15 @@ export function HubsTab() {
         </div>
         <div className="px-4 pb-3">
           <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
-            {form.name.trim() || "Untitled hub"}
+            {formatDisplayCase(form.name.trim()) || "Untitled hub"}
           </p>
           {form.line1 && (
             <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground/70 leading-tight">
-              {form.line1}
+              {formatDisplayCase(form.line1)}
             </p>
           )}
           {headerAddr && (
-            <p className="truncate text-11 text-muted-foreground/55">{headerAddr}</p>
+            <p className="truncate text-11 text-muted-foreground/55">{formatDisplayCase(headerAddr)}</p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {form.is_default && (
@@ -909,12 +910,12 @@ function HubRow({
         <Building2 className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-13 font-semibold text-foreground leading-tight">{hub.name}</p>
+        <p className="truncate text-13 font-semibold text-foreground leading-tight">{formatDisplayCase(hub.name)}</p>
         {a.line1 && (
-          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{a.line1}</p>
+          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{formatDisplayCase(a.line1)}</p>
         )}
         {cityLine && (
-          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{cityLine}</p>
+          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{formatDisplayCase(cityLine)}</p>
         )}
         <p className="mt-0.5 truncate font-mono text-10 tabular-nums text-muted-foreground/50">
           {c.start}–{c.end} · max {c.maxStops}

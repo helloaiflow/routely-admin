@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayCase } from "@/lib/format-display";
 import {
   AlertTriangle,
   CalendarClock,
@@ -35,8 +36,8 @@ function AddressBlock({ label, a }: { label: string; a?: LabelAddress }) {
   return (
     <div className="min-w-0">
       <p className="type-label mb-1 text-muted-foreground">{label}</p>
-      <p className="truncate font-medium text-13">{a.name ?? "—"}</p>
-      <p className="truncate text-11 text-muted-foreground">{[a.street1, a.street2].filter(Boolean).join(", ")}</p>
+      <p className="truncate font-medium text-13">{formatDisplayCase(a.name) || "—"}</p>
+      <p className="truncate text-11 text-muted-foreground">{formatDisplayCase([a.street1, a.street2].filter(Boolean).join(", "))}</p>
       <p className="truncate text-11 text-muted-foreground">
         {[a.city, a.state, a.zip].filter(Boolean).join(", ")}
       </p>

@@ -91,6 +91,7 @@ async function fetchJsonSafe(url: string, timeoutMs = 15_000): Promise<Record<st
 }
 import { fetchFailedScansCount, resolveFailedScan } from "@/lib/ocr/failed-scans-client";
 import { cn } from "@/lib/utils";
+import { formatDisplayCase } from "@/lib/format-display";
 
 import type { OCRSubmitData } from "./_components/ocr-scan-modal";
 import { PrintLabelDialog } from "./_components/print-label-dialog";
@@ -508,9 +509,7 @@ function fmtStopDate(iso: string) {
     return "—";
   }
 }
-function toTitle(s: string) {
-  return (s || "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const toTitle = (s: string) => formatDisplayCase(s);
 
 /* ── Address Autocomplete ─────────────────────────────────────────────────── */
 function AddrSearch({

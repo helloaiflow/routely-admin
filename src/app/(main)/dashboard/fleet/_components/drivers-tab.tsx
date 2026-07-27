@@ -51,6 +51,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
 import { FleetRouteMap } from "./fleet-route-map";
@@ -717,7 +718,7 @@ export function DriversTab() {
         </div>
         <div className="px-4 pb-3">
           <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
-            {form.name.trim() || "Untitled driver"}
+            {formatDisplayCase(form.name.trim()) || "Untitled driver"}
           </p>
           {form.phone && (
             <p className="mt-0.5 truncate font-mono text-xs font-medium text-muted-foreground/70 leading-tight tabular-nums">
@@ -726,7 +727,7 @@ export function DriversTab() {
           )}
           {(form.line1 || headerAddr) && (
             <p className="truncate text-11 text-muted-foreground/55">
-              {[form.line1, headerAddr].filter(Boolean).join(" · ")}
+              {formatDisplayCase([form.line1, headerAddr].filter(Boolean).join(" · "))}
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -1061,12 +1062,12 @@ function DriverRow({
         <Users className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-13 font-semibold text-foreground leading-tight">{driver.name}</p>
+        <p className="truncate text-13 font-semibold text-foreground leading-tight">{formatDisplayCase(driver.name)}</p>
         <p className="mt-0.5 truncate font-mono text-11 tabular-nums text-foreground/65 leading-tight">
           {formatPhone(driver.phone)}
         </p>
         <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
-          {driver.all_hubs ? "All hubs" : hubNames(ids)}
+          {driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids))}
         </p>
         {vehicle && (
           <p className="mt-0.5 truncate text-10 text-muted-foreground/50 leading-tight">{vehicle}</p>

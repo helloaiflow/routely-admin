@@ -283,10 +283,8 @@ function pkgMeta(t: string): { emoji: string; label: string } {
   if (x === "internal") return { emoji: "📦", label: "Internal" };
   return { emoji: "📦", label: x ? x.toUpperCase() : "Package" };
 }
-function toTitleCase(s: string | null | undefined): string {
-  if (!s) return "";
-  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { formatDisplayCase } from "@/lib/format-display";
+const toTitleCase = (s: string | null | undefined) => formatDisplayCase(s);
 
 // ── Progress timeline (5 nodes) ──────────────────────────────────────────
 // Canonical sequence (always the same 5 steps): Draft → Unassigned → Assigned →

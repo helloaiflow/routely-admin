@@ -3,10 +3,16 @@
 // formatPhone / formatDate / formatTime / formatCurrency anywhere else; import
 // from "@/lib/ui/format". (search/_helpers + default/_helpers re-export these.)
 
+import { formatDisplayCase } from "@/lib/format-display";
+
+// Canonical display casing for DB ALL-CAPS data. Delegates to
+// formatDisplayCase: preserves FL/directionals/LLC, ordinals (12th), name
+// particles (de la), and leaves already-mixed-case input untouched.
 export function toTitleCase(s: string): string {
-  if (!s) return s;
-  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return formatDisplayCase(s);
 }
+
+export { formatDisplayCase };
 
 export function formatPhone(phone: string | null | undefined): string {
   if (!phone) return "—";

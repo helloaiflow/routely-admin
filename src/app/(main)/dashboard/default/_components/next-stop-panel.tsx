@@ -66,10 +66,8 @@ function _fmtDate(v: string | null | undefined): string {
   }
 }
 
-function toTitleCase(s: string): string {
-  if (!s) return s;
-  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { formatDisplayCase } from "@/lib/format-display";
+const toTitleCase = (s: string) => formatDisplayCase(s);
 
 // Format a US phone as (XXX) XXX-XXXX for the monitor row. Strips non-digits,
 // drops a leading country-code 1 on 11-digit E.164, and degrades gracefully on

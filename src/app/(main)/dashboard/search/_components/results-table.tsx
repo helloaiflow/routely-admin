@@ -247,7 +247,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
                   {/* 2. Address — single clean line */}
                   <td className="px-4 py-3.5 max-w-[280px]">
                     <p className="truncate text-13 text-foreground/85" title={r.delivery_address}>
-                      {r.delivery_address||"—"}
+                      {toTitleCase(r.delivery_address)||"—"}
                     </p>
                     {(r.delivery_city||r.delivery_state)&&(
                       <p className="mt-1 truncate text-11 text-muted-foreground/55">
@@ -323,7 +323,7 @@ export function ResultsTable({ results, loading, onSelect, fromStops, fromDrafts
                   </span>
                 </div>
                 <p className="mt-0.5 text-11 text-muted-foreground/70 truncate">
-                  {r.delivery_address||"—"}{r.delivery_city?`, ${r.delivery_city}`:""}
+                  {toTitleCase(r.delivery_address)||"—"}{r.delivery_city?`, ${toTitleCase(r.delivery_city)}`:""}
                 </p>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="font-mono text-10 font-bold text-primary truncate">{tid}</span>

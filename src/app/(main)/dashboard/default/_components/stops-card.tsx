@@ -72,7 +72,8 @@ function fmtCurrency(n?: number | null) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
 }
 
-const toTitle = (s: string) => (s ?? "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+import { formatDisplayCase } from "@/lib/format-display";
+const toTitle = (s: string) => formatDisplayCase(s);
 
 // ── Reusable cell components ───────────────────────────────────────────────
 const CTracking = ({ s }: { s: DashboardStop }) => (

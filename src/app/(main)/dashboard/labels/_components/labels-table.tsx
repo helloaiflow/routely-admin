@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
 import { LabelDetailSheet } from "./label-detail-sheet";
@@ -219,7 +220,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
                   </TableCell>
                   {/* Recipient: name + tracking (mono) below */}
                   <TableCell className="max-w-[190px]">
-                    <span className="block truncate font-medium text-13">{o.to_address?.name ?? "—"}</span>
+                    <span className="block truncate font-medium text-13">{formatDisplayCase(o.to_address?.name) || "—"}</span>
                     {o.shippo?.tracking_number ? (
                       o.shippo?.tracking_url ? (
                         <a
@@ -242,7 +243,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
                   </TableCell>
                   {/* Ship To: street + City, ST ZIP */}
                   <TableCell className="max-w-[200px]">
-                    <span className="block truncate text-13">{o.to_address?.street1 ?? "—"}</span>
+                    <span className="block truncate text-13">{formatDisplayCase(o.to_address?.street1) || "—"}</span>
                     <span className="block truncate text-11 text-muted-foreground">
                       {[o.to_address?.city, [o.to_address?.state, o.to_address?.zip].filter(Boolean).join(" ")]
                         .filter(Boolean)
@@ -284,7 +285,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
               <span className="min-w-0 flex-1">
                 {/* name + tracking on top */}
                 <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium text-13">{o.to_address?.name ?? "—"}</span>
+                  <span className="truncate font-medium text-13">{formatDisplayCase(o.to_address?.name) || "—"}</span>
                   <span className="shrink-0 font-semibold text-13 tabular-nums">{money(o.rate?.client_price)}</span>
                 </span>
                 <span className="mt-0.5 flex items-center justify-between gap-2">

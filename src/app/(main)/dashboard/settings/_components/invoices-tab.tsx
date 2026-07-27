@@ -161,7 +161,7 @@ export function InvoicesTab() {
         {/* Invoice list */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Invoices</CardTitle>
+            <CardTitle className="text-13">Invoices</CardTitle>
             <p className="text-muted-foreground text-sm">
               {invoices.length} statement{invoices.length === 1 ? "" : "s"}
             </p>
@@ -231,7 +231,7 @@ export function InvoicesTab() {
         <Card className="lg:col-span-3">
           <CardContent className="p-0">
             {loading ? (
-              <div className="space-y-3 p-6">
+              <div className="space-y-3 p-4">
                 <Skeleton className="h-8 w-40" />
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-32 w-full" />
@@ -240,13 +240,13 @@ export function InvoicesTab() {
               <p className="py-16 text-center text-muted-foreground text-sm">Select an invoice to preview it.</p>
             ) : (
               <div className="flex h-full flex-col">
-                <div className="flex-1 space-y-5 p-5 sm:p-6">
+                <div className="flex-1 space-y-5 p-4 sm:p-4">
                   {/* Header: logo + INVOICE */}
                   <div className="flex items-start justify-between gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/img/routelyLogoBlack.svg" alt="Routely" className="h-8 w-auto dark:invert sm:h-9" />
                     <div className="text-right">
-                      <p className="font-bold text-lg tracking-tight">INVOICE</p>
+                      <p className="font-bold text-13 tracking-tight">INVOICE</p>
                       <p className="font-mono text-11 text-muted-foreground tabular-nums">{selected.number}</p>
                     </div>
                   </div>

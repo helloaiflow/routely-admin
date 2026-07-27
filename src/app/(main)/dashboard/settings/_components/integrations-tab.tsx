@@ -89,7 +89,7 @@ export function IntegrationsTab() {
   if (needsTenant) {
     return (
       <Card className="max-w-3xl">
-        <CardContent className="flex flex-col items-start gap-1 py-8">
+        <CardContent className="flex flex-col items-start gap-1 py-4">
           <p className="font-medium text-sm">Selecciona un tenant</p>
           <p className="text-muted-foreground text-sm">
             La configuración de integraciones es por tenant. Elige un tenant en el selector del
@@ -103,7 +103,7 @@ export function IntegrationsTab() {
   if (!settings) {
     return (
       <Card className="max-w-3xl">
-        <CardContent className="py-8 text-muted-foreground text-sm">
+        <CardContent className="py-4 text-muted-foreground text-sm">
           No se pudo cargar la configuración de integraciones.
         </CardContent>
       </Card>
@@ -115,7 +115,7 @@ export function IntegrationsTab() {
       {/* ── Route optimization engine ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-13">
             <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
               <Route className="size-4" aria-hidden="true" />
             </span>
@@ -158,7 +158,7 @@ export function IntegrationsTab() {
       {/* ── SMS provider ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-13">
             <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
               <Send className="size-4" aria-hidden="true" />
             </span>
@@ -205,7 +205,7 @@ export function IntegrationsTab() {
       {/* ── Circuit hybrid switch ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-13">
             <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
               <Waypoints className="size-4" aria-hidden="true" />
             </span>

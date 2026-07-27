@@ -484,7 +484,7 @@ function StatCard({
           accent === "warning" ? "bg-warning/15" : "bg-primary/10",
         )}
       />
-      <CardContent className="relative flex items-center gap-3 py-5">
+      <CardContent className="relative flex items-center gap-3 py-4">
         <span
           className={cn(
             "grid size-10 place-items-center rounded-lg",

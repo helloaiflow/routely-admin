@@ -56,7 +56,7 @@ export function AccountTab() {
           aria-hidden="true"
           className="pointer-events-none absolute -top-16 -right-10 size-40 rounded-full bg-primary/15 blur-2xl"
         />
-        <CardContent className="relative flex flex-col items-center gap-3 py-8 text-center">
+        <CardContent className="relative flex flex-col items-center gap-3 py-4 text-center">
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
           <button
             type="button"
@@ -79,7 +79,7 @@ export function AccountTab() {
             </span>
           </button>
           <div>
-            <p className="font-semibold text-base leading-tight">{fullName}</p>
+            <p className="font-semibold text-13 leading-tight">{fullName}</p>
             <p className="text-muted-foreground text-sm">{email}</p>
             {companyName && <p className="mt-1 text-muted-foreground text-xs">{companyName}</p>}
           </div>
@@ -102,7 +102,7 @@ export function AccountTab() {
       <div className="space-y-5 lg:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Profile</CardTitle>
+            <CardTitle className="text-13">Profile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -134,7 +134,7 @@ export function AccountTab() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex items-center gap-2 text-13">
               <Lock className="size-4" aria-hidden="true" /> Security
             </CardTitle>
           </CardHeader>

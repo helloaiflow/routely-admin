@@ -25,7 +25,7 @@ export function PlansTab({ plan }: { plan: string }) {
             <div
               key={p.id}
               className={cn(
-                "group relative flex flex-col overflow-hidden rounded-2xl border p-5 shadow-xs ring-1 ring-foreground/10 transition-all",
+                "group relative flex flex-col overflow-hidden rounded-2xl border p-4 shadow-xs ring-1 ring-foreground/10 transition-all",
                 isCurrent
                   ? "border-primary bg-gradient-to-b from-primary/[0.07] to-card shadow-md ring-primary/25"
                   : "bg-card hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
@@ -47,7 +47,7 @@ export function PlansTab({ plan }: { plan: string }) {
                   <Sparkles className="size-3" aria-hidden="true" /> Popular
                 </Badge>
               )}
-              <p className="relative font-semibold text-base">{p.name}</p>
+              <p className="relative font-semibold text-13">{p.name}</p>
               <p className="relative mt-0.5 text-muted-foreground text-xs leading-relaxed">{p.desc}</p>
               <div className="relative mt-4 flex items-baseline gap-0.5">
                 <span className="font-bold text-3xl tracking-tight">{p.price}</span>

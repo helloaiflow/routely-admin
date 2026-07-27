@@ -87,7 +87,7 @@ export function SettingsShell() {
   return (
     <div className="@container/main w-full space-y-5 px-4 py-4 sm:px-6">
       {/* ── Cinematic header band (Higgsfield hero + gradient overlay) ── */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/12 via-primary/[0.04] to-background p-6 ring-1 ring-primary/10 md:p-7">
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/12 via-primary/[0.04] to-background p-4 ring-1 ring-primary/10 md:p-7">
         {/* Higgsfield-generated decorative hero — sits behind the gradient so
             the header still looks premium if the asset fails to load. */}
         <img

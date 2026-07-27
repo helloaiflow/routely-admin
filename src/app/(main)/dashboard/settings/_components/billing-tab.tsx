@@ -161,7 +161,7 @@ export function BillingTab({
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-col gap-3 border-b !pb-0 sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
             <div className="flex-1 pb-3 sm:pb-4">
-              <CardTitle className="text-base">Spend — last 30 days</CardTitle>
+              <CardTitle className="text-13">Spend — last 30 days</CardTitle>
               <p className="text-muted-foreground text-sm">Shipping-label purchases over time.</p>
             </div>
             <div className="flex gap-0 border-t sm:border-t-0 sm:border-l">
@@ -174,7 +174,7 @@ export function BillingTab({
                   className="flex flex-1 flex-col justify-center gap-0.5 px-4 py-2.5 text-left transition-colors data-[active=true]:bg-muted/50 sm:px-5"
                 >
                   <span className="type-label text-muted-foreground">{barConfig[k].label}</span>
-                  <span className="font-semibold text-base tabular-nums sm:text-lg">
+                  <span className="font-semibold text-13 tabular-nums sm:text-13">
                     {loading ? "—" : k === "spend" ? money(totals.spend) : totals.count}
                   </span>
                 </button>
@@ -200,7 +200,7 @@ export function BillingTab({
         {/* Payment card column */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Payment method</CardTitle>
+            <CardTitle className="text-13">Payment method</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {billingLoading ? (
@@ -261,7 +261,7 @@ export function BillingTab({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Recent charges</CardTitle>
+            <CardTitle className="text-13">Recent charges</CardTitle>
             <p className="text-muted-foreground text-sm">Your latest shipping-label charges.</p>
           </CardHeader>
           <CardContent className="pt-0">
@@ -315,7 +315,7 @@ export function BillingTab({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Payment term</CardTitle>
+            <CardTitle className="text-13">Payment term</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
             {PAYMENT_TERMS.map((t) => {
@@ -387,7 +387,7 @@ function CreditCardVisual({
           <img src="/img/routelyLogo.svg" alt="Routely" className="h-5 w-auto sm:h-6" />
           <div className="h-6 w-8 rounded-md bg-gradient-to-br from-white/70 to-white/30 ring-1 ring-white/40" aria-hidden="true" />
         </div>
-        <div className="font-mono text-base tracking-[0.2em] tabular-nums sm:text-lg">
+        <div className="font-mono text-13 tracking-[0.2em] tabular-nums sm:text-13">
           {hasCard ? `•••• •••• •••• ${last4}` : "•••• •••• •••• ••••"}
         </div>
         <div className="flex items-end justify-between text-xs">

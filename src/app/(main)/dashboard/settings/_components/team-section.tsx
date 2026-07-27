@@ -209,11 +209,11 @@ export function TeamSection() {
       {/* Members card */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Members</CardTitle>
+          <CardTitle className="text-13">Members</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {loading ? (
-            <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
+            <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
               <IconLoader2 className="size-4 animate-spin" /> Loading team…
             </div>
           ) : (

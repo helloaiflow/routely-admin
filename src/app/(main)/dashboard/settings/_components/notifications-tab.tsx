@@ -82,7 +82,7 @@ export function NotificationsTab() {
       {GROUPS.map((group) => (
         <Card key={group.title}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex items-center gap-2 text-13">
               <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
                 <group.icon className="size-4" aria-hidden="true" />
               </span>

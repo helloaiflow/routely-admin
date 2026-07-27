@@ -74,12 +74,12 @@ export function CodQueue({ items, loading }: { items: DashboardStop[]; loading: 
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-foreground text-xs">{s.recipient_name || "—"}</p>
-                      <p className="truncate text-[10px] text-muted-foreground">
+                      <p className="truncate text-10 text-muted-foreground">
                         {s.delivery_city} {s.delivery_zip}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className={cn("rounded-md px-1.5 py-0.5 font-semibold text-[10px]", tone.bg, tone.text)}>
+                      <span className={cn("rounded-md px-1.5 py-0.5 font-semibold text-10", tone.bg, tone.text)}>
                         {statusLabel(s.status)}
                       </span>
                       <span className="font-bold text-xs tabular-nums">{formatCurrency(s.collect_amount ?? 0)}</span>

@@ -61,10 +61,10 @@ export function ColdChain({ items, loading }: { items: DashboardStop[]; loading:
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-foreground text-xs">{s.recipient_name || "—"}</p>
-                      <p className="truncate text-[10px] text-muted-foreground">{s.delivery_address}</p>
+                      <p className="truncate text-10 text-muted-foreground">{s.delivery_address}</p>
                     </div>
                     <span
-                      className={cn("shrink-0 rounded-md px-1.5 py-0.5 font-semibold text-[10px]", tone.bg, tone.text)}
+                      className={cn("shrink-0 rounded-md px-1.5 py-0.5 font-semibold text-10", tone.bg, tone.text)}
                     >
                       {statusLabel(s.status)}
                     </span>

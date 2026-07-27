@@ -40,7 +40,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
         <CardAction>
           <div className="flex items-center gap-1.5 rounded-full bg-primary/5 px-2.5 py-1 ring-1 ring-primary/20">
             <div className="size-1.5 animate-pulse rounded-full bg-primary" />
-            <span className="font-semibold text-[10px] text-primary">Live</span>
+            <span className="font-semibold text-10 text-primary">Live</span>
           </div>
         </CardAction>
       </CardHeader>
@@ -58,7 +58,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
               <ArrowDownToLine className="size-3.5 text-white" />
             </div>
             <div>
-              <p className="font-medium text-[10px] text-violet-600 uppercase tracking-wide">Pick Ups</p>
+              <p className="font-medium text-10 text-violet-600 uppercase tracking-wide">Pick Ups</p>
               {loading ? (
                 <div className="mt-0.5 h-5 w-6 animate-pulse rounded bg-violet-500/25" />
               ) : (
@@ -67,7 +67,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
                 </p>
               )}
             </div>
-            <span className="ml-auto rounded-full bg-violet-500/15 px-1.5 py-0.5 font-semibold text-[10px] text-violet-700 dark:text-violet-400">
+            <span className="ml-auto rounded-full bg-violet-500/15 px-1.5 py-0.5 font-semibold text-10 text-violet-700 dark:text-violet-400">
               {typeTotal > 0 ? `${Math.round((pickups / typeTotal) * 100)}%` : "—"}
             </span>
           </motion.div>
@@ -82,7 +82,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
               <Truck className="size-3.5 text-white" />
             </div>
             <div>
-              <p className="font-medium text-[10px] text-blue-600 uppercase tracking-wide">Deliveries</p>
+              <p className="font-medium text-10 text-blue-600 uppercase tracking-wide">Deliveries</p>
               {loading ? (
                 <div className="mt-0.5 h-5 w-6 animate-pulse rounded bg-blue-500/25" />
               ) : (
@@ -91,7 +91,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
                 </p>
               )}
             </div>
-            <span className="ml-auto rounded-full bg-blue-500/15 px-1.5 py-0.5 font-semibold text-[10px] text-blue-700 dark:text-blue-400">
+            <span className="ml-auto rounded-full bg-blue-500/15 px-1.5 py-0.5 font-semibold text-10 text-blue-700 dark:text-blue-400">
               {typeTotal > 0 ? `${Math.round((deliveries / typeTotal) * 100)}%` : "—"}
             </span>
           </motion.div>
@@ -119,7 +119,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
                     <span className="font-black text-foreground text-lg tabular-nums leading-none">{count}</span>
                   )}
                 </div>
-                <p className="font-medium text-[10px] text-muted-foreground">{stage.label}</p>
+                <p className="font-medium text-10 text-muted-foreground">{stage.label}</p>
                 <div className="h-1 overflow-hidden rounded-full bg-border/40">
                   <motion.div
                     className="h-full rounded-full"
@@ -131,7 +131,7 @@ export function DeliveryPipeline({ pipeline, loading }: { pipeline?: DashboardPi
                 </div>
                 <span
                   className={cn(
-                    "text-right font-semibold text-[10px] tabular-nums",
+                    "text-right font-semibold text-10 tabular-nums",
                     loading ? "text-transparent" : "text-muted-foreground/50",
                   )}
                 >

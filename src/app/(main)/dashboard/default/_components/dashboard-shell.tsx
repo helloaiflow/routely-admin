@@ -125,15 +125,15 @@ function ActivitiesFeed({ stops, loading }: { stops: DashboardStop[]; loading: b
                     {[s.delivery_address, s.delivery_city].filter(Boolean).join(", ")}
                   </p>
                   {/* Tracking number */}
-                  <p className="mt-0.5 font-medium font-mono text-[10px] text-primary/70">
+                  <p className="mt-0.5 font-medium font-mono text-10 text-primary/70">
                     {s.stop_id ?? s.id?.slice(-12).toUpperCase() ?? "—"}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={cn("rounded-full px-2 py-0.5 font-semibold text-[10px]", tone.bg, tone.text)}>
+                  <span className={cn("rounded-full px-2 py-0.5 font-semibold text-10", tone.bg, tone.text)}>
                     {statusLabel(s.status)}
                   </span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
+                  <span className="flex items-center gap-1 text-10 text-muted-foreground/50">
                     <Clock className="size-2.5" />
                     {formatEta(s.delivery_date, s.is_same_day)}
                   </span>
@@ -225,7 +225,7 @@ export function DashboardShell() {
               value={t.key}
               disabled={t.soon}
               title={t.soon ? "Routes — coming soon" : undefined}
-              className="group shrink-0 gap-1.5 px-2.5 text-[13px] sm:px-3 sm:text-sm"
+              className="group shrink-0 gap-1.5 px-2.5 text-13 sm:px-3 sm:text-sm"
             >
               <t.Icon
                 className={cn(
@@ -240,7 +240,7 @@ export function DashboardShell() {
               {t.label}
               {t.count != null && t.count > 0 && (
                 <Badge
-                  className="ml-0.5 h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-[10px] text-white tabular-nums leading-none"
+                  className="ml-0.5 h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-10 text-white tabular-nums leading-none"
                 >
                   {t.count}
                 </Badge>

@@ -107,9 +107,9 @@ export function DeliveriesByLocation({ stops, loading }: { stops: DashboardStop[
                     indicator="line"
                     formatter={(value, _name, item) => (
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-[11px] text-foreground">{item.payload.city}</span>
-                        <span className="text-[10px] text-muted-foreground">{item.payload.address}</span>
-                        <span className="font-bold text-[11px] text-foreground">
+                        <span className="font-semibold text-11 text-foreground">{item.payload.city}</span>
+                        <span className="text-10 text-muted-foreground">{item.payload.address}</span>
+                        <span className="font-bold text-11 text-foreground">
                           {value} stops · {item.payload.pct}%
                         </span>
                       </div>
@@ -146,7 +146,7 @@ export function DeliveriesByLocation({ stops, loading }: { stops: DashboardStop[
             Top {rows.length} cities cover {rows.reduce((a, r) => a + r.pct, 0)}% of deliveries
             <TrendingUp className="size-3.5 text-primary" />
           </div>
-          <p className="text-[11px] text-muted-foreground">Based on {stops.length} stops this period</p>
+          <p className="text-11 text-muted-foreground">Based on {stops.length} stops this period</p>
         </CardFooter>
       )}
     </Card>
@@ -264,7 +264,7 @@ export function StopsByDisposition({ stops, loading }: { stops: DashboardStop[];
                   <ChartTooltipContent
                     hideLabel
                     formatter={(value, _name, item) => (
-                      <div className="flex items-center gap-2 text-[11px]">
+                      <div className="flex items-center gap-2 text-11">
                         <span
                           className="inline-block size-2 shrink-0 rounded-full"
                           style={{ background: item.payload.fill }}
@@ -302,7 +302,7 @@ export function StopsByDisposition({ stops, loading }: { stops: DashboardStop[];
         <CardFooter className="flex-col items-start gap-2 border-border/40 border-t bg-muted/10 px-4 pt-3 pb-4">
           <div className="flex w-full flex-wrap gap-x-3 gap-y-1.5">
             {rows.map((r) => (
-              <div key={r.label} className="flex items-center gap-1.5 text-[11px]">
+              <div key={r.label} className="flex items-center gap-1.5 text-11">
                 <span className="size-2 shrink-0 rounded-full" style={{ background: r.fill }} />
                 <span className="text-muted-foreground">{r.label}</span>
                 <span className="font-semibold text-foreground tabular-nums">{r.count}</span>
@@ -419,7 +419,7 @@ export function StopsByType({ stops, loading }: { stops: DashboardStop[]; loadin
                   </div>
                   <div className="flex items-baseline gap-1.5 tabular-nums">
                     <span className="font-bold text-base text-foreground">{r.count}</span>
-                    <span className="text-[10px] text-muted-foreground/60">{r.pct}%</span>
+                    <span className="text-10 text-muted-foreground/60">{r.pct}%</span>
                   </div>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -472,9 +472,9 @@ function BreakdownRow({
           <span className="truncate font-medium text-foreground text-xs">{label}</span>
         </div>
         <div className="flex shrink-0 items-baseline gap-1 tabular-nums">
-          <span className="font-bold text-[13px] text-foreground">{processed}</span>
-          <span className="font-medium text-[11px] text-muted-foreground/55">/{total}</span>
-          <span className="ml-1 font-semibold text-[10px] text-muted-foreground/70">{pct}%</span>
+          <span className="font-bold text-13 text-foreground">{processed}</span>
+          <span className="font-medium text-11 text-muted-foreground/55">/{total}</span>
+          <span className="ml-1 font-semibold text-10 text-muted-foreground/70">{pct}%</span>
         </div>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -620,7 +620,7 @@ export function DeliveriesBreakdown({ stops, loading }: { stops: DashboardStop[]
                   type="button"
                   onClick={() => setView(opt.key)}
                   className={cn(
-                    "inline-flex h-6 items-center whitespace-nowrap rounded-md px-2 font-medium text-[11px] transition-all duration-150",
+                    "inline-flex h-6 items-center whitespace-nowrap rounded-md px-2 font-medium text-11 transition-all duration-150",
                     on
                       ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
                       : "text-muted-foreground/70 hover:bg-background/60 hover:text-foreground",
@@ -697,9 +697,9 @@ export function DeliveriesBreakdown({ stops, loading }: { stops: DashboardStop[]
                     indicator="line"
                     formatter={(_value, _name, item) => (
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-[11px] text-foreground">{item.payload.city}</span>
-                        <span className="text-[10px] text-muted-foreground">{item.payload.address}</span>
-                        <span className="font-bold text-[11px] text-foreground">
+                        <span className="font-semibold text-11 text-foreground">{item.payload.city}</span>
+                        <span className="text-10 text-muted-foreground">{item.payload.address}</span>
+                        <span className="font-bold text-11 text-foreground">
                           {item.payload.processed}/{item.payload.total} processed · {item.payload.pct}%
                         </span>
                       </div>

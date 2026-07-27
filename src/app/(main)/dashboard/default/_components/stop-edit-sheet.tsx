@@ -391,7 +391,7 @@ function ProgressTimeline({ status }: { status: string }) {
             <span
               key={label}
               className={cn(
-                "text-[10px] leading-tight tracking-wide transition-colors duration-500",
+                "text-10 leading-tight tracking-wide transition-colors duration-500",
                 isActive
                   ? "font-semibold"
                   : i < step
@@ -446,7 +446,7 @@ function InlineField({
 
   return (
     <div className="group flex min-h-[34px] items-start justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0">
-      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
         {label}
         {required && <span className="ml-0.5 text-rose-500">*</span>}
       </span>
@@ -464,7 +464,7 @@ function InlineField({
             }
           }}
           placeholder={placeholder}
-          className="h-6 min-w-0 max-w-[60%] flex-1 rounded border border-primary/40 bg-background px-1.5 text-right font-medium text-[11px] text-foreground outline-none focus:ring-1 focus:ring-primary/30"
+          className="h-6 min-w-0 max-w-[60%] flex-1 rounded border border-primary/40 bg-background px-1.5 text-right font-medium text-11 text-foreground outline-none focus:ring-1 focus:ring-primary/30"
         />
       ) : (
         <button
@@ -472,7 +472,7 @@ function InlineField({
           onClick={() => !disabled && setEditing(true)}
           disabled={disabled}
           className={cn(
-            "flex min-w-0 items-center gap-1.5 truncate text-right font-medium text-[11px] leading-snug transition-colors",
+            "flex min-w-0 items-center gap-1.5 truncate text-right font-medium text-11 leading-snug transition-colors",
             disabled ? "cursor-not-allowed text-foreground/85" : "cursor-text text-foreground hover:text-primary",
             !local && !disabled && "text-muted-foreground/60 italic",
           )}
@@ -524,7 +524,7 @@ function ToggleRow({
 
   return (
     <div className="group flex min-h-[34px] items-center justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0">
-      <span className="text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+      <span className="text-11 text-muted-foreground/65 leading-snug">{label}</span>
       <div className="flex items-center gap-1.5">
         {saving && <Loader2 className="size-3 animate-spin text-primary" aria-hidden="true" />}
         <button
@@ -561,8 +561,8 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0">
-      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-[11px] text-foreground leading-snug">
+      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
+      <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-11 text-foreground leading-snug">
         <Icon className="size-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
         <span className="truncate">{children}</span>
       </span>
@@ -657,7 +657,7 @@ function ProofOfDelivery({ photos, signatureUrl }: { photos: string[]; signature
           )}
         />
         {main.kind === "signature" && (
-          <span className="absolute bottom-1.5 left-1.5 rounded-md bg-foreground/60 px-1.5 py-0.5 font-medium text-[10px] text-background">
+          <span className="absolute bottom-1.5 left-1.5 rounded-md bg-foreground/60 px-1.5 py-0.5 font-medium text-10 text-background">
             Signature
           </span>
         )}
@@ -765,8 +765,8 @@ function EventBanner({ status, timestamp }: { status: string; timestamp: string 
         <div className={cn("flex size-6 items-center justify-center rounded-full", accent.eventIconBg)}>
           <Icon className={cn("size-3.5", accent.eventIcon)} aria-hidden="true" />
         </div>
-        <span className={cn("font-semibold text-[13px]", accent.eventText)}>{title}</span>
-        {time && <span className="ml-auto font-medium text-[11px] text-muted-foreground/70">{time}</span>}
+        <span className={cn("font-semibold text-13", accent.eventText)}>{title}</span>
+        {time && <span className="ml-auto font-medium text-11 text-muted-foreground/70">{time}</span>}
       </div>
     </div>
   );
@@ -1068,7 +1068,7 @@ export function StopEditSheet({
               <button
                 type="button"
                 onClick={handleOpenFull}
-                className="font-mono font-semibold text-[11px] text-primary tabular-nums transition-colors hover:underline"
+                className="font-mono font-semibold text-11 text-primary tabular-nums transition-colors hover:underline"
                 title="Open full details"
               >
                 {stop.stop_id}
@@ -1115,7 +1115,7 @@ export function StopEditSheet({
               <p className="mt-0.5 truncate text-xs text-muted-foreground/70 leading-tight">
                 {stop.address.street || "—"}
               </p>
-              <p className="truncate text-[11px] text-muted-foreground/55">
+              <p className="truncate text-11 text-muted-foreground/55">
                 {[stop.address.city, stop.address.state, stop.address.zip].filter(Boolean).join(", ") || "—"}
               </p>
 
@@ -1129,39 +1129,39 @@ export function StopEditSheet({
                     {toTitleCase(stop.assignment.driver_name)}
                   </span>
                   {stop.assignment.route_title && (
-                    <span className="text-[11px] text-muted-foreground/60">· {stop.assignment.route_title}</span>
+                    <span className="text-11 text-muted-foreground/60">· {stop.assignment.route_title}</span>
                   )}
                 </div>
               )}
 
               {/* Chips row — status (data-driven) + type + package + flags (reactive to edits) */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className={cn("rounded-full px-2 py-0.5 font-semibold text-[10px] ring-1", accent.badge)}>
+                <span className={cn("rounded-full px-2 py-0.5 font-semibold text-10 ring-1", accent.badge)}>
                   {accent.label}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-[10px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground">
                   {stopTypeEmoji(stop.stop_type).emoji} {stopTypeEmoji(stop.stop_type).label}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-[10px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground">
                   {pkgMeta(stop.package.type).emoji} {pkgMeta(stop.package.type).label}
                 </span>
                 {stop.service.type === "same_day" && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-[10px] text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-10 text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
                     ⚡ Same Day
                   </span>
                 )}
                 {stop.package.requires_signature && (
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-[10px] text-indigo-700 ring-1 ring-indigo-200/60 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/30">
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-10 text-indigo-700 ring-1 ring-indigo-200/60 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/30">
                     ✍ Signature
                   </span>
                 )}
                 {stop.service.collect_payment && (
-                  <span className="rounded-full bg-teal-50 px-2 py-0.5 font-semibold text-[10px] text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
+                  <span className="rounded-full bg-teal-50 px-2 py-0.5 font-semibold text-10 text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
                     💵 COD
                   </span>
                 )}
                 {stop.service.return_to_sender && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-[10px] text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-10 text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
                     ↩ RTS
                   </span>
                 )}
@@ -1188,7 +1188,7 @@ export function StopEditSheet({
                 type="button"
                 onClick={() => setTab(k)}
                 className={cn(
-                  "relative px-2.5 py-2 font-semibold text-[11px] transition-colors",
+                  "relative px-2.5 py-2 font-semibold text-11 transition-colors",
                   tab === k ? "text-primary" : "text-muted-foreground/55 hover:text-foreground",
                 )}
               >
@@ -1210,7 +1210,7 @@ export function StopEditSheet({
                   <div className="mx-3 mt-3 rounded-xl border border-blue-200/50 bg-blue-50/30 p-3">
                     <div className="flex items-start gap-2">
                       <Truck className="mt-0.5 size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
-                      <p className="font-medium text-[11px] text-blue-800 leading-snug">
+                      <p className="font-medium text-11 text-blue-800 leading-snug">
                         Driver is en route — only safe fields can be edited: notes, phone, gate code, drop preference,
                         cold chain &amp; signature settings.
                       </p>
@@ -1229,25 +1229,25 @@ export function StopEditSheet({
                       <button
                         type="button"
                         onClick={() => setConfirmCancel(true)}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-rose-500/10 px-2.5 py-1.5 font-semibold text-[11px] text-rose-700 dark:text-rose-400 ring-1 ring-rose-200/70 transition-colors hover:bg-rose-500/15"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-rose-500/10 px-2.5 py-1.5 font-semibold text-11 text-rose-700 dark:text-rose-400 ring-1 ring-rose-200/70 transition-colors hover:bg-rose-500/15"
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
                         Cancel stop
                       </button>
                     ) : (
                       <div className="flex items-center gap-1.5 rounded-md bg-rose-500/10 px-2.5 py-1.5 ring-1 ring-rose-200/70">
-                        <span className="font-semibold text-[11px] text-rose-700">Cancel — sure?</span>
+                        <span className="font-semibold text-11 text-rose-700">Cancel — sure?</span>
                         <button
                           type="button"
                           onClick={handleDelete}
-                          className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-[11px] text-white hover:bg-rose-700"
+                          className="rounded bg-rose-600 px-2 py-0.5 font-semibold text-11 text-white hover:bg-rose-700"
                         >
                           Yes
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmCancel(false)}
-                          className="rounded px-1.5 py-0.5 text-[11px] text-rose-700 dark:text-rose-400 hover:bg-rose-500/15"
+                          className="rounded px-1.5 py-0.5 text-11 text-rose-700 dark:text-rose-400 hover:bg-rose-500/15"
                         >
                           No
                         </button>
@@ -1257,7 +1257,7 @@ export function StopEditSheet({
                       type="button"
                       onClick={() => commit("service", "return_to_sender", !stop.service.return_to_sender)}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-semibold text-[11px] ring-1 transition-colors",
+                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-semibold text-11 ring-1 transition-colors",
                         stop.service.return_to_sender
                           ? "bg-amber-500/15 text-amber-800 dark:text-amber-400 ring-amber-300/70 hover:bg-amber-500/25"
                           : "bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-amber-200/70 hover:bg-amber-500/15",
@@ -1285,7 +1285,7 @@ export function StopEditSheet({
                       onCommit={(v) => commit("address", "gate_code", v)}
                     />
                     <div className="flex items-center justify-between gap-4 border-border/[0.07] border-b py-2">
-                      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+                      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
                         Drop preference
                       </span>
                       <Select
@@ -1293,7 +1293,7 @@ export function StopEditSheet({
                         onValueChange={(v) => commit("address", "drop_preference", v === "none" ? "" : v)}
                         disabled={!quickInfoEditable}
                       >
-                        <SelectTrigger className="h-7 w-[160px] border-border bg-background font-medium text-[11px] text-foreground shadow-sm">
+                        <SelectTrigger className="h-7 w-[160px] border-border bg-background font-medium text-11 text-foreground shadow-sm">
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent align="end">
@@ -1491,13 +1491,13 @@ export function StopEditSheet({
                     className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary focus:ring-2 focus:ring-primary/10"
                   />
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-[10px] text-muted-foreground/40">
+                    <span className="text-10 text-muted-foreground/40">
                       {noteText.length}/500 · Cmd+Enter to send
                     </span>
                     <Button
                       type="button"
                       size="sm"
-                      className="h-6 gap-1 px-2.5 text-[11px]"
+                      className="h-6 gap-1 px-2.5 text-11"
                       disabled={!noteText.trim() || postingNote}
                       onClick={handlePostNote}
                     >
@@ -1512,8 +1512,8 @@ export function StopEditSheet({
                 </div>
                 {internalNotes.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-[11px] text-muted-foreground/50">No notes yet</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground/35">Add an instruction or update above</p>
+                    <p className="text-11 text-muted-foreground/50">No notes yet</p>
+                    <p className="mt-0.5 text-11 text-muted-foreground/35">Add an instruction or update above</p>
                   </div>
                 ) : (
                   <div className="relative px-3 py-2">
@@ -1536,20 +1536,20 @@ export function StopEditSheet({
                               {isLatest && (
                                 <span className="absolute inset-0 animate-ping rounded-full bg-primary/25 [animation-duration:2.5s]" />
                               )}
-                              <div className="relative z-10 flex size-5 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-white">
+                              <div className="relative z-10 flex size-5 items-center justify-center rounded-full bg-primary font-bold text-10 text-white">
                                 {initials || "•"}
                               </div>
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                                <span className="truncate font-semibold text-[11px] text-foreground/80 capitalize">
+                                <span className="truncate font-semibold text-11 text-foreground/80 capitalize">
                                   {(note.author ?? "").toLowerCase() || "—"}
                                 </span>
-                                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/35 tabular-nums">
+                                <span className="ml-auto shrink-0 text-10 text-muted-foreground/35 tabular-nums">
                                   {fmtNoteTime(note.created_at)}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-foreground/75 leading-snug">{note.text}</p>
+                              <p className="text-11 text-foreground/75 leading-snug">{note.text}</p>
                             </div>
                           </div>
                         );
@@ -1579,7 +1579,7 @@ export function StopEditSheet({
                     <Button
                       type="button"
                       size="sm"
-                      className="h-8 gap-1.5 bg-primary px-3 text-[11px] text-white hover:bg-primary/90"
+                      className="h-8 gap-1.5 bg-primary px-3 text-11 text-white hover:bg-primary/90"
                       disabled={!gateCodeInput.trim() || savingGateCode}
                       onClick={handleSaveGateCode}
                     >
@@ -1591,13 +1591,13 @@ export function StopEditSheet({
                       Save
                     </Button>
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground/40">
+                  <p className="mt-1 text-10 text-muted-foreground/40">
                     Short code (e.g. *1234) or brief note · {gateCodeInput.length}/50
                   </p>
                 </div>
                 {stop.address.street && (
                   <div className="border-border/50 border-b bg-muted/20 px-3 py-1.5">
-                    <p className="font-semibold text-[10px] text-muted-foreground/55 uppercase tracking-widest">
+                    <p className="font-semibold text-10 text-muted-foreground/55 uppercase tracking-widest">
                       Building:{" "}
                       <span className="font-mono text-foreground/70 normal-case tracking-normal">
                         {stop.address.street}
@@ -1608,12 +1608,12 @@ export function StopEditSheet({
                 {gateCodesLoading ? (
                   <div className="flex items-center justify-center gap-2 py-10">
                     <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
-                    <span className="text-[11px] text-muted-foreground">Looking up access codes…</span>
+                    <span className="text-11 text-muted-foreground">Looking up access codes…</span>
                   </div>
                 ) : gateCodesData.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-[11px] text-muted-foreground/50">No access codes on file</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground/35">for this address</p>
+                    <p className="text-11 text-muted-foreground/50">No access codes on file</p>
+                    <p className="mt-0.5 text-11 text-muted-foreground/35">for this address</p>
                   </div>
                 ) : (
                   <div className="relative px-3 py-2">
@@ -1637,17 +1637,17 @@ export function StopEditSheet({
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                                <span className="truncate font-semibold text-[11px] text-foreground/80 capitalize">
+                                <span className="truncate font-semibold text-11 text-foreground/80 capitalize">
                                   {addedBy}
                                 </span>
-                                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/35 tabular-nums">
+                                <span className="ml-auto shrink-0 text-10 text-muted-foreground/35 tabular-nums">
                                   {createdAt ? fmtNoteTime(createdAt) : ""}
                                 </span>
                               </div>
-                              <p className="font-mono font-semibold text-[13px] text-foreground tracking-wider">
+                              <p className="font-mono font-semibold text-13 text-foreground tracking-wider">
                                 {code}
                               </p>
-                              {notes && <p className="text-[11px] text-muted-foreground/70 leading-snug">{notes}</p>}
+                              {notes && <p className="text-11 text-muted-foreground/70 leading-snug">{notes}</p>}
                             </div>
                           </div>
                         );
@@ -1664,10 +1664,10 @@ export function StopEditSheet({
                 {timelineEntries === null ? (
                   <div className="flex items-center justify-center gap-2 py-10">
                     <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
-                    <span className="text-[11px] text-muted-foreground">Loading history…</span>
+                    <span className="text-11 text-muted-foreground">Loading history…</span>
                   </div>
                 ) : timelineEntries.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-[11px] text-muted-foreground/50">No history yet</div>
+                  <div className="px-4 py-8 text-center text-11 text-muted-foreground/50">No history yet</div>
                 ) : (
                   <ol className="relative ml-2 border-border/50 border-l">
                     {timelineEntries.map((e, i) => {
@@ -1692,15 +1692,15 @@ export function StopEditSheet({
                           <div className="flex items-baseline justify-between gap-2">
                             <span className="font-medium text-xs text-foreground/85">{e.label}</span>
                             {ts && (
-                              <span className="shrink-0 text-[10px] text-muted-foreground/50">
+                              <span className="shrink-0 text-10 text-muted-foreground/50">
                                 {ts.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
                                 {ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                               </span>
                             )}
                           </div>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground/70">{timelineActorDisplay(e)}</p>
+                          <p className="mt-0.5 text-11 text-muted-foreground/70">{timelineActorDisplay(e)}</p>
                           {e.note && (
-                            <p className="mt-0.5 whitespace-pre-line text-[11px] text-muted-foreground/50">
+                            <p className="mt-0.5 whitespace-pre-line text-11 text-muted-foreground/50">
                               {e.note}
                             </p>
                           )}
@@ -1709,7 +1709,7 @@ export function StopEditSheet({
                               <button
                                 type="button"
                                 onClick={() => setTimelineExpanded(isOpen ? null : i)}
-                                className="mt-1 flex items-center gap-1 font-medium text-[10px] text-primary/80 hover:text-primary"
+                                className="mt-1 flex items-center gap-1 font-medium text-10 text-primary/80 hover:text-primary"
                               >
                                 <ChevronDown
                                   className={cn("size-3 transition-transform", isOpen && "rotate-180")}
@@ -1722,7 +1722,7 @@ export function StopEditSheet({
                               {isOpen && (
                                 <div className="mt-1.5 space-y-1 rounded-lg bg-muted/30 px-2.5 py-2">
                                   {e.field_changes?.map((c) => (
-                                    <div key={c.field} className="text-[11px]">
+                                    <div key={c.field} className="text-11">
                                       <span className="font-medium text-foreground/70">
                                         {FIELD_LABELS[c.field] ?? c.field}:
                                       </span>{" "}
@@ -1749,7 +1749,7 @@ export function StopEditSheet({
           {/* ── Footer ─────────────────────────────────────────── */}
           <div className="shrink-0 border-border/60 border-t bg-card px-4 py-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground/55">
+              <span className="text-11 text-muted-foreground/55">
                 {isLocked
                   ? "Read-only — stop reached a final state"
                   : isLimited

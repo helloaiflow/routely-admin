@@ -24,9 +24,9 @@ export function UpcomingTimeline({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2.5 flex items-center justify-between px-0.5">
-        <h4 className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">Upcoming</h4>
+        <h4 className="font-semibold text-10 text-muted-foreground uppercase tracking-widest">Upcoming</h4>
         {items.length > 0 && (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-[10px] text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-10 text-muted-foreground">
             {items.length}
           </span>
         )}
@@ -88,7 +88,7 @@ export function UpcomingTimeline({
                       <div className="flex items-center gap-1.5">
                         <span
                           className={cn(
-                            "shrink-0 rounded-md px-1.5 py-0.5 font-bold font-mono text-[10px]",
+                            "shrink-0 rounded-md px-1.5 py-0.5 font-bold font-mono text-10",
                             isPickup ? "bg-violet-500/15 text-violet-700 dark:text-violet-400" : "bg-blue-500/15 text-blue-700 dark:text-blue-400",
                           )}
                         >
@@ -101,17 +101,17 @@ export function UpcomingTimeline({
                       </div>
 
                       {/* Row 2: city + zip */}
-                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      <p className="mt-0.5 truncate text-10 text-muted-foreground">
                         {[s.delivery_city, s.delivery_zip].filter(Boolean).join(" · ") || s.delivery_address || "—"}
                       </p>
 
                       {/* Row 3: ETA + status */}
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="font-medium text-[10px] text-muted-foreground">
+                        <span className="font-medium text-10 text-muted-foreground">
                           {formatEta(s.delivery_date, s.is_same_day)}
                         </span>
                         <span
-                          className={cn("ml-auto rounded-full px-2 py-0.5 font-medium text-[10px]", tone.bg, tone.text)}
+                          className={cn("ml-auto rounded-full px-2 py-0.5 font-medium text-10", tone.bg, tone.text)}
                         >
                           {statusLabel(s.status)}
                         </span>

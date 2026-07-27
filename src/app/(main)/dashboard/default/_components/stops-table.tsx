@@ -158,7 +158,7 @@ function FilterPopover({
 
   const Sect = ({ title, items, field }: { title: string; items: readonly string[]; field: keyof FilterState }) => (
     <div>
-      <p className="mb-1 px-2 font-bold text-[10px] text-muted-foreground/40 uppercase tracking-wider">{title}</p>
+      <p className="mb-1 px-2 font-bold text-10 text-muted-foreground/40 uppercase tracking-wider">{title}</p>
       {items.map((v) => (
         <Row
           key={v}
@@ -183,14 +183,14 @@ function FilterPopover({
           variant="outline"
           size="sm"
           className={cn(
-            "h-7 gap-1.5 border-border/50 text-[11px] transition-all",
+            "h-7 gap-1.5 border-border/50 text-11 transition-all",
             n > 0 ? "border-primary/50 bg-primary/[0.04] text-primary" : "text-muted-foreground hover:text-foreground",
           )}
         >
           <SlidersHorizontal className="size-3" />
           Filter
           {n > 0 && (
-            <span className="flex size-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-white">
+            <span className="flex size-4 items-center justify-center rounded-full bg-primary font-bold text-10 text-white">
               {n}
             </span>
           )}
@@ -206,7 +206,7 @@ function FilterPopover({
                 setLocal(EMPTY);
                 onApply(EMPTY);
               }}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 text-11 text-muted-foreground hover:text-foreground"
             >
               <X className="size-3" />
               Clear
@@ -220,7 +220,7 @@ function FilterPopover({
           {opts.cities.length > 1 && <Sect title="City" items={opts.cities as string[]} field="cities" />}
         </div>
         <div className="mt-3 border-border/30 border-t pt-2.5">
-          <Button size="sm" className="h-7 w-full text-[11px]" onClick={() => onApply(local)}>
+          <Button size="sm" className="h-7 w-full text-11" onClick={() => onApply(local)}>
             Apply
           </Button>
         </div>
@@ -305,7 +305,7 @@ export function StopsTable({
     <button
       type="button"
       onClick={() => handleSort(col)}
-      className="inline-flex items-center gap-1 font-bold text-[11px] text-muted-foreground/50 uppercase tracking-wider transition-colors hover:text-foreground/80"
+      className="inline-flex items-center gap-1 font-bold text-11 text-muted-foreground/50 uppercase tracking-wider transition-colors hover:text-foreground/80"
     >
       {label}
       {sort.key === col ? (
@@ -393,7 +393,7 @@ export function StopsTable({
                     setPage(1);
                   }}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold text-[11px] transition-all",
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold text-11 transition-all",
                     active
                       ? "bg-primary text-white shadow-sm"
                       : "bg-card text-muted-foreground/70 ring-1 ring-border hover:bg-muted/40 hover:text-foreground/80",
@@ -424,7 +424,7 @@ export function StopsTable({
           <thead>
             <tr className="border-border/60 border-b bg-muted/30">
               <th className="px-3 py-2.5 text-left">
-                <span className="font-bold text-[11px] text-muted-foreground/50 uppercase tracking-wider">Tracking</span>
+                <span className="font-bold text-11 text-muted-foreground/50 uppercase tracking-wider">Tracking</span>
               </th>
               <th className="px-3 py-2.5 text-left">
                 <SortBtn col="recipient_name" label="Recipient" />
@@ -433,16 +433,16 @@ export function StopsTable({
                 <SortBtn col="delivery_city" label="Address" />
               </th>
               <th className="px-3 py-2.5 text-left">
-                <span className="font-bold text-[11px] text-muted-foreground/50 uppercase tracking-wider">Phone</span>
+                <span className="font-bold text-11 text-muted-foreground/50 uppercase tracking-wider">Phone</span>
               </th>
               <th className="px-3 py-2.5 text-left">
-                <span className="font-bold text-[11px] text-muted-foreground/50 uppercase tracking-wider">Delivery</span>
+                <span className="font-bold text-11 text-muted-foreground/50 uppercase tracking-wider">Delivery</span>
               </th>
               <th className="px-3 py-2.5 text-left">
                 <SortBtn col="status" label="Status" />
               </th>
               <th className="px-3 py-2.5 text-left">
-                <span className="font-bold text-[11px] text-muted-foreground/50 uppercase tracking-wider">Driver</span>
+                <span className="font-bold text-11 text-muted-foreground/50 uppercase tracking-wider">Driver</span>
               </th>
               <th className="px-3 py-2.5 text-right">
                 <SortBtn col="created_at" label="Created" />
@@ -452,7 +452,7 @@ export function StopsTable({
           <tbody className="divide-y divide-border/60">
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-14 text-center text-[13px] text-muted-foreground/50">
+                <td colSpan={8} className="py-14 text-center text-13 text-muted-foreground/50">
                   {search || fn > 0 ? "No stops match the filters" : "No stops today"}
                 </td>
               </tr>
@@ -482,7 +482,7 @@ export function StopsTable({
                   >
                     {/* 1. Tracking ID */}
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      <span className="font-bold font-mono text-primary text-[11px]">{tid}</span>
+                      <span className="font-bold font-mono text-primary text-11">{tid}</span>
                     </td>
 
                     {/* 2. Recipient name */}
@@ -504,14 +504,14 @@ export function StopsTable({
 
                     {/* 5. Delivery date (scheduled) */}
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      <span className="font-medium text-[11px] text-muted-foreground">{deliveryLabel(r)}</span>
+                      <span className="font-medium text-11 text-muted-foreground">{deliveryLabel(r)}</span>
                     </td>
 
                     {/* 6. Status pill */}
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold text-[11px]",
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold text-11",
                           st.bg,
                           st.text,
                         )}
@@ -526,13 +526,13 @@ export function StopsTable({
                       {r.driver_name ? (
                         <p className="truncate font-medium text-xs text-foreground/80">{toTitleCase(r.driver_name)}</p>
                       ) : (
-                        <span className="text-[11px] text-muted-foreground/40">—</span>
+                        <span className="text-11 text-muted-foreground/40">—</span>
                       )}
                     </td>
 
                     {/* 8. Created (when the stop was entered) */}
                     <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                      <span className="font-medium text-[11px] text-muted-foreground/70">{formatDate(r.created_at)}</span>
+                      <span className="font-medium text-11 text-muted-foreground/70">{formatDate(r.created_at)}</span>
                     </td>
                   </tr>
                 );
@@ -545,7 +545,7 @@ export function StopsTable({
       {/* Mobile: stacked list */}
       <div className="divide-y divide-border/60 sm:hidden">
         {pageData.length === 0 ? (
-          <div className="py-12 text-center text-[13px] text-muted-foreground/50">
+          <div className="py-12 text-center text-13 text-muted-foreground/50">
             {search || fn > 0 ? "No stops match the filters" : "No stops today"}
           </div>
         ) : (
@@ -566,20 +566,20 @@ export function StopsTable({
                 <span className={cn("size-2 shrink-0 rounded-full", st.bg)} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-semibold text-[13px] text-foreground">
+                    <p className="truncate font-semibold text-13 text-foreground">
                       {toTitleCase(r.recipient_name) || "—"}
                     </p>
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px]", st.bg, st.text)}>
+                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 font-semibold text-10", st.bg, st.text)}>
                       {statusLabel(r.status)}
                     </span>
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
+                  <p className="mt-0.5 truncate text-11 text-muted-foreground/70">
                     {r.delivery_address || "—"}
                     {r.delivery_city ? `, ${r.delivery_city}` : ""}
                   </p>
                   <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="truncate font-bold font-mono text-primary text-[10px]">{tid}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground/50">{deliveryLabel(r)}</span>
+                    <span className="truncate font-bold font-mono text-primary text-10">{tid}</span>
+                    <span className="shrink-0 text-11 text-muted-foreground/50">{deliveryLabel(r)}</span>
                   </div>
                 </div>
               </button>
@@ -591,7 +591,7 @@ export function StopsTable({
       {/* Pagination */}
       {sorted.length > 0 && (
         <div className="flex items-center justify-between border-border/60 border-t bg-muted/40 px-4 py-2">
-          <p className="text-[11px] text-muted-foreground/50 tabular-nums">
+          <p className="text-11 text-muted-foreground/50 tabular-nums">
             {sorted.length <= PAGE_SIZE
               ? `${sorted.length} total`
               : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, sorted.length)} of ${sorted.length}`}
@@ -607,7 +607,7 @@ export function StopsTable({
               >
                 <ChevronLeft className="size-3.5" />
               </Button>
-              <span className="px-2 text-[11px] text-muted-foreground/70 tabular-nums">
+              <span className="px-2 text-11 text-muted-foreground/70 tabular-nums">
                 {safePage}/{totalPages}
               </span>
               <Button

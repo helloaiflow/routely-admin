@@ -76,7 +76,7 @@ const toTitle = (s: string) => (s ?? "").toLowerCase().replace(/\b\w/g, (c) => c
 
 // ── Reusable cell components ───────────────────────────────────────────────
 const CTracking = ({ s }: { s: DashboardStop }) => (
-  <span className="font-mono font-semibold text-[11px] text-primary">{s.stop_id ?? s.id.slice(-8).toUpperCase()}</span>
+  <span className="font-mono font-semibold text-11 text-primary">{s.stop_id ?? s.id.slice(-8).toUpperCase()}</span>
 );
 const CRecipient = ({ s }: { s: DashboardStop }) => (
   <span className="whitespace-nowrap font-medium text-foreground text-xs">{toTitle(s.recipient_name || "—")}</span>
@@ -100,7 +100,7 @@ const CDriver = ({ s }: { s: DashboardStop }) => (
 const CStatus = ({ s }: { s: DashboardStop }) => (
   <span
     className={cn(
-      "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 font-semibold text-[10px] ring-1",
+      "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 font-semibold text-10 ring-1",
       badgeCls(s.status),
     )}
   >
@@ -194,7 +194,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
           {/* Row 2: name + city */}
           <div className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-foreground text-xs">{toTitle(s.recipient_name || "—")}</span>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{s.delivery_city ?? ""}</span>
+            <span className="shrink-0 text-11 text-muted-foreground">{s.delivery_city ?? ""}</span>
           </div>
         </div>
         <div className="mt-1 shrink-0 text-muted-foreground/40">
@@ -211,7 +211,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
                 key={col.key}
                 className={cn("flex flex-col gap-0.5", col.key === "addr" || col.key === "notes" ? "col-span-2" : "")}
               >
-                <span className="font-semibold text-[10px] text-muted-foreground/50 uppercase leading-none tracking-wider">
+                <span className="font-semibold text-10 text-muted-foreground/50 uppercase leading-none tracking-wider">
                   {col.label}
                 </span>
                 <div>{col.render(s)}</div>
@@ -222,7 +222,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
           {s.recipient_phone && (
             <a
               href={`tel:${s.recipient_phone}`}
-              className="mt-3 inline-flex items-center gap-1.5 font-medium text-[11px] text-primary"
+              className="mt-3 inline-flex items-center gap-1.5 font-medium text-11 text-primary"
             >
               <Phone className="size-3" />
               Call {s.recipient_phone}
@@ -303,7 +303,7 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
                   {counts[f.key] > 0 && (
                     <span
                       className={cn(
-                        "min-w-[14px] text-center font-semibold text-[10px] tabular-nums leading-none",
+                        "min-w-[14px] text-center font-semibold text-10 tabular-nums leading-none",
                         on ? "text-primary" : "text-muted-foreground/55",
                       )}
                     >
@@ -371,7 +371,7 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
         </div>
 
         {/* Footer */}
-        <div className="border-border/35 border-t bg-muted/10 px-4 py-2 text-[11px] text-muted-foreground/60">
+        <div className="border-border/35 border-t bg-muted/10 px-4 py-2 text-11 text-muted-foreground/60">
           Showing {filtered.length} of {counts[filter]} {activeTab.label.toLowerCase()} stops
         </div>
       </CardContent>

@@ -156,7 +156,7 @@ function TotalCard({ count }: { count: number }) {
         spot={brandAlpha(0.20)}
         className="flex h-full cursor-default flex-col justify-between rounded-2xl border border-primary/20 bg-card/95 p-3.5 shadow-md backdrop-blur-sm"
       >
-        <p className="font-semibold text-[10px] text-muted-foreground/55 uppercase leading-none tracking-[0.18em]">
+        <p className="font-semibold text-10 text-muted-foreground/55 uppercase leading-none tracking-[0.18em]">
           Total
         </p>
         <p
@@ -165,7 +165,7 @@ function TotalCard({ count }: { count: number }) {
         >
           {count}
         </p>
-        <p className="font-medium text-[10px] text-muted-foreground/45 uppercase leading-none tracking-wide">stops</p>
+        <p className="font-medium text-10 text-muted-foreground/45 uppercase leading-none tracking-wide">stops</p>
       </MagicCard>
     </motion.div>
   );
@@ -196,7 +196,7 @@ function CenterCard({
         spot="rgba(255,255,255,0.26)"
         className="flex h-full cursor-default flex-col justify-between rounded-xl bg-gradient-to-br from-[#FF6B8A] via-[#FF7DC8] to-[#FF95E8] px-3 py-2.5 shadow-[0_4px_18px_rgba(255,107,138,0.40)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_8px_26px_rgba(255,107,138,0.52)]"
       >
-        <p className="font-bold text-[10px] text-white/65 uppercase leading-none tracking-[0.14em]">{label}</p>
+        <p className="font-bold text-10 text-white/65 uppercase leading-none tracking-[0.14em]">{label}</p>
         <p className="font-black text-white tabular-nums leading-none" style={{ fontSize: "clamp(16px, 1.9vw, 22px)" }}>
           {count}
         </p>
@@ -238,7 +238,7 @@ function RightCard({
             : "bg-gradient-to-br from-[#5B3DD6] via-[#8040FF] to-[#B03DD1] shadow-[0_4px_18px_rgba(91,61,214,0.38)] hover:shadow-[0_8px_26px_rgba(91,61,214,0.52)]",
         )}
       >
-        <p className="font-bold text-[10px] text-white/65 uppercase leading-none tracking-[0.14em]">{label}</p>
+        <p className="font-bold text-10 text-white/65 uppercase leading-none tracking-[0.14em]">{label}</p>
         <p className="font-black text-white tabular-nums leading-none" style={{ fontSize: "clamp(16px, 1.9vw, 22px)" }}>
           {count}
         </p>
@@ -332,7 +332,7 @@ export function SankeyFlow({ data, loading }: { data?: DashboardData; loading: b
         <CardAction>
           <div className="flex items-center gap-1.5 rounded-full bg-primary/5 px-2.5 py-1 ring-1 ring-primary/20">
             <div className="size-1.5 animate-pulse rounded-full bg-primary" />
-            <span className="font-semibold text-[10px] text-primary">Live</span>
+            <span className="font-semibold text-10 text-primary">Live</span>
           </div>
         </CardAction>
       </CardHeader>

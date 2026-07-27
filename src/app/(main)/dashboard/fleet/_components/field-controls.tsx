@@ -1,7 +1,20 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { useState } from "react";
 
+import { Check, ChevronsUpDown, Minus, Plus, X } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -149,5 +162,176 @@ export function MobileTabBar({
         );
       })}
     </nav>
+  );
+}
+
+/* ── Driver avatars (Allowed / Blocked sections) ─────────────────────────── */
+
+/** Deterministic hue from a name — stable across renders and sessions. */
+function nameHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+/** Avatar: profile image when available, else initials on a deterministic
+ *  color derived from the name. `blocked` renders the red-tinted ring. */
+export function DriverAvatar({
+  name,
+  imageUrl,
+  blocked,
+}: {
+  name: string;
+  imageUrl?: string | null;
+  blocked?: boolean;
+}) {
+  const hue = nameHue(name);
+  return (
+    <span
+      title={name}
+      className={cn(
+        "relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-full text-11 font-bold ring-2",
+        blocked ? "ring-rose-500/60" : "ring-border/60",
+      )}
+      style={
+        imageUrl
+          ? undefined
+          : { backgroundColor: `hsl(${hue} 55% 42%)`, color: "white" }
+      }
+    >
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt={name} className="size-full object-cover" />
+      ) : (
+        initials(name)
+      )}
+      {blocked && <span className="absolute inset-0 rounded-full bg-rose-500/15" aria-hidden="true" />}
+    </span>
+  );
+}
+
+/** Avatar row with 10px names below — used by Allowed/Blocked driver sections. */
+export function DriverAvatarRow({
+  drivers,
+  blocked,
+  emptyText,
+}: {
+  drivers: { id: string; name: string; imageUrl?: string | null }[];
+  blocked?: boolean;
+  emptyText: string;
+}) {
+  if (drivers.length === 0) {
+    return <p className="py-1 type-caption">{emptyText}</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-2 py-1">
+      {drivers.map((d) => (
+        <span key={d.id} className="flex w-12 flex-col items-center gap-1">
+          <DriverAvatar name={d.name} imageUrl={d.imageUrl} blocked={blocked} />
+          <span className={cn("w-full truncate text-center text-10 leading-tight", blocked ? "text-rose-500/80" : "text-muted-foreground")}>
+            {d.name.split(/\s+/)[0]}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+
+/* ── Generic searchable multi-select (Command + Popover, replace-toggle) ──── */
+export function SearchMultiSelect({
+  items,
+  selected,
+  onToggle,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  icon: Icon,
+  badgeTone = "default",
+}: {
+  items: { id: string; label: string; hint?: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyText: string;
+  icon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  badgeTone?: "default" | "destructive";
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedItems = items.filter((i) => selected.includes(i.id));
+  return (
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-8 w-full justify-between font-normal text-13"
+          >
+            <span className="flex items-center gap-2 truncate">
+              {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden={true} />}
+              {selected.length > 0 ? (
+                <span>
+                  {placeholder} <span className="text-muted-foreground">· {selected.length} selected</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">{placeholder}</span>
+              )}
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={searchPlaceholder} />
+            <CommandList>
+              <CommandEmpty>{emptyText}</CommandEmpty>
+              <CommandGroup>
+                {items.map((item) => {
+                  const isSel = selected.includes(item.id);
+                  return (
+                    <CommandItem key={item.id} value={item.label} onSelect={() => onToggle(item.id)}>
+                      <Check className={cn("size-3.5", isSel ? "opacity-100" : "opacity-0")} aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                      {item.hint && <span className="ml-auto text-10 text-muted-foreground">{item.hint}</span>}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {selectedItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedItems.map((item) => (
+            <Badge
+              key={item.id}
+              variant={badgeTone === "destructive" ? "destructive" : "secondary"}
+              className="gap-1 pr-1"
+            >
+              {item.label}
+              {item.hint && <span className="opacity-60">{item.hint}</span>}
+              <button
+                type="button"
+                onClick={() => onToggle(item.id)}
+                className="grid size-4 place-items-center rounded-sm transition-colors hover:bg-background/40"
+                aria-label={`Remove ${item.label}`}
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

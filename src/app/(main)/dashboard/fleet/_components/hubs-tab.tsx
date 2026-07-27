@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ArrowLeft,
+  Ban,
   Building2,
   ClipboardList,
   List,
+  Lock,
   ChevronDown,
   CircleCheck,
   Clock,
@@ -18,6 +20,7 @@ import {
   Repeat,
   Search,
   Star,
+  Users,
   X,
 } from "lucide-react";
 
@@ -38,7 +41,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
-import { MobileTabBar, Stepper, TimeSelect } from "./field-controls";
+import { DriverAvatarRow, MobileTabBar, SearchMultiSelect, Stepper, TimeSelect } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
@@ -63,6 +66,8 @@ type Hub = {
   is_default: boolean;
   external_circuit_id: string | null;
   route_defaults?: RouteDefaults | null;
+  visibility?: "pool" | "dedicated";
+  tenant_ids?: number[];
   created_at?: string;
   updated_at?: string;
 };
@@ -93,6 +98,9 @@ type FormState = {
   rdEndCity: string;
   rdEndState: string;
   rdEndZip: string;
+  // Access (tenant scoping): pool = all tenants; dedicated = tenantIds only.
+  visibility: "pool" | "dedicated";
+  tenantIds: number[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -118,6 +126,8 @@ const EMPTY_FORM: FormState = {
   rdEndCity: "",
   rdEndState: "",
   rdEndZip: "",
+  visibility: "pool",
+  tenantIds: [],
 };
 
 // Common US timezones for the compact picker (default America/New_York).
@@ -220,6 +230,8 @@ function payloadFromForm(f: FormState): Record<string, unknown> {
     if (endAddress) routeDefaults.end_address = endAddress;
   }
   payload.route_defaults = routeDefaults;
+  payload.visibility = f.visibility;
+  payload.tenant_ids = f.visibility === "dedicated" ? f.tenantIds : [];
   return payload;
 }
 
@@ -248,6 +260,13 @@ export function HubsTab() {
   // Mobile (<sm) tri-pane navigation: List · Details · Map (Stops pattern).
   const [mobileTab, setMobileTab] = useState<"list" | "detail" | "map">("list");
 
+  // Access control data: tenants (for dedicated scoping) + drivers (for
+  // allow/block relations). Loaded once; relations load per selected hub.
+  const [tenants, setTenants] = useState<{ tenant_id: number; name: string }[]>([]);
+  const [driverOpts, setDriverOpts] = useState<{ id: string; name: string }[]>([]);
+  const [relations, setRelations] = useState<{ allowed: string[]; blocked: string[] }>({ allowed: [], blocked: [] });
+  const [relationsBusy, setRelationsBusy] = useState(false);
+
   // Resilient load: on a transient failure at mount, retry once after a short
   // delay before surfacing the error (keeps the list from getting stuck empty).
   function load(retry = true) {
@@ -267,7 +286,57 @@ export function HubsTab() {
 
   useEffect(() => {
     load();
+    fetch("/api/admin/tenants")
+      .then((r) => (r.ok ? r.json() : { tenants: [] }))
+      .then((d) => setTenants(d.tenants ?? []))
+      .catch(() => setTenants([]));
+    fetch("/api/client/drivers")
+      .then((r) => (r.ok ? r.json() : { drivers: [] }))
+      .then((d) => setDriverOpts(((d.drivers ?? []) as { id: string; name: string }[]).map(({ id, name }) => ({ id, name }))))
+      .catch(() => setDriverOpts([]));
   }, []);
+
+  // Load this hub's driver relations; save on every toggle (replace semantics,
+  // block wins server-side). Non-blocking: failures surface inline.
+  function loadRelations(hubId: string) {
+    setRelations({ allowed: [], blocked: [] });
+    fetch(`/api/client/hubs/${encodeURIComponent(hubId)}/drivers`)
+      .then((r) => (r.ok ? r.json() : { allowed: [], blocked: [] }))
+      .then((d) => setRelations({ allowed: d.allowed ?? [], blocked: d.blocked ?? [] }))
+      .catch(() => {});
+  }
+
+  async function saveRelations(hubId: string, next: { allowed: string[]; blocked: string[] }) {
+    setRelations(next); // optimistic — server echo corrects on mismatch
+    setRelationsBusy(true);
+    const res = await fetch(`/api/client/hubs/${encodeURIComponent(hubId)}/drivers`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    }).catch(() => null);
+    setRelationsBusy(false);
+    if (res?.ok) {
+      const d = await res.json().catch(() => null);
+      if (d) setRelations({ allowed: d.allowed ?? [], blocked: d.blocked ?? [] });
+    } else {
+      setError("Could not save driver access — try again.");
+      loadRelations(hubId);
+    }
+  }
+
+  function toggleRelation(kind: "allowed" | "blocked", driverId: string) {
+    if (!editing) return;
+    const cur = relations[kind];
+    const other: "allowed" | "blocked" = kind === "allowed" ? "blocked" : "allowed";
+    const next = {
+      ...relations,
+      [kind]: cur.includes(driverId) ? cur.filter((d) => d !== driverId) : [...cur, driverId],
+      // adding to one list removes from the other (block wins is server-side,
+      // but the UI keeps the lists visually exclusive)
+      [other]: relations[other].filter((d) => d !== driverId),
+    } as { allowed: string[]; blocked: string[] };
+    void saveRelations(editing.id, next);
+  }
 
   // Map a hub record → the editable form state.
   function formFromHub(hub: Hub): FormState {
@@ -296,6 +365,8 @@ export function HubsTab() {
       rdEndCity: rd.end_address?.city ?? "",
       rdEndState: rd.end_address?.state ?? "",
       rdEndZip: rd.end_address?.zip ?? "",
+      visibility: hub.visibility === "dedicated" ? "dedicated" : "pool",
+      tenantIds: Array.isArray(hub.tenant_ids) ? hub.tenant_ids : [],
     };
   }
 
@@ -320,6 +391,7 @@ export function HubsTab() {
     const f = formFromHub(hub);
     setForm(f);
     lastSavedRef.current = JSON.stringify(payloadFromForm(f));
+    loadRelations(hub.id);
     setError("");
     setSavedTick(false);
     setAttempted(false);
@@ -687,6 +759,94 @@ export function HubsTab() {
             />
           </FieldRow>
         </Group>
+
+        {/* ── Access — pool vs dedicated tenant scoping ── */}
+        <Group
+          icon={Lock}
+          title="Access"
+          note="Pool: every tenant can use this hub (stops stay tenant-filtered). Dedicated: only the tenants listed below."
+        >
+          <FieldRow label="Visibility">
+            <div className="flex overflow-hidden rounded-lg border border-border/60">
+              {(["pool", "dedicated"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, visibility: v }))}
+                  className={cn(
+                    "px-3 py-1 text-11 font-semibold capitalize transition-colors",
+                    form.visibility === v
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-transparent text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </FieldRow>
+          {form.visibility === "dedicated" && (
+            <StackRow label="Tenants" hint="Who can use this hub">
+              <SearchMultiSelect
+                items={tenants.map((t) => ({ id: String(t.tenant_id), label: t.name, hint: `#${t.tenant_id}` }))}
+                selected={form.tenantIds.map(String)}
+                onToggle={(id) =>
+                  setForm((f) => ({
+                    ...f,
+                    tenantIds: f.tenantIds.includes(Number(id))
+                      ? f.tenantIds.filter((t) => t !== Number(id))
+                      : [...f.tenantIds, Number(id)],
+                  }))
+                }
+                placeholder="Select tenants"
+                searchPlaceholder="Search tenants…"
+                emptyText="No tenants found."
+              />
+            </StackRow>
+          )}
+        </Group>
+
+        {/* ── Drivers — allowed / blocked for this hub (saved instantly) ── */}
+        {editing && (
+          <Group
+            icon={Users}
+            title="Drivers"
+            note={relationsBusy ? "Saving driver access…" : "Blocked always wins over allowed."}
+          >
+            <StackRow label="Allowed drivers" hint="Eligible for this hub">
+              <SearchMultiSelect
+                items={driverOpts.map((d) => ({ id: d.id, label: d.name }))}
+                selected={relations.allowed}
+                onToggle={(id) => toggleRelation("allowed", id)}
+                placeholder="Allow drivers"
+                searchPlaceholder="Search drivers…"
+                emptyText="No drivers found."
+                icon={Users}
+              />
+              <DriverAvatarRow
+                drivers={driverOpts.filter((d) => relations.allowed.includes(d.id))}
+                emptyText="No drivers allowed yet."
+              />
+            </StackRow>
+            <StackRow label="Blocked drivers" hint="Never assigned here">
+              <SearchMultiSelect
+                items={driverOpts.map((d) => ({ id: d.id, label: d.name }))}
+                selected={relations.blocked}
+                onToggle={(id) => toggleRelation("blocked", id)}
+                placeholder="Block drivers"
+                searchPlaceholder="Search drivers…"
+                emptyText="No drivers found."
+                icon={Ban}
+                badgeTone="destructive"
+              />
+              <DriverAvatarRow
+                drivers={driverOpts.filter((d) => relations.blocked.includes(d.id))}
+                blocked
+                emptyText="No drivers blocked."
+              />
+            </StackRow>
+          </Group>
+        )}
       </div>
 
       {/* Sticky action bar — full-width primary Save (Stops "Submit Order" recipe),

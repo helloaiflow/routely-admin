@@ -1,5 +1,18 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/* tailwind-merge does not know our custom numeric font-size tokens
+ * (@theme --text-9…--text-13). Without this config it classifies `text-13`
+ * as a text COLOR, so any cn("text-13 …", "text-red-500") silently DROPS the
+ * font size (measured live: status labels rendered 13.5px instead of 10px).
+ * Registering them in the font-size class group fixes every cn() call site. */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["9", "10", "11", "12", "13"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

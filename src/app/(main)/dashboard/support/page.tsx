@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function SupportPage() {
   return (
     <div className="min-h-[calc(100vh-57px)] bg-muted/40">
-      <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
+      <div className="mx-auto max-w-6xl px-4 py-3 lg:px-4">
         <div className="space-y-4">
           <div>
             <h1 className="type-page-title">Support</h1>
             <p className="text-muted-foreground">Get help from the Routely team</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <a href="tel:+18889201907">
               <Card className="cursor-pointer transition-colors hover:border-primary/30">
                 <CardHeader className="pb-2">

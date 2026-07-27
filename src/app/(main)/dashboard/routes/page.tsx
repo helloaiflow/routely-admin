@@ -3,7 +3,7 @@ import { MapPin } from "lucide-react";
 export default function RoutesPage() {
   return (
     <div className="min-h-[calc(100vh-57px)] bg-muted/40">
-      <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
+      <div className="mx-auto max-w-6xl px-4 py-3 lg:px-4">
         <div className="space-y-4">
           <div>
             <h1 className="type-page-title">Active Routes</h1>

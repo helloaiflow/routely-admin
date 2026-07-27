@@ -53,7 +53,7 @@ export function CardOverview() {
       <CardContent>
         <div className="space-y-4">
           <div className="grid w-full place-items-center">
-            <div className="relative flex aspect-8/5 w-full max-w-100 flex-col justify-between overflow-hidden rounded-xl bg-primary p-6">
+            <div className="relative flex aspect-8/5 w-full max-w-100 flex-col justify-between overflow-hidden rounded-xl bg-primary p-4">
               <div className="flex items-start justify-between">
                 <SimpleIcon icon={siApple} className="size-5 fill-primary-foreground sm:size-8" />
               </div>
@@ -69,7 +69,7 @@ export function CardOverview() {
                   <p className="font-medium font-mono text-primary-foreground text-sm uppercase tracking-wide">
                     Arham Khan
                   </p>
-                  <div className="flex gap-6">
+                  <div className="flex gap-3">
                     <div>
                       <p className="text-10 text-primary-foreground/80 uppercase tracking-wider">Valid Thru</p>
                       <p className="font-mono text-primary-foreground/80 text-xs">06/30</p>

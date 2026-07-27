@@ -408,7 +408,7 @@ export function FleetRouteMap({
       {/* Loading overlay */}
       {loading && !failed && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
-          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-card px-6 py-4 shadow-xl ring-1 ring-border/60">
+          <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-card px-4 py-3 shadow-xl ring-1 ring-border/60">
             <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" />
             <p className="font-semibold text-11 text-muted-foreground">
               {twoPoint ? "Calculating route…" : "Locating…"}

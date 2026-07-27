@@ -909,7 +909,7 @@ export function DriversTab() {
               ))}
             </div>
           ) : drivers.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+            <div className="flex flex-col items-center gap-2 px-4 py-14 text-center">
               <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
                 <Users className="size-6" aria-hidden="true" />
               </span>
@@ -1090,7 +1090,7 @@ function DriverRow({
 function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }) {
   if (!driver) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/30">
         <div className="flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border/60">
           <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
         </div>

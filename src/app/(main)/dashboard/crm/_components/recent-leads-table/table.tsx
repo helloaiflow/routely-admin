@@ -120,7 +120,7 @@ export function RecentLeadsTable({ data }: { data: RecentLeadRow[] }) {
           </div>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-3">
         <div className="overflow-hidden rounded-md border">
           <Table>
             <TableHeader className="bg-muted">
@@ -153,7 +153,7 @@ export function RecentLeadsTable({ data }: { data: RecentLeadRow[] }) {
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="hidden flex-1 text-muted-foreground text-sm lg:flex">
             {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s)
             selected.

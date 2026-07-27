@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
  *  Hubs and Drivers pages. Standalone (no data fetching). */
 export default function FleetPage() {
   return (
-    <div className="@container/main w-full space-y-6 px-4 py-4 sm:px-6">
+    <div className="@container/main w-full space-y-6 px-4 py-3 sm:px-4">
       <div>
         <h1 className="font-semibold text-xl tracking-tight md:text-2xl">Fleet</h1>
         <p className="text-sm text-muted-foreground">
@@ -16,7 +16,7 @@ export default function FleetPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <FleetCard
           href="/dashboard/hubs"
           icon={<Building2 className="size-5" aria-hidden="true" />}
@@ -48,7 +48,7 @@ function FleetCard({
   return (
     <Link href={href} className="group block">
       <Card className="transition-colors hover:border-primary/40 hover:bg-muted/30">
-        <CardContent className="flex items-center gap-4 p-5">
+        <CardContent className="flex items-center gap-3 p-5">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
             {icon}
           </span>

@@ -200,7 +200,7 @@ function CenterCard({
         <p className="font-black text-white tabular-nums leading-none" style={{ fontSize: "clamp(16px, 1.9vw, 22px)" }}>
           {count}
         </p>
-        <p className="font-medium text-[7.5px] text-white/50 leading-none tracking-wide">{stat}</p>
+        <p className="font-medium text-9 text-white/50 leading-none tracking-wide">{stat}</p>
       </MagicCard>
     </motion.div>
   );
@@ -242,7 +242,7 @@ function RightCard({
         <p className="font-black text-white tabular-nums leading-none" style={{ fontSize: "clamp(16px, 1.9vw, 22px)" }}>
           {count}
         </p>
-        <p className="font-medium text-[7.5px] text-white/50 leading-none tracking-wide">{stat}</p>
+        <p className="font-medium text-9 text-white/50 leading-none tracking-wide">{stat}</p>
       </MagicCard>
     </motion.div>
   );
@@ -542,7 +542,7 @@ export function SankeyFlow({ data, loading }: { data?: DashboardData; loading: b
                   spot={brandAlpha(0.18)}
                   className="flex h-full cursor-default flex-col justify-between rounded-2xl border border-primary/20 bg-card/95 p-2.5 shadow-md backdrop-blur-sm"
                 >
-                  <span className="font-semibold text-[7.5px] text-muted-foreground/55 leading-none tracking-wide">
+                  <span className="font-semibold text-9 text-muted-foreground/55 leading-none tracking-wide">
                     Stop
                   </span>
                   <span className="font-black text-xl text-foreground tabular-nums leading-none tracking-tight">
@@ -576,7 +576,7 @@ export function SankeyFlow({ data, loading }: { data?: DashboardData; loading: b
                     spot="rgba(255,255,255,0.24)"
                     className="flex h-full cursor-default flex-col justify-between rounded-xl bg-gradient-to-br from-[#FF6B8A] via-[#FF7DC8] to-[#FF95E8] p-2.5 shadow-[0_3px_14px_rgba(255,107,138,0.38)]"
                   >
-                    <span className="font-semibold text-[7.5px] text-white/65 leading-none">{c.label}</span>
+                    <span className="font-semibold text-9 text-white/65 leading-none">{c.label}</span>
                     <span className="font-black text-lg text-white tabular-nums leading-none">{c.count}</span>
                   </MagicCard>
                 </motion.div>
@@ -621,7 +621,7 @@ export function SankeyFlow({ data, loading }: { data?: DashboardData; loading: b
                       c.cls,
                     )}
                   >
-                    <span className="font-semibold text-[7.5px] text-white/65 leading-none">{c.label}</span>
+                    <span className="font-semibold text-9 text-white/65 leading-none">{c.label}</span>
                     <span className="font-black text-lg text-white tabular-nums leading-none">{c.count}</span>
                   </MagicCard>
                 </motion.div>

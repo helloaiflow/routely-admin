@@ -86,7 +86,7 @@ export function ResultsMobile({ results, loading, onSelect }: Props) {
                   {r.route_title && <span className="max-w-[120px] truncate rounded bg-muted px-1.5 py-0.5 text-10 text-muted-foreground">{r.route_title}</span>}
                   {r.driver_name && (
                     <span className="flex items-center gap-1 text-10 text-muted-foreground">
-                      <span className="flex size-3.5 items-center justify-center rounded-full bg-primary/10 text-[7.5px] font-bold text-primary">{getInitials(r.driver_name)}</span>
+                      <span className="flex size-3.5 items-center justify-center rounded-full bg-primary/10 text-9 font-bold text-primary">{getInitials(r.driver_name)}</span>
                       {toTitleCase(r.driver_name)}
                     </span>
                   )}

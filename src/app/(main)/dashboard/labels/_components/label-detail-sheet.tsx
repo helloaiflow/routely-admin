@@ -35,12 +35,12 @@ function AddressBlock({ label, a }: { label: string; a?: LabelAddress }) {
   return (
     <div className="min-w-0">
       <p className="type-label mb-1 text-muted-foreground">{label}</p>
-      <p className="truncate font-medium text-[13px]">{a.name ?? "—"}</p>
-      <p className="truncate text-[11px] text-muted-foreground">{[a.street1, a.street2].filter(Boolean).join(", ")}</p>
-      <p className="truncate text-[11px] text-muted-foreground">
+      <p className="truncate font-medium text-13">{a.name ?? "—"}</p>
+      <p className="truncate text-11 text-muted-foreground">{[a.street1, a.street2].filter(Boolean).join(", ")}</p>
+      <p className="truncate text-11 text-muted-foreground">
         {[a.city, a.state, a.zip].filter(Boolean).join(", ")}
       </p>
-      {a.email && <p className="truncate text-[11px] text-muted-foreground">{a.email}</p>}
+      {a.email && <p className="truncate text-11 text-muted-foreground">{a.email}</p>}
     </div>
   );
 }
@@ -97,9 +97,9 @@ function Timeline({ order }: { order: LabelOrder }) {
               <e.icon className="size-3.5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1 pt-0.5">
-              <span className={cn("block text-[13px]", last ? "font-semibold" : "font-medium")}>{e.label}</span>
+              <span className={cn("block text-13", last ? "font-semibold" : "font-medium")}>{e.label}</span>
               {e.at && (
-                <span className="block text-[11px] text-muted-foreground">
+                <span className="block text-11 text-muted-foreground">
                   {relTime(e.at)} · {fullDate(e.at)}
                 </span>
               )}
@@ -114,8 +114,8 @@ function Timeline({ order }: { order: LabelOrder }) {
             <CalendarClock className="size-3.5" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1 pt-0.5">
-            <span className="block font-medium text-[13px]">Estimated arrival</span>
-            <span className="block text-[11px] text-muted-foreground">Est. {eta} · based on carrier transit days</span>
+            <span className="block font-medium text-13">Estimated arrival</span>
+            <span className="block text-11 text-muted-foreground">Est. {eta} · based on carrier transit days</span>
           </span>
         </li>
       )}
@@ -139,10 +139,10 @@ export function LabelDetailSheet({
           <>
             <SheetHeader className="border-border/60 border-b px-4 py-4">
               <div className="flex items-center justify-between gap-2">
-                <SheetTitle className="font-mono text-[13px] text-primary tabular-nums">{o.order_id}</SheetTitle>
+                <SheetTitle className="font-mono text-13 text-primary tabular-nums">{o.order_id}</SheetTitle>
                 <StatusBadge status={o.status} />
               </div>
-              <SheetDescription className="flex items-center gap-2 text-[13px]">
+              <SheetDescription className="flex items-center gap-2 text-13">
                 <CarrierChip provider={o.rate?.provider} />
                 {o.rate?.provider} {o.rate?.service}
                 {o.rate?.days != null && <span className="text-muted-foreground">· {o.rate.days}d</span>}
@@ -156,16 +156,16 @@ export function LabelDetailSheet({
               {/* Error surface for refunded/failed */}
               {(o.status === "failed" || o.status === "refunded" || o.status === "refund_failed") && (
                 <div className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5" role="alert">
-                  <p className="font-medium text-[13px] text-destructive">
+                  <p className="font-medium text-13 text-destructive">
                     {o.status === "refunded"
                       ? "Purchase failed — payment auto-refunded."
                       : o.status === "refund_failed"
                         ? "Purchase AND refund failed — contact support."
                         : "Purchase failed."}
                   </p>
-                  {o.error && <p className="mt-1 break-words text-[11px] text-destructive/80">{o.error}</p>}
+                  {o.error && <p className="mt-1 break-words text-11 text-destructive/80">{o.error}</p>}
                   {o.payment?.refund_id && (
-                    <p className="mt-1 font-mono text-[11px] text-destructive/80 tabular-nums">
+                    <p className="mt-1 font-mono text-11 text-destructive/80 tabular-nums">
                       Refund: {o.payment.refund_id}
                     </p>
                   )}
@@ -181,7 +181,7 @@ export function LabelDetailSheet({
               <Separator className="bg-border/60" />
 
               {/* Package + payment */}
-              <div className="grid grid-cols-2 gap-3 text-[13px]">
+              <div className="grid grid-cols-2 gap-3 text-13">
                 <div>
                   <p className="type-label mb-1 text-muted-foreground">Package</p>
                   <p>{PACKAGE_TYPE_LABELS[o.package_type ?? ""] ?? "—"}</p>
@@ -204,7 +204,7 @@ export function LabelDetailSheet({
               {o.shippo?.tracking_number && (
                 <div>
                   <p className="type-label mb-1 text-muted-foreground">Tracking</p>
-                  <p className="select-all break-all font-mono text-[13px] tabular-nums">{o.shippo.tracking_number}</p>
+                  <p className="select-all break-all font-mono text-13 tabular-nums">{o.shippo.tracking_number}</p>
                 </div>
               )}
 
@@ -266,7 +266,7 @@ export function LabelDetailSheet({
                   </a>
                 </Button>
               ) : (
-                <p className="flex h-10 flex-1 items-center justify-center gap-1.5 text-[13px] text-muted-foreground">
+                <p className="flex h-10 flex-1 items-center justify-center gap-1.5 text-13 text-muted-foreground">
                   <MapPin className="size-3.5" aria-hidden="true" />
                   No label actions available
                 </p>

@@ -51,7 +51,7 @@ export function CarrierChip({ provider, size = "sm" }: { provider?: string; size
     );
   }
   return (
-    <span className="inline-flex h-6 items-center rounded-md border border-border/60 bg-muted px-1.5 font-bold text-[10px]">
+    <span className="inline-flex h-6 items-center rounded-md border border-border/60 bg-muted px-1.5 font-bold text-10">
       {provider ?? "—"}
     </span>
   );
@@ -62,7 +62,7 @@ export function StatusBadge({ status }: { status: LabelStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium text-[11px]",
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium text-11",
         meta.cls,
       )}
     >
@@ -138,7 +138,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
               }}
               placeholder="Search order, tracking, or recipient…"
               aria-label="Search labels"
-              className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-[13px]"
+              className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-13"
             />
           </div>
           <div className="flex gap-2">
@@ -151,7 +151,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
             >
               <SelectTrigger
                 size="sm"
-                className="h-9 w-[130px] border-border/60 text-[13px]"
+                className="h-9 w-[130px] border-border/60 text-13"
                 aria-label="Filter by status"
               >
                 <SelectValue />
@@ -174,7 +174,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
             >
               <SelectTrigger
                 size="sm"
-                className="h-9 w-[110px] border-border/60 text-[13px]"
+                className="h-9 w-[110px] border-border/60 text-13"
                 aria-label="Filter by carrier"
               >
                 <SelectValue />
@@ -210,16 +210,16 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
             <TableBody>
               {rows.map((o) => (
                 <TableRow key={o.order_id} className="cursor-pointer" onClick={() => setSelected(o)}>
-                  <TableCell className="font-mono text-[11px] text-primary tabular-nums">{o.order_id}</TableCell>
+                  <TableCell className="font-mono text-11 text-primary tabular-nums">{o.order_id}</TableCell>
                   <TableCell>
-                    <span className="block text-[13px] text-muted-foreground">{shortDate(o.created_at)}</span>
+                    <span className="block text-13 text-muted-foreground">{shortDate(o.created_at)}</span>
                     {estArrivalLabel(o) && (
-                      <span className="block text-[11px] text-muted-foreground/70">Est. {estArrivalLabel(o)}</span>
+                      <span className="block text-11 text-muted-foreground/70">Est. {estArrivalLabel(o)}</span>
                     )}
                   </TableCell>
                   {/* Recipient: name + tracking (mono) below */}
                   <TableCell className="max-w-[190px]">
-                    <span className="block truncate font-medium text-[13px]">{o.to_address?.name ?? "—"}</span>
+                    <span className="block truncate font-medium text-13">{o.to_address?.name ?? "—"}</span>
                     {o.shippo?.tracking_number ? (
                       o.shippo?.tracking_url ? (
                         <a
@@ -227,23 +227,23 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="block truncate font-mono text-[11px] text-primary tabular-nums hover:underline"
+                          className="block truncate font-mono text-11 text-primary tabular-nums hover:underline"
                         >
                           {o.shippo.tracking_number}
                         </a>
                       ) : (
-                        <span className="block truncate font-mono text-[11px] text-muted-foreground tabular-nums">
+                        <span className="block truncate font-mono text-11 text-muted-foreground tabular-nums">
                           {o.shippo.tracking_number}
                         </span>
                       )
                     ) : (
-                      <span className="block font-mono text-[11px] text-muted-foreground tabular-nums">—</span>
+                      <span className="block font-mono text-11 text-muted-foreground tabular-nums">—</span>
                     )}
                   </TableCell>
                   {/* Ship To: street + City, ST ZIP */}
                   <TableCell className="max-w-[200px]">
-                    <span className="block truncate text-[13px]">{o.to_address?.street1 ?? "—"}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
+                    <span className="block truncate text-13">{o.to_address?.street1 ?? "—"}</span>
+                    <span className="block truncate text-11 text-muted-foreground">
                       {[o.to_address?.city, [o.to_address?.state, o.to_address?.zip].filter(Boolean).join(" ")]
                         .filter(Boolean)
                         .join(", ")}
@@ -252,14 +252,14 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
                   <TableCell>
                     <span className="flex items-center gap-1.5">
                       <CarrierChip provider={o.rate?.provider} />
-                      <span className="text-[13px]">{o.rate?.provider ?? "—"}</span>
+                      <span className="text-13">{o.rate?.provider ?? "—"}</span>
                     </span>
                   </TableCell>
-                  <TableCell className="max-w-[140px] truncate text-[13px]">{o.rate?.service ?? "—"}</TableCell>
+                  <TableCell className="max-w-[140px] truncate text-13">{o.rate?.service ?? "—"}</TableCell>
                   <TableCell>
                     <StatusBadge status={o.status} />
                   </TableCell>
-                  <TableCell className="text-right font-semibold text-[13px] tabular-nums">
+                  <TableCell className="text-right font-semibold text-13 tabular-nums">
                     {money(o.rate?.client_price)}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
@@ -284,17 +284,17 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
               <span className="min-w-0 flex-1">
                 {/* name + tracking on top */}
                 <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium text-[13px]">{o.to_address?.name ?? "—"}</span>
-                  <span className="shrink-0 font-semibold text-[13px] tabular-nums">{money(o.rate?.client_price)}</span>
+                  <span className="truncate font-medium text-13">{o.to_address?.name ?? "—"}</span>
+                  <span className="shrink-0 font-semibold text-13 tabular-nums">{money(o.rate?.client_price)}</span>
                 </span>
                 <span className="mt-0.5 flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[11px] text-muted-foreground tabular-nums">
+                  <span className="truncate font-mono text-11 text-muted-foreground tabular-nums">
                     {o.shippo?.tracking_number ?? o.order_id}
                   </span>
                   <StatusBadge status={o.status} />
                 </span>
                 {/* address below */}
-                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                <span className="mt-0.5 block truncate text-11 text-muted-foreground">
                   {[
                     o.to_address?.street1,
                     o.to_address?.city,
@@ -315,7 +315,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
         )}
         {filtered.length > PAGE_SIZE && (
           <div className="flex items-center justify-between border-border/60 border-t px-3 py-2">
-            <p className="text-[11px] text-muted-foreground tabular-nums">
+            <p className="text-11 text-muted-foreground tabular-nums">
               {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
             </p>
             <div className="flex gap-1">

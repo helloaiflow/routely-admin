@@ -297,10 +297,10 @@ export function OverviewTab({ orders, range }: { orders: LabelOrder[]; range: Ra
               >
                 <CarrierChip provider={o.rate?.provider} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-mono text-[11px] text-primary tabular-nums">{o.order_id}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">{o.to_address?.name ?? "—"}</span>
+                  <span className="block truncate font-mono text-11 text-primary tabular-nums">{o.order_id}</span>
+                  <span className="block truncate text-11 text-muted-foreground">{o.to_address?.name ?? "—"}</span>
                 </span>
-                <span className="shrink-0 font-semibold text-[13px] tabular-nums">{money(o.rate?.client_price)}</span>
+                <span className="shrink-0 font-semibold text-13 tabular-nums">{money(o.rate?.client_price)}</span>
               </button>
             ))}
           </CardContent>
@@ -318,14 +318,14 @@ export function OverviewTab({ orders, range }: { orders: LabelOrder[]; range: Ra
               const meta = STATUS_META[st as keyof typeof STATUS_META];
               return (
                 <div key={st} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-[13px]">
+                  <span className="flex items-center gap-2 text-13">
                     <span
                       className={cn("size-2 rounded-full", meta?.dot ?? "bg-muted-foreground/40")}
                       aria-hidden="true"
                     />
                     {meta?.label ?? st}
                   </span>
-                  <span className="font-semibold text-[13px] tabular-nums">{count}</span>
+                  <span className="font-semibold text-13 tabular-nums">{count}</span>
                 </div>
               );
             })}
@@ -344,7 +344,7 @@ export function OverviewTab({ orders, range }: { orders: LabelOrder[]; range: Ra
               const pct = byCarrier.total ? Math.round((count / byCarrier.total) * 100) : 0;
               return (
                 <div key={c} className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[13px]">
+                  <div className="flex items-center justify-between gap-2 text-13">
                     <span className="flex items-center gap-2">
                       <CarrierChip provider={c} />
                       {c}
@@ -382,12 +382,12 @@ export function OverviewTab({ orders, range }: { orders: LabelOrder[]; range: Ra
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="truncate font-mono text-[11px] text-primary tabular-nums">{o.order_id}</span>
+                    <span className="truncate font-mono text-11 text-primary tabular-nums">{o.order_id}</span>
                     <StatusBadge status={o.status} />
                   </span>
-                  {o.error && <span className="mt-0.5 block truncate text-[11px] text-destructive/80">{o.error}</span>}
+                  {o.error && <span className="mt-0.5 block truncate text-11 text-destructive/80">{o.error}</span>}
                 </span>
-                <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
+                <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-11 text-muted-foreground">
                   {shortDate(o.created_at)}
                   <ArrowUpRight className="size-3" aria-hidden="true" />
                 </span>

@@ -87,20 +87,20 @@ export function ActivityTab({ orders }: { orders: LabelOrder[] }) {
               <e.icon className="size-3.5" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px]">{e.title}</p>
+              <p className="truncate text-13">{e.title}</p>
               {e.sub && (
                 <p
                   className={
                     e.sub.startsWith("LBL-")
-                      ? "truncate font-mono text-[11px] text-muted-foreground tabular-nums"
-                      : "truncate text-[11px] text-muted-foreground"
+                      ? "truncate font-mono text-11 text-muted-foreground tabular-nums"
+                      : "truncate text-11 text-muted-foreground"
                   }
                 >
                   {e.sub}
                 </p>
               )}
             </div>
-            <time className="shrink-0 text-[11px] text-muted-foreground tabular-nums" dateTime={e.at}>
+            <time className="shrink-0 text-11 text-muted-foreground tabular-nums" dateTime={e.at}>
               {relTime(e.at)}
             </time>
           </li>

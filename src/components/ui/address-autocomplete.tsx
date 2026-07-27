@@ -171,8 +171,8 @@ export function AddressAutocomplete({
           disabled={disabled}
           autoComplete="off"
           className={cn(
-            "flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pl-9 text-base leading-none",
-            "[touch-action:manipulation] placeholder:text-sm placeholder:text-muted-foreground/40",
+            "flex h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 pl-8 text-13 leading-none",
+            "[touch-action:manipulation] placeholder:text-13 placeholder:text-muted-foreground/40",
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring",
             "disabled:cursor-not-allowed disabled:opacity-50",
             error && "border-destructive focus-visible:ring-destructive",

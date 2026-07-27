@@ -63,7 +63,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - 49px)" }}>
+        {/* Height derives from the h-12 (3rem) header + 1px border so it scales
+            with the root density dial instead of a hardcoded px offset. */}
+        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - 3rem - 1px)" }}>
           {children}
         </div>
 

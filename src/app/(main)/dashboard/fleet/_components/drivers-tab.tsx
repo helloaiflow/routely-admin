@@ -55,6 +55,8 @@ import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
+import { PersonAvatar } from "@/components/ui/avatar-group";
+
 import { MobileTabBar } from "./field-controls";
 import { IsoCourierScene } from "./fleet-art";
 import { FleetRouteMap } from "./fleet-route-map";
@@ -727,7 +729,16 @@ export function DriversTab() {
             </button>
           </div>
         </div>
-        <div className="relative px-4 pb-3">
+        <div className="relative flex items-start gap-2.5 px-4 pb-3">
+          {form.name.trim() && (
+            <PersonAvatar
+              person={{ id: editing?.id ?? "new", name: form.name.trim() }}
+              size="size-9"
+              ring={false}
+              className="mt-0.5 shrink-0"
+            />
+          )}
+          <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
             {formatDisplayCase(form.name.trim()) || "Untitled driver"}
           </p>
@@ -756,6 +767,7 @@ export function DriversTab() {
                 {form.vehicle.trim()}
               </span>
             )}
+          </div>
           </div>
         </div>
       </div>
@@ -1060,43 +1072,47 @@ function DriverRow({
         }
       }}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-2.5 border-b border-l-2 border-border/50 px-2.5 py-2 text-left transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
         inactive && "opacity-60",
         selected
           ? "border-l-primary bg-blue-50 dark:bg-primary/20"
           : "border-l-transparent bg-card hover:bg-muted/30",
       )}
     >
-      <span
-        className={cn(
-          "mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg",
-          inactive ? "bg-muted text-muted-foreground" : "bg-primary/15 text-primary",
-        )}
-      >
-        <Users className="size-4" aria-hidden="true" />
-      </span>
+      <PersonAvatar person={{ id: driver.id, name: driver.name }} size="size-7" ring={false} className={cn(inactive && "grayscale opacity-70")} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-13 font-semibold text-foreground leading-tight">{formatDisplayCase(driver.name)}</p>
-        <p className="mt-0.5 truncate font-mono text-11 tabular-nums text-foreground/65 leading-tight">
-          {formatPhone(driver.phone)}
-        </p>
-        <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
-          {driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids))}
-        </p>
-        {vehicle && (
-          <p className="mt-0.5 truncate text-10 text-muted-foreground/50 leading-tight">{vehicle}</p>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1 self-center">
-        {inactive ? (
-          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-semibold text-muted-foreground ring-1 ring-border">
-            Inactive
+        {/* Line 1 — name + status (6px dot + colored 10px label) */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-12 font-semibold text-foreground leading-snug">
+            {formatDisplayCase(driver.name)}
+          </p>
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1 text-10 font-medium",
+              inactive ? "text-muted-foreground/60" : "text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            {inactive ? "Inactive" : "Active"}
           </span>
-        ) : (
-          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
-            Active
-          </span>
-        )}
+        </div>
+        {/* Line 2 — phone · hubs · vehicle merged into one muted line */}
+        <div className="mt-px flex items-center justify-between gap-2">
+          {(() => {
+            const meta = [
+              formatPhone(driver.phone),
+              driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids)),
+              vehicle,
+            ]
+              .filter((x) => x && x !== "—")
+              .join(" · ");
+            return (
+              <p className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug tabular-nums" title={meta}>
+                {meta || "—"}
+              </p>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );

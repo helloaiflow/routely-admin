@@ -204,7 +204,7 @@ function CalField({
 }) {
   return (
     <label className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">{label}</span>
+      <span className="text-10 font-medium uppercase tracking-wide text-muted-foreground/70">{label}</span>
       <input
         type="number"
         value={value}
@@ -326,14 +326,14 @@ export function PrintPoolLabelsDialog({
           {/* Batch selector + alignment toggle */}
           <div className="mb-3">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="text-11 font-semibold uppercase tracking-wider text-muted-foreground">
                 How many labels
               </span>
               <button
                 type="button"
                 onClick={() => setShowCal((v) => !v)}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-11 font-medium transition-colors",
                   showCal ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
@@ -357,13 +357,13 @@ export function PrintPoolLabelsDialog({
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+            <p className="mt-1.5 text-11 leading-relaxed text-muted-foreground/70">
               {availableTotal != null
                 ? `${availableTotal.toLocaleString()} labels available in the pool · ${capacity} fit per sheet.`
                 : `${capacity} labels fit per sheet.`}
             </p>
             {shortfall && !loading && availableTotal != null && (
-              <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+              <p className="mt-1 flex items-center gap-1.5 text-11 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 Only {returned} available — printing {returned} instead of {count}.
               </p>
@@ -374,11 +374,11 @@ export function PrintPoolLabelsDialog({
           {showCal && (
             <div className="mb-3 rounded-lg border border-border/70 bg-muted/30 p-3">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-semibold text-foreground">Sheet alignment (inches)</p>
+                <p className="text-11 font-semibold text-foreground">Sheet alignment (inches)</p>
                 <button
                   type="button"
                   onClick={() => setCal(DEFAULT_CAL)}
-                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-11 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <RotateCcw className="size-3" /> Reset
                 </button>
@@ -394,7 +394,7 @@ export function PrintPoolLabelsDialog({
                 <CalField label="Row gap" value={cal.rowGap} step={0.01} min={0} max={1} onChange={(n) => setCalField("rowGap", n)} />
                 <div />
               </div>
-              <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
+              <p className="mt-2 text-10 leading-relaxed text-muted-foreground/70">
                 Print one sheet, lay it over your label sheet, and nudge these until the barcodes sit on the labels.
                 Saved automatically on this device.
               </p>
@@ -410,7 +410,7 @@ export function PrintPoolLabelsDialog({
             {loading ? (
               <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="size-5 animate-spin" />
-                <span className="text-[13px]">Loading labels…</span>
+                <span className="text-13">Loading labels…</span>
               </div>
             ) : error ? (
               <div className="flex h-40 max-w-[320px] flex-col items-center justify-center gap-2 text-center">
@@ -428,7 +428,7 @@ export function PrintPoolLabelsDialog({
               ))
             )}
           </div>
-          <p className="mt-2 text-center text-[10px] text-muted-foreground/70">
+          <p className="mt-2 text-center text-10 text-muted-foreground/70">
             Preview · {SHEET_W} × {SHEET_H} in · {cal.cols} × {cal.rows} grid · each label {LABEL_W} × {LABEL_H} in
             {pages.length > 1 ? ` · ${pages.length} sheets` : ""}
           </p>
@@ -473,7 +473,7 @@ export function PrintPoolLabelsButton({ className }: { className?: string }) {
               <Barcode />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-[11px]">
+          <TooltipContent side="bottom" className="text-11">
             Print labels
           </TooltipContent>
         </Tooltip>

@@ -212,11 +212,11 @@ export default function BarcodeScanModal({ open, onOpenChange, onDetected }: Bar
             <div className="flex size-16 items-center justify-center rounded-2xl bg-destructive/10">
               <AlertCircle className="size-8 text-destructive" />
             </div>
-            <p className="max-w-[290px] text-center text-[13px] text-muted-foreground/70 leading-relaxed">{errorMsg}</p>
+            <p className="max-w-[290px] text-center text-13 text-muted-foreground/70 leading-relaxed">{errorMsg}</p>
             <Button
               onClick={() => onOpenChange(false)}
               variant="outline"
-              className="h-11 w-full max-w-[300px] rounded-xl border-border/60 text-[13px] font-medium"
+              className="h-11 w-full max-w-[300px] rounded-xl border-border/60 text-13 font-medium"
             >
               Close
             </Button>
@@ -249,7 +249,7 @@ export default function BarcodeScanModal({ open, onOpenChange, onDetected }: Bar
               )}
 
               <div className="absolute right-0 bottom-3 left-0 flex justify-center">
-                <span className="rounded-full bg-black/55 px-3.5 py-1 text-[11px] text-white/85">
+                <span className="rounded-full bg-black/55 px-3.5 py-1 text-11 text-white/85">
                   Align the barcode in the box
                 </span>
               </div>

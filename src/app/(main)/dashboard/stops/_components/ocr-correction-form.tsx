@@ -234,12 +234,12 @@ export default function OcrCorrectionForm({
             {(counterLabel || (reasons && reasons.length > 0)) && (
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 {counterLabel && (
-                  <span className="rounded-full bg-rose-500/10 px-3 py-0.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                  <span className="rounded-full bg-rose-500/10 px-3 py-0.5 text-11 font-semibold text-rose-600 dark:text-rose-400">
                     {counterLabel}
                   </span>
                 )}
                 {reasons && reasons.length > 0 && (
-                  <span className="truncate text-[11px] text-muted-foreground/60">{reasons.join(" · ")}</span>
+                  <span className="truncate text-11 text-muted-foreground/60">{reasons.join(" · ")}</span>
                 )}
               </div>
             )}
@@ -254,7 +254,7 @@ export default function OcrCorrectionForm({
                 {/* biome-ignore lint/a11y/useAltText: reference label image */}
                 {/* biome-ignore lint/performance/noImgElement: ephemeral object / data URL */}
                 <img src={imageUrl} className="mx-auto max-h-[42svh] w-full object-contain" />
-                <span className="absolute right-2 bottom-2 flex items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
+                <span className="absolute right-2 bottom-2 flex items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-11 font-medium text-white">
                   <Maximize2 className="size-3" />
                   Tap to zoom
                 </span>
@@ -264,7 +264,7 @@ export default function OcrCorrectionForm({
 
           {/* Address */}
           <div className="mb-3">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Delivery Address <span className="text-destructive">*</span>
             </label>
             <input
@@ -276,16 +276,16 @@ export default function OcrCorrectionForm({
                 runAddressValidation(e.target.value);
               }}
               placeholder="123 Main St, Miami, FL 33101"
-              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
             {validating && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
+              <p className="mt-1.5 flex items-center gap-1.5 text-11 text-muted-foreground/50">
                 <Loader2 className="size-3 animate-spin" />
                 Validating…
               </p>
             )}
             {resolvedAddress && !validating && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+              <p className="mt-1.5 flex items-center gap-1.5 text-11 text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="size-3 shrink-0" />
                 {[resolvedAddress.street, resolvedAddress.city, resolvedAddress.state, resolvedAddress.zip]
                   .filter(Boolean)
@@ -320,7 +320,7 @@ export default function OcrCorrectionForm({
 
           {/* Apt / Suite / Unit (optional) — kept out of the Google-validated line */}
           <div className="mb-3">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Apt / Suite / Unit{" "}
               <span className="font-normal normal-case tracking-normal text-muted-foreground/40">(optional)</span>
             </label>
@@ -328,13 +328,13 @@ export default function OcrCorrectionForm({
               value={apt}
               onChange={(e) => setApt(e.target.value)}
               placeholder="Apt 5, Suite 200, Unit B…"
-              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </div>
 
           {/* Name */}
           <div className="mb-3">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Recipient Name <span className="text-destructive">*</span>
             </label>
             <input
@@ -344,13 +344,13 @@ export default function OcrCorrectionForm({
                 setErrors([]);
               }}
               placeholder="Full name"
-              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </div>
 
           {/* Phone */}
           <div className="mb-3">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Phone Number <span className="text-destructive">*</span>
             </label>
             <input
@@ -361,14 +361,14 @@ export default function OcrCorrectionForm({
               }}
               placeholder="(555) 123-4567"
               inputMode="tel"
-              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </div>
 
           {/* DOB + Order IDs */}
           <div className="mb-3 grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                 Date of Birth
               </label>
               <input
@@ -376,11 +376,11 @@ export default function OcrCorrectionForm({
                 onChange={(e) => setDob(e.target.value)}
                 placeholder="MM/DD/YYYY"
                 inputMode="numeric"
-                className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                 Order IDs
               </label>
               <input
@@ -394,20 +394,20 @@ export default function OcrCorrectionForm({
 
           {/* Gate code (optional) — captured + stored like other stop fields */}
           <div className="mb-3">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Gate Code <span className="font-normal text-muted-foreground/40">(optional)</span>
             </label>
             <input
               value={gateCode}
               onChange={(e) => setGateCode(e.target.value)}
               placeholder="e.g. #1234"
-              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </div>
 
           {/* Package type */}
           <div className="mb-4">
-            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <p className="mb-2.5 text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
               Package Options
             </p>
             <div className="mb-2.5 grid grid-cols-4 gap-1 rounded-xl bg-muted/40 p-1">
@@ -463,7 +463,7 @@ export default function OcrCorrectionForm({
                   type="button"
                   onClick={toggle}
                   className={cn(
-                    "flex h-9 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-[11px] font-medium transition-all",
+                    "flex h-9 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-11 font-medium transition-all",
                     active
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border/50 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground",
@@ -490,7 +490,7 @@ export default function OcrCorrectionForm({
                   }}
                   placeholder="0.00"
                   inputMode="decimal"
-                  className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                  className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
                 />
               </div>
             )}
@@ -499,10 +499,10 @@ export default function OcrCorrectionForm({
           {/* Validation / submit errors */}
           {errors.length > 0 && (
             <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3">
-              <p className="mb-1 text-[11px] font-semibold text-destructive">Fix before submitting:</p>
+              <p className="mb-1 text-11 font-semibold text-destructive">Fix before submitting:</p>
               {errors.map((e, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: static error list per render
-                <p key={i} className="text-[11px] text-destructive/80">
+                <p key={i} className="text-11 text-destructive/80">
                   • {e}
                 </p>
               ))}
@@ -532,7 +532,7 @@ export default function OcrCorrectionForm({
               onClick={onSkip}
               disabled={submitting}
               variant="outline"
-              className="h-11 w-full gap-2 rounded-xl border-border/60 font-medium text-[13px]"
+              className="h-11 w-full gap-2 rounded-xl border-border/60 font-medium text-13"
             >
               <SkipForward className="size-4" />
               {skipLabel}
@@ -585,7 +585,7 @@ export default function OcrCorrectionForm({
               <AlertTriangle className="size-5.5 text-amber-500" />
             </div>
             <p className="font-semibold text-sm text-foreground">Address not verified</p>
-            <p className="mt-1.5 text-[13px] text-muted-foreground/70 leading-relaxed">
+            <p className="mt-1.5 text-13 text-muted-foreground/70 leading-relaxed">
               We couldn&apos;t confirm this address with Google. You can submit it anyway — it&apos;ll be flagged as
               unverified for review.
             </p>
@@ -601,7 +601,7 @@ export default function OcrCorrectionForm({
                 onClick={() => setShowWarn(false)}
                 disabled={submitting}
                 variant="outline"
-                className="h-10 w-full rounded-xl border-border/60 font-medium text-[13px]"
+                className="h-10 w-full rounded-xl border-border/60 font-medium text-13"
               >
                 Cancel
               </Button>

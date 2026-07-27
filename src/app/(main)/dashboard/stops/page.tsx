@@ -643,7 +643,7 @@ function AddrSearch({
           placeholder={placeholder ?? "Search address…"}
           spellCheck={false}
           autoComplete="off"
-          className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/50"
         />
         {busy ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground/50" />
@@ -687,8 +687,8 @@ function AddrSearch({
               >
                 <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-[13px] text-foreground">{p.main_text}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{p.secondary_text}</p>
+                  <p className="truncate font-semibold text-13 text-foreground">{p.main_text}</p>
+                  <p className="truncate text-11 text-muted-foreground">{p.secondary_text}</p>
                 </div>
               </button>
             ))}
@@ -827,7 +827,7 @@ function NewStopInput({
           placeholder="Search delivery address…"
           spellCheck={false}
           autoComplete="off"
-          className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/50"
         />
         {busy ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground/40" />
@@ -865,7 +865,7 @@ function NewStopInput({
               <>
                 <div className="flex items-center gap-1.5 border-amber-200/50 border-b bg-amber-50 px-3.5 py-1.5 dark:border-amber-500/20 dark:bg-amber-500/10">
                   <AlertCircle className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                  <span className="font-semibold text-[11px] text-amber-700 dark:text-amber-300">
+                  <span className="font-semibold text-11 text-amber-700 dark:text-amber-300">
                     Today: {matchedStops.length} {matchedStops.length === 1 ? "delivery" : "deliveries"} already at this
                     address
                   </span>
@@ -889,11 +889,11 @@ function NewStopInput({
                       <span className={cn("size-2 shrink-0 rounded-full", ac.dot)} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-xs text-foreground">{s.address}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">
+                        <p className="truncate text-11 text-muted-foreground">
                           {[s.city, s.state].filter(Boolean).join(", ")} · {toTitle(s.recipient_name) || "No name yet"}
                         </p>
                       </div>
-                      <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 font-bold text-[10px]", ac.badge)}>
+                      <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 font-bold text-10", ac.badge)}>
                         {statusLabel(s.status)}
                       </span>
                     </button>
@@ -906,7 +906,7 @@ function NewStopInput({
               <>
                 {matchedStops.length > 0 && (
                   <div className="flex items-center gap-1.5 bg-muted/40 px-3.5 py-1.5">
-                    <span className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
+                    <span className="font-bold text-10 text-muted-foreground uppercase tracking-wider">
                       Add another stop
                     </span>
                   </div>
@@ -923,8 +923,8 @@ function NewStopInput({
                   >
                     <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-[13px] text-foreground">{p.main_text}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">{p.secondary_text}</p>
+                      <p className="truncate font-semibold text-13 text-foreground">{p.main_text}</p>
+                      <p className="truncate text-11 text-muted-foreground">{p.secondary_text}</p>
                     </div>
                   </button>
                 ))}
@@ -994,7 +994,7 @@ function _AddrFilter({ value, onChange }: { value: string; onChange: (v: string)
           placeholder="Filter stops…"
           spellCheck={false}
           autoComplete="off"
-          className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/50"
         />
         {busy ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground/40" />
@@ -1036,8 +1036,8 @@ function _AddrFilter({ value, onChange }: { value: string; onChange: (v: string)
               >
                 <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-[13px] text-foreground">{p.main_text}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{p.secondary_text}</p>
+                  <p className="truncate font-semibold text-13 text-foreground">{p.main_text}</p>
+                  <p className="truncate text-11 text-muted-foreground">{p.secondary_text}</p>
                 </div>
               </button>
             ))}
@@ -1137,7 +1137,7 @@ function PickupSelector({
               {toTitle(selected?.name ?? "Select pickup")}
             </p>
             {selected?.address && (
-              <p className="truncate text-[11px] text-muted-foreground leading-tight">{toTitle(selected.address)}</p>
+              <p className="truncate text-11 text-muted-foreground leading-tight">{toTitle(selected.address)}</p>
             )}
           </div>
           <ChevronDown
@@ -1177,8 +1177,8 @@ function PickupSelector({
                   />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-xs text-foreground">{toTitle(l.name)}</p>
-                    {l.address && <p className="truncate text-[11px] text-muted-foreground">{toTitle(l.address)}</p>}
-                    {l.is_default && <span className="font-semibold text-[10px] text-primary">Default</span>}
+                    {l.address && <p className="truncate text-11 text-muted-foreground">{toTitle(l.address)}</p>}
+                    {l.is_default && <span className="font-semibold text-10 text-primary">Default</span>}
                   </div>
                   {selected?.id === l.id && l.id !== "__custom__" && (
                     <CheckCircle2 className="size-3.5 shrink-0 text-primary" />
@@ -1657,8 +1657,8 @@ function GoogleMap({
           <MapIcon className="size-7 text-muted-foreground/50" aria-hidden="true" />
         </div>
         <div className="text-center">
-          <p className="font-bold text-[13px] text-foreground/70">Route map</p>
-          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+          <p className="font-bold text-13 text-foreground/70">Route map</p>
+          <p className="mt-1 text-11 text-muted-foreground leading-relaxed">
             Select a stop to see
             <br />
             the pickup → delivery route
@@ -1674,7 +1674,7 @@ function GoogleMap({
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-card px-6 py-4 shadow-xl ring-1 ring-border/60">
             <Loader2 className="size-5 animate-spin text-primary" />
-            <p className="font-semibold text-[11px] text-muted-foreground">Calculating route…</p>
+            <p className="font-semibold text-11 text-muted-foreground">Calculating route…</p>
           </div>
         </div>
       )}
@@ -2214,7 +2214,7 @@ function GoogleMap({
                 <Layers style={{ width: 14, height: 14 }} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="text-[11px]">
+            <TooltipContent side="left" className="text-11">
               Satellite view
             </TooltipContent>
           </Tooltip>
@@ -2262,7 +2262,7 @@ function GoogleMap({
                   <Navigation style={{ width: 14, height: 14 }} />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left" className="text-[11px]">
+              <TooltipContent side="left" className="text-11">
                 Center route
               </TooltipContent>
             </Tooltip>
@@ -2309,7 +2309,7 @@ function GoogleMap({
                   <Camera style={{ width: 14, height: 14 }} />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left" className="text-[11px]">
+              <TooltipContent side="left" className="text-11">
                 Route screenshot
               </TooltipContent>
             </Tooltip>
@@ -2351,7 +2351,7 @@ function GoogleMap({
                 <ExternalLink style={{ width: 14, height: 14 }} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="text-[11px]">
+            <TooltipContent side="left" className="text-11">
               Open in Google Maps
             </TooltipContent>
           </Tooltip>
@@ -2487,7 +2487,7 @@ function FormSection({
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold tracking-[-0.01em] text-foreground/80">{title}</span>
           {!open && summary && (
-            <span className="ml-1 max-w-[120px] truncate text-[11px] text-muted-foreground/50">{summary}</span>
+            <span className="ml-1 max-w-[120px] truncate text-11 text-muted-foreground/50">{summary}</span>
           )}
         </div>
         <ChevronDown
@@ -2515,7 +2515,7 @@ function FormSection({
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0">
-      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
       <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
     </div>
   );
@@ -2550,7 +2550,7 @@ function ReadRow({
     if (!value) return null;
     return (
       <div className="flex items-start justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0">
-        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
           {label}
           {required && (
             <span className="ml-0.5 text-rose-400" title="Required">
@@ -2560,8 +2560,8 @@ function ReadRow({
         </span>
         <span
           className={cn(
-            "min-w-0 truncate text-right text-[11px] font-medium leading-snug text-foreground",
-            mono && "font-mono text-[11px] text-primary",
+            "min-w-0 truncate text-right text-11 font-medium leading-snug text-foreground",
+            mono && "font-mono text-11 text-primary",
           )}
         >
           {value}
@@ -2609,7 +2609,7 @@ function ReadRow({
       className="group flex cursor-text items-start justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0"
       onClick={() => setEditing(true)}
     >
-      <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
         {label}
         {required && (
           <span className="ml-0.5 text-rose-400" title="Required">
@@ -2709,9 +2709,9 @@ function _RateCard({
       <div className="flex items-center justify-between rounded-xl border-2 border-border/40 bg-muted/20 px-3.5 py-2.5 opacity-50">
         <div>
           <p className="font-semibold text-xs text-foreground">{carrier}</p>
-          <p className="text-[11px] text-muted-foreground">Not available</p>
+          <p className="text-11 text-muted-foreground">Not available</p>
         </div>
-        <span className="text-[11px] text-muted-foreground">N/A</span>
+        <span className="text-11 text-muted-foreground">N/A</span>
       </div>
     );
   return (
@@ -2726,17 +2726,17 @@ function _RateCard({
     >
       <div>
         <p className="font-semibold text-xs text-foreground">{carrier}</p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-11 text-muted-foreground">
           {service ?? "Standard"}
           {days != null ? ` · ${days} days` : ""}
         </p>
       </div>
       <div className="flex items-center gap-2.5">
-        <span className="font-bold text-[13px] text-foreground">${amount.toFixed(2)}</span>
+        <span className="font-bold text-13 text-foreground">${amount.toFixed(2)}</span>
         {selected ? (
           <CheckCircle2 className="size-4 text-primary" />
         ) : (
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-[11px] text-primary">Select</span>
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-11 text-primary">Select</span>
         )}
       </div>
     </div>
@@ -2877,8 +2877,8 @@ function _DraftStopPanel({
         </motion.div>
         <div>
           <p className="font-black text-lg text-foreground">Stop Created!</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">{street}</p>
-          <p className="mt-3 font-bold font-mono text-[13px] text-primary">{trackingNum}</p>
+          <p className="mt-1 text-13 text-muted-foreground">{street}</p>
+          <p className="mt-3 font-bold font-mono text-13 text-primary">{trackingNum}</p>
         </div>
         <Button onClick={onClose} className="mt-2 h-9 rounded-xl px-8 font-bold text-sm">
           Done
@@ -2904,7 +2904,7 @@ function _DraftStopPanel({
         <div className="relative flex items-center justify-between border-border/[0.06] border-b px-4 pt-1.5 pb-1">
           <div className="flex items-center gap-1.5">
             <span className="size-1.5 shrink-0 rounded-full bg-violet-500" />
-            <span className="font-semibold text-[11px] text-muted-foreground/50 italic">Draft</span>
+            <span className="font-semibold text-11 text-muted-foreground/50 italic">Draft</span>
           </div>
           <button
             type="button"
@@ -2920,16 +2920,16 @@ function _DraftStopPanel({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <p className="font-bold text-sm text-foreground leading-tight tracking-tight">{toTitle(street)}</p>
-              <p className="mt-0.5 font-medium text-[11px] text-muted-foreground">{toTitle(city)}</p>
+              <p className="mt-0.5 font-medium text-11 text-muted-foreground">{toTitle(city)}</p>
             </div>
             <Package className="mt-0.5 size-5 shrink-0 text-violet-400/30" aria-hidden="true" />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-violet-700 dark:text-violet-400">
+            <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 font-semibold text-10 text-violet-700 dark:text-violet-400">
               <span className="size-1 shrink-0 rounded-full bg-violet-500" />
               Draft
             </span>
-            <span className="inline-flex items-center gap-0.5 rounded-md bg-muted/60 px-1.5 py-0.5 font-mono font-semibold text-[10px] text-muted-foreground/55">
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-muted/60 px-1.5 py-0.5 font-mono font-semibold text-10 text-muted-foreground/55">
               <Hash className="size-2.5" aria-hidden="true" />
               Tracking Pending
             </span>
@@ -2957,10 +2957,10 @@ function _DraftStopPanel({
                     autoSave({ recipient_name: e.target.value.trim().toUpperCase() });
                   }}
                   placeholder="Recipient name *"
-                  className="h-9 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                  className="h-9 flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
                 />
               </div>
-              {draftErrors.name && <p className="px-1 font-medium text-[11px] text-rose-500">{draftErrors.name}</p>}
+              {draftErrors.name && <p className="px-1 font-medium text-11 text-rose-500">{draftErrors.name}</p>}
               <div className="flex items-center gap-2 overflow-hidden rounded-lg border border-border/60 bg-background px-2.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
                 <Phone className="size-3.5 shrink-0 text-muted-foreground" />
                 <input
@@ -2992,10 +2992,10 @@ function _DraftStopPanel({
                   }}
                   placeholder="(555) 123-4567"
                   inputMode="tel"
-                  className="h-9 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                  className="h-9 flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
                 />
               </div>
-              {draftErrors.phone && <p className="px-1 font-medium text-[11px] text-rose-500">{draftErrors.phone}</p>}
+              {draftErrors.phone && <p className="px-1 font-medium text-11 text-rose-500">{draftErrors.phone}</p>}
             </div>
           </FormSection>
 
@@ -3057,7 +3057,7 @@ function _DraftStopPanel({
             {cod && (
               <FieldRow label="COD Amount">
                 <div className="flex items-center gap-1">
-                  <span className="font-bold text-[13px] text-muted-foreground">$</span>
+                  <span className="font-bold text-13 text-muted-foreground">$</span>
                   <input
                     value={codAmt}
                     inputMode="decimal"
@@ -3075,7 +3075,7 @@ function _DraftStopPanel({
 
           {/* Notes */}
           <div className="px-4 pt-2 pb-3">
-            <label className="mb-1.5 flex items-center gap-1.5 font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
+            <label className="mb-1.5 flex items-center gap-1.5 font-bold text-11 text-muted-foreground uppercase tracking-wider">
               <FileText className="size-3" />
               Driver Notes
             </label>
@@ -3099,7 +3099,7 @@ function _DraftStopPanel({
         style={{ paddingBottom: "max(0.75rem, calc(env(safe-area-inset-bottom) + 4.5rem))" }}
       >
         {error && (
-          <p className="rounded-lg bg-destructive/10 px-3 py-1.5 font-semibold text-[11px] text-destructive">{error}</p>
+          <p className="rounded-lg bg-destructive/10 px-3 py-1.5 font-semibold text-11 text-destructive">{error}</p>
         )}
         <Button
           onClick={submitOrder}
@@ -3121,7 +3121,7 @@ function _DraftStopPanel({
         <button
           type="button"
           onClick={onClose}
-          className="w-full rounded-xl border border-border/40 py-2.5 font-medium text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.98]"
+          className="w-full rounded-xl border border-border/40 py-2.5 font-medium text-13 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.98]"
         >
           Cancel
         </button>
@@ -3249,7 +3249,7 @@ function StopStatusTracker({ status }: { status: string }) {
             <span
               key={stage.key}
               className={cn(
-                "text-[10px] leading-tight tracking-wide",
+                "text-10 leading-tight tracking-wide",
                 isFail
                   ? "font-semibold text-rose-500"
                   : isActive
@@ -3342,7 +3342,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
         <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
           <FileText className="size-5 text-muted-foreground/50" aria-hidden="true" />
         </div>
-        <p className="max-w-[200px] text-center text-[11px] text-muted-foreground/60">
+        <p className="max-w-[200px] text-center text-11 text-muted-foreground/60">
           History starts once the order is submitted
         </p>
       </div>
@@ -3352,7 +3352,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
     return (
       <div className="flex items-center justify-center gap-2 py-12">
         <AlertCircle className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
-        <span className="text-[11px] text-muted-foreground/60">{error}</span>
+        <span className="text-11 text-muted-foreground/60">{error}</span>
       </div>
     );
   }
@@ -3360,14 +3360,14 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
     return (
       <div className="flex items-center justify-center gap-2 py-12">
         <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
-        <span className="text-[11px] text-muted-foreground">Loading history…</span>
+        <span className="text-11 text-muted-foreground">Loading history…</span>
       </div>
     );
   }
   if (entries.length === 0) {
     return (
       <div className="px-4 py-10 text-center">
-        <p className="text-[11px] text-muted-foreground/50">No history recorded yet</p>
+        <p className="text-11 text-muted-foreground/50">No history recorded yet</p>
       </div>
     );
   }
@@ -3397,20 +3397,20 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs font-medium text-foreground/85">{e.label}</span>
                 {ts && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground/50">
+                  <span className="shrink-0 text-10 text-muted-foreground/50">
                     {ts.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
                     {ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground/70">{timelineActorDisplay(e)}</p>
-              {e.note && <p className="mt-0.5 whitespace-pre-line text-[11px] text-muted-foreground/50">{e.note}</p>}
+              <p className="mt-0.5 text-11 text-muted-foreground/70">{timelineActorDisplay(e)}</p>
+              {e.note && <p className="mt-0.5 whitespace-pre-line text-11 text-muted-foreground/50">{e.note}</p>}
               {hasDetail && (
                 <>
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : i)}
-                    className="mt-1 flex items-center gap-1 text-[10px] font-medium text-primary/80 hover:text-primary"
+                    className="mt-1 flex items-center gap-1 text-10 font-medium text-primary/80 hover:text-primary"
                   >
                     <ChevronDown
                       className={cn("size-3 transition-transform", isOpen && "rotate-180")}
@@ -3423,7 +3423,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
                   {isOpen && (
                     <div className="mt-1.5 space-y-1 rounded-lg bg-muted/30 px-2.5 py-2">
                       {e.field_changes?.map((c) => (
-                        <div key={c.field} className="text-[11px]">
+                        <div key={c.field} className="text-11">
                           <span className="font-medium text-foreground/70">{FIELD_LABELS[c.field] ?? c.field}:</span>{" "}
                           <span className="text-muted-foreground/60 line-through">{String(c.old_value ?? "—")}</span>
                           {" → "}
@@ -4465,7 +4465,7 @@ function StopDetailPanel({
             <a
               href="#"
               onClick={(e) => e.preventDefault()}
-              className="font-mono text-[10px] text-primary dark:text-white/80 hover:underline"
+              className="font-mono text-10 text-primary dark:text-white/80 hover:underline"
             >
               {!isDraft && tid ? tid : "Tracking Pending"}
             </a>
@@ -4475,7 +4475,7 @@ function StopDetailPanel({
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex items-center gap-0.5 font-semibold text-[10px] text-emerald-600"
+                  className="flex items-center gap-0.5 font-semibold text-10 text-emerald-600"
                 >
                   <CheckCircle2 className="size-2.5" />
                   Saved
@@ -4532,7 +4532,7 @@ function StopDetailPanel({
                 <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground/70 leading-tight">
                   {streetVal || "—"}
                 </p>
-                {cityVal && <p className="truncate text-[11px] text-muted-foreground/55">{cityVal}</p>}
+                {cityVal && <p className="truncate text-11 text-muted-foreground/55">{cityVal}</p>}
               </>
             ) : (
               <>
@@ -4541,7 +4541,7 @@ function StopDetailPanel({
               </>
             );
           })()}
-          {/* Badges row — every badge is rounded-full text-[10px] (per spec).
+          {/* Badges row — every badge is rounded-full text-10 (per spec).
               Emoji prefixes dropped (rendered inconsistently across OS /
               looked toy-like beside the enterprise typography). Status is the
               authoritative pill; type / pkg / flags are quieter chips. */}
@@ -4549,7 +4549,7 @@ function StopDetailPanel({
             {/* Status — primary, colored ring badge */}
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
+                "rounded-full px-2 py-0.5 text-10 font-semibold ring-1",
                 isDraft
                   ? "bg-violet-50 text-violet-600 ring-violet-200/60 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30"
                   : DELIVERED.includes(status)
@@ -4565,7 +4565,7 @@ function StopDetailPanel({
             </span>
             {/* Stop type */}
             {stopType && (
-              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
                 {toTitle(stopType)}
               </span>
             )}
@@ -4575,41 +4575,41 @@ function StopDetailPanel({
                 pkg || (isDraft ? (draftData?.package_type ?? "rx") : (full?.package.type ?? summary.package_type));
               const meta = PKG_TYPES.find((p) => p.id === ptId);
               return meta ? (
-                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
                   {meta.l}
                 </span>
               ) : null;
             })()}
             {/* Special flags */}
             {(serviceType === "same_day" || serviceType === "express") && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-10 font-medium text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
                 {serviceType === "same_day" ? "Same Day" : "Express"}
               </span>
             )}
             {(full?.package.requires_signature || sig) && (
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-blue-200/60 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30">
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-10 font-medium text-blue-700 ring-1 ring-blue-200/60 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30">
                 Sig. Req.
               </span>
             )}
             {(full?.service.collect_payment || cod) && (
-              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-10 font-medium text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
                 {parseFloat(codAmt || "0") > 0 ? fmtCurrency(codAmt) : "COD"}
               </span>
             )}
             {(full?.package.cold_chain || coldChain) && (
-              <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-700 ring-1 ring-cyan-200/60 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/30">
+              <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-10 font-medium text-cyan-700 ring-1 ring-cyan-200/60 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/30">
                 Cold Chain
               </span>
             )}
             {(gate || full?.address.gate_code) && (
-              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-10 font-medium text-muted-foreground ring-1 ring-border">
                 {gate || full?.address.gate_code}
               </span>
             )}
             {/* Drop-off preference */}
             {(dropPref || full?.address.drop_preference) &&
               dropLabel(dropPref || full?.address.drop_preference || "") && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
                   {dropLabel(dropPref || full?.address.drop_preference || "")}
                 </span>
               )}
@@ -4618,9 +4618,9 @@ function StopDetailPanel({
           {driver && (
             <div className="mt-1.5 flex items-center gap-1.5">
               <Truck className="size-3 text-muted-foreground/60" aria-hidden="true" />
-              <span className="font-medium text-[11px] text-muted-foreground">{toTitle(driver)}</span>
+              <span className="font-medium text-11 text-muted-foreground">{toTitle(driver)}</span>
               {route && (
-                <span className="text-[10px] text-muted-foreground/60">
+                <span className="text-10 text-muted-foreground/60">
                   · {route.length > 22 ? `${route.slice(0, 22)}…` : route}
                 </span>
               )}
@@ -4638,12 +4638,12 @@ function StopDetailPanel({
           <div className="mx-3 mb-3 rounded-lg border border-rose-200/60 bg-rose-50 px-3 py-2.5 dark:border-rose-500/30 dark:bg-rose-500/10">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-semibold text-[11px] text-rose-700 dark:text-rose-300">
+                <p className="font-semibold text-11 text-rose-700 dark:text-rose-300">
                   Submit failed — fix &amp; resubmit
                 </p>
                 {(full?.submit_error?.reason || full?.dispatch_sync?.error) && (
                   <p
-                    className="mt-0.5 truncate text-[11px] text-rose-600/80 dark:text-rose-300/70"
+                    className="mt-0.5 truncate text-11 text-rose-600/80 dark:text-rose-300/70"
                     title={full?.submit_error?.reason || full?.dispatch_sync?.error}
                   >
                     {full?.submit_error?.reason || full?.dispatch_sync?.error}
@@ -4653,7 +4653,7 @@ function StopDetailPanel({
               <Button
                 type="button"
                 size="sm"
-                className="h-7 shrink-0 gap-1.5 bg-rose-600 px-2.5 text-[11px] text-white hover:bg-rose-700"
+                className="h-7 shrink-0 gap-1.5 bg-rose-600 px-2.5 text-11 text-white hover:bg-rose-700"
                 disabled={retrying}
                 onClick={handleRetrySubmission}
               >
@@ -4680,7 +4680,7 @@ function StopDetailPanel({
               onClick={() => setPanelTab(tab)}
               className={cn(
                 // h-8 (was h-9) makes the panel feel less chunky per spec
-                "h-8 border-b-2 px-3 text-[11px] font-medium transition-colors",
+                "h-8 border-b-2 px-3 text-11 font-medium transition-colors",
                 panelTab === tab
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground/60 hover:text-foreground",
@@ -4692,7 +4692,7 @@ function StopDetailPanel({
                 <span className="flex items-center gap-1.5">
                   Notes
                   {internalNotes.length > 0 && (
-                    <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary dark:bg-primary/25 dark:text-white/90">
+                    <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-10 font-semibold text-primary dark:bg-primary/25 dark:text-white/90">
                       {internalNotes.length}
                     </span>
                   )}
@@ -4703,7 +4703,7 @@ function StopDetailPanel({
                 <span className="flex items-center gap-1.5">
                   Gate Codes
                   {gateCodesData.length > 0 && (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 font-semibold text-[10px] text-muted-foreground">
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 font-semibold text-10 text-muted-foreground">
                       {gateCodesData.length}
                     </span>
                   )}
@@ -4739,7 +4739,7 @@ function StopDetailPanel({
                 author from session). Save via confirm modal on blur-with-text;
                 no extra button (avoids confusion with the draft approve CTA). */}
               <div className="border-b border-border/60 bg-card px-3 py-2.5">
-                <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <label className="mb-1.5 flex items-center gap-1.5 text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   <MessageSquare className="size-3 text-muted-foreground/50" aria-hidden="true" />
                   Quick Notes
                 </label>
@@ -4781,7 +4781,7 @@ function StopDetailPanel({
                   placeholder="Full name"
                 />
                 {validationErrors.name && (
-                  <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">{validationErrors.name}</p>
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.name}</p>
                 )}
                 <ReadRow
                   label="Phone #"
@@ -4808,7 +4808,7 @@ function StopDetailPanel({
                   inputMode="tel"
                 />
                 {validationErrors.phone && (
-                  <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">{validationErrors.phone}</p>
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.phone}</p>
                 )}
                 <ReadRow
                   label="Email"
@@ -4826,10 +4826,10 @@ function StopDetailPanel({
                   placeholder="email@example.com"
                 />
                 {validationErrors.email && (
-                  <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">{validationErrors.email}</p>
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.email}</p>
                 )}
                 {!validationErrors.email && recipEmail && !isValidEmail(recipEmail) && (
-                  <p className="-mt-1 px-3 font-medium text-[10px] text-rose-500">Invalid email format</p>
+                  <p className="-mt-1 px-3 font-medium text-10 text-rose-500">Invalid email format</p>
                 )}
                 <ReadRow
                   label="Date of Birth"
@@ -4851,7 +4851,7 @@ function StopDetailPanel({
                   placeholder="MM/DD/YYYY"
                 />
                 {validationErrors.dob && (
-                  <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">{validationErrors.dob}</p>
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.dob}</p>
                 )}
                 {/* Stop Type + Pkg Type moved here from Package section */}
                 <FieldRow label="Stop Type">
@@ -4985,7 +4985,7 @@ function StopDetailPanel({
                   via routeZone (full.route_zone ?? summary.zone). */}
                 <FieldRow label="Route Zone">
                   {routeZone ? (
-                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-medium text-[11px] text-foreground leading-snug">
+                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-medium text-11 text-foreground leading-snug">
                       {routeZone}
                     </span>
                   ) : (
@@ -4999,7 +4999,7 @@ function StopDetailPanel({
                   <button
                     type="button"
                     onClick={() => setPayOpen((v) => !v)}
-                    className="mb-2 flex items-center gap-1 font-semibold text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    className="mb-2 flex items-center gap-1 font-semibold text-11 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <ChevronDown className={cn("size-3 transition-transform", payOpen && "rotate-180")} />
                     Payment / COD
@@ -5036,7 +5036,7 @@ function StopDetailPanel({
                             >
                               <FieldRow label="COD Amount">
                                 <div className="flex items-center gap-1">
-                                  <span className="font-bold text-[13px] text-muted-foreground">$</span>
+                                  <span className="font-bold text-13 text-muted-foreground">$</span>
                                   <input
                                     value={codAmt}
                                     inputMode="decimal"
@@ -5062,7 +5062,7 @@ function StopDetailPanel({
                                 </div>
                               </FieldRow>
                               {validationErrors.cod && (
-                                <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">
+                                <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">
                                   {validationErrors.cod}
                                 </p>
                               )}
@@ -5114,7 +5114,7 @@ function StopDetailPanel({
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-xs text-foreground">{localPickup?.name || "—"}</p>
                         {localPickup?.address && (
-                          <p className="truncate text-[11px] text-muted-foreground">{localPickup.address}</p>
+                          <p className="truncate text-11 text-muted-foreground">{localPickup.address}</p>
                         )}
                       </div>
                     </div>
@@ -5234,7 +5234,7 @@ function StopDetailPanel({
                       <button
                         type="button"
                         onClick={() => setEditingDeliveryAddr(false)}
-                        className="font-medium text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground"
+                        className="font-medium text-11 text-muted-foreground/70 transition-colors hover:text-foreground"
                       >
                         Cancel
                       </button>
@@ -5266,7 +5266,7 @@ function StopDetailPanel({
                         >
                           {toTitle(localDeliveryStreet || street || "—")}
                         </p>
-                        <p className="truncate text-[11px] text-muted-foreground">
+                        <p className="truncate text-11 text-muted-foreground">
                           {[toTitle(localDeliveryCity || city), localDeliveryState || state, localDeliveryZip || zip]
                             .filter(Boolean)
                             .join(", ")}
@@ -5299,7 +5299,7 @@ function StopDetailPanel({
                   />
                 </FieldRow>
                 {validationErrors.gate && (
-                  <p className="px-3 pt-0.5 font-medium text-[11px] text-rose-500">{validationErrors.gate}</p>
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.gate}</p>
                 )}
                 <FieldRow label="Drop-off">
                   <Select
@@ -5379,7 +5379,7 @@ function StopDetailPanel({
                   <button
                     type="button"
                     onClick={() => setDimsOpen((v) => !v)}
-                    className="mb-2 flex items-center gap-1 font-semibold text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    className="mb-2 flex items-center gap-1 font-semibold text-11 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <ChevronDown className={cn("size-3 transition-transform", dimsOpen && "rotate-180")} />
                     Dimensions
@@ -5490,11 +5490,11 @@ function StopDetailPanel({
                 className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
               />
               <div className="mt-1.5 flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground/40">{noteText.length}/500 · Cmd+Enter to send</span>
+                <span className="text-10 text-muted-foreground/40">{noteText.length}/500 · Cmd+Enter to send</span>
                 <Button
                   type="button"
                   size="sm"
-                  className="h-6 gap-1 px-2.5 text-[11px]"
+                  className="h-6 gap-1 px-2.5 text-11"
                   disabled={!noteText.trim() || postingNote}
                   onClick={handlePostNote}
                 >
@@ -5511,8 +5511,8 @@ function StopDetailPanel({
             {/* Timeline */}
             {internalNotes.length === 0 ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-[11px] text-muted-foreground/50">No notes yet</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/35">Add an instruction or update above</p>
+                <p className="text-11 text-muted-foreground/50">No notes yet</p>
+                <p className="mt-0.5 text-11 text-muted-foreground/35">Add an instruction or update above</p>
               </div>
             ) : (
               <div className="relative px-3 py-2">
@@ -5537,7 +5537,7 @@ function StopDetailPanel({
                           )}
                           <div
                             className={cn(
-                              "relative z-10 flex size-5 items-center justify-center rounded-full text-[10px] font-bold",
+                              "relative z-10 flex size-5 items-center justify-center rounded-full text-10 font-bold",
                               isRoutely ? "bg-primary text-white" : "bg-primary text-white",
                             )}
                           >
@@ -5547,35 +5547,35 @@ function StopDetailPanel({
                         <div className="min-w-0 flex-1">
                           {/* Meta: name · company · time */}
                           <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                            <span className="truncate text-[11px] font-semibold capitalize text-foreground/80">
+                            <span className="truncate text-11 font-semibold capitalize text-foreground/80">
                               {note.author.toLowerCase()}
                             </span>
                             {isRoutely && note.role !== "system" && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="shrink-0 text-[10px] font-medium text-primary/60">Routely</span>
+                                <span className="shrink-0 text-10 font-medium text-primary/60">Routely</span>
                               </>
                             )}
                             {note.role === "system" && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="shrink-0 text-[10px] text-muted-foreground/50">System</span>
+                                <span className="shrink-0 text-10 text-muted-foreground/50">System</span>
                               </>
                             )}
                             {!isRoutely && tenantCompanyName && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="shrink-0 text-[10px] font-medium capitalize text-amber-600/65">
+                                <span className="shrink-0 text-10 font-medium capitalize text-amber-600/65">
                                   {tenantCompanyName.toLowerCase()}
                                 </span>
                               </>
                             )}
-                            <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground/35">
+                            <span className="ml-auto shrink-0 tabular-nums text-10 text-muted-foreground/35">
                               {fmtNoteTime(note.created_at)}
                             </span>
                           </div>
                           {/* Content */}
-                          <p className="text-[11px] leading-snug text-foreground/75">{note.text}</p>
+                          <p className="text-11 leading-snug text-foreground/75">{note.text}</p>
                         </div>
                       </div>
                     );
@@ -5609,7 +5609,7 @@ function StopDetailPanel({
                 <Button
                   type="button"
                   size="sm"
-                  className="h-8 gap-1.5 px-3 text-[11px] bg-primary text-white hover:bg-primary/90"
+                  className="h-8 gap-1.5 px-3 text-11 bg-primary text-white hover:bg-primary/90"
                   disabled={!gateCodeInput.trim() || savingGateCode}
                   onClick={handleSaveGateCode}
                 >
@@ -5621,14 +5621,14 @@ function StopDetailPanel({
                   Save
                 </Button>
               </div>
-              <p className="mt-1 text-[10px] text-muted-foreground/40">
+              <p className="mt-1 text-10 text-muted-foreground/40">
                 Short code (e.g. *1234) or brief note (e.g. Call front desk) · {gateCodeInput.length}/50
               </p>
             </div>
             {/* Address header */}
             {gateCodesStreet && (
               <div className="border-b border-border/50 bg-muted/20 px-3 py-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/55">
+                <p className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/55">
                   Building:{" "}
                   <span className="font-mono normal-case tracking-normal text-foreground/70">{gateCodesStreet}</span>
                 </p>
@@ -5637,12 +5637,12 @@ function StopDetailPanel({
             {gateCodesLoading ? (
               <div className="flex items-center justify-center gap-2 py-10">
                 <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
-                <span className="text-[11px] text-muted-foreground">Looking up access codes…</span>
+                <span className="text-11 text-muted-foreground">Looking up access codes…</span>
               </div>
             ) : gateCodesData.length === 0 ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-[11px] text-muted-foreground/50">No access codes on file</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/35">for this address</p>
+                <p className="text-11 text-muted-foreground/50">No access codes on file</p>
+                <p className="mt-0.5 text-11 text-muted-foreground/35">for this address</p>
               </div>
             ) : (
               <div className="relative px-3 py-2">
@@ -5669,24 +5669,24 @@ function StopDetailPanel({
                         <div className="min-w-0 flex-1">
                           {/* Meta: added_by · building · time */}
                           <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                            <span className="truncate text-[11px] font-semibold capitalize text-foreground/80">
+                            <span className="truncate text-11 font-semibold capitalize text-foreground/80">
                               {addedBy}
                             </span>
                             {gateCodesStreet && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="max-w-[80px] shrink-0 truncate text-[10px] text-muted-foreground/50">
+                                <span className="max-w-[80px] shrink-0 truncate text-10 text-muted-foreground/50">
                                   {gateCodesStreet.split(" ").slice(0, 3).join(" ")}
                                 </span>
                               </>
                             )}
-                            <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground/35">
+                            <span className="ml-auto shrink-0 tabular-nums text-10 text-muted-foreground/35">
                               {createdAt ? fmtNoteTime(createdAt) : ""}
                             </span>
                           </div>
                           {/* Code */}
-                          <p className="font-mono text-[13px] font-semibold tracking-wider text-foreground">{code}</p>
-                          {notes && <p className="text-[11px] leading-snug text-muted-foreground/70">{notes}</p>}
+                          <p className="font-mono text-13 font-semibold tracking-wider text-foreground">{code}</p>
+                          {notes && <p className="text-11 leading-snug text-muted-foreground/70">{notes}</p>}
                         </div>
                       </div>
                     );
@@ -5712,7 +5712,7 @@ function StopDetailPanel({
         {isDraft ? (
           <>
             {submitError && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-1.5 font-semibold text-[11px] text-destructive dark:bg-destructive/15">
+              <p className="rounded-lg bg-destructive/10 px-3 py-1.5 font-semibold text-11 text-destructive dark:bg-destructive/15">
                 {submitError}
               </p>
             )}
@@ -5752,7 +5752,7 @@ function StopDetailPanel({
                         <span
                           key={c.label}
                           className={cn(
-                            "flex shrink-0 items-center gap-1 font-medium text-[10px]",
+                            "flex shrink-0 items-center gap-1 font-medium text-10",
                             c.ok ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60",
                           )}
                         >
@@ -5770,7 +5770,7 @@ function StopDetailPanel({
                     </div>
                     <span
                       className={cn(
-                        "shrink-0 font-semibold text-[10px] tabular-nums",
+                        "shrink-0 font-semibold text-10 tabular-nums",
                         pct === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/80",
                       )}
                     >
@@ -5819,11 +5819,11 @@ function StopDetailPanel({
                     className="flex items-center gap-1 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5"
                   >
                     <CheckCircle2 className="size-3 text-emerald-600" />
-                    <span className="font-semibold text-[11px] text-emerald-700">Saved</span>
+                    <span className="font-semibold text-11 text-emerald-700">Saved</span>
                   </motion.div>
                 )}
               </AnimatePresence>
-              {!autoSaved && <span className="text-[11px] text-muted-foreground/50">Changes save automatically</span>}
+              {!autoSaved && <span className="text-11 text-muted-foreground/50">Changes save automatically</span>}
             </div>
             <button
               type="button"
@@ -5917,7 +5917,7 @@ function StopDetailPanel({
           </DialogHeader>
           <div className="space-y-2 text-xs">
             <div className="rounded-lg bg-muted/40 p-3 ring-1 ring-border/40">
-              {!isDraft && tid && <p className="font-mono text-[11px] text-muted-foreground">{tid}</p>}
+              {!isDraft && tid && <p className="font-mono text-11 text-muted-foreground">{tid}</p>}
               <p className="font-semibold text-foreground">
                 {toTitle(recipName || full?.recipient.name || summary.recipient_name || "—")}
               </p>
@@ -6142,7 +6142,7 @@ function BulkEditDialog({
           <div className="min-w-0 flex-1 overflow-hidden px-1 pt-1 text-xs">
             {prop === "pickup" && (
               <div className="min-w-0 space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New pickup location</label>
+                <label className="block font-medium text-11 text-muted-foreground">New pickup location</label>
                 {/* Compact Select — trigger truncates, dropdown items render
                     name + address on TWO lines so long combined strings can't
                     overflow horizontally. SelectContent uses the Radix portal
@@ -6158,13 +6158,13 @@ function BulkEditDialog({
                           <span className="flex items-center gap-1.5 truncate font-medium">
                             {toTitle(l.name)}
                             {l.is_default && (
-                              <span className="rounded bg-primary/10 px-1 py-0 font-semibold text-[10px] text-primary">
+                              <span className="rounded bg-primary/10 px-1 py-0 font-semibold text-10 text-primary">
                                 Default
                               </span>
                             )}
                           </span>
                           {l.address && (
-                            <span className="truncate text-[11px] text-muted-foreground">{l.address}</span>
+                            <span className="truncate text-11 text-muted-foreground">{l.address}</span>
                           )}
                         </div>
                       </SelectItem>
@@ -6175,7 +6175,7 @@ function BulkEditDialog({
             )}
             {prop === "service_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New service type</label>
+                <label className="block font-medium text-11 text-muted-foreground">New service type</label>
                 <Select value={serviceType} onValueChange={setServiceType}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
@@ -6207,7 +6207,7 @@ function BulkEditDialog({
             )}
             {prop === "package_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New package type</label>
+                <label className="block font-medium text-11 text-muted-foreground">New package type</label>
                 <Select value={pkgType} onValueChange={(v) => setPkgType(v as PackageType)}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
@@ -6226,7 +6226,7 @@ function BulkEditDialog({
             )}
             {prop === "stop_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New stop type</label>
+                <label className="block font-medium text-11 text-muted-foreground">New stop type</label>
                 <Select value={stopType} onValueChange={(v) => setStopType(v as "delivery" | "pickup")}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
@@ -6252,7 +6252,7 @@ function BulkEditDialog({
                   <p className="flex items-center gap-1.5 font-medium text-xs">
                     <Snowflake className="size-3.5 text-muted-foreground/70" aria-hidden="true" /> Cold Chain
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Mark every selected draft as cold-chain.</p>
+                  <p className="text-11 text-muted-foreground">Mark every selected draft as cold-chain.</p>
                 </div>
                 <Switch checked={coldChain} onCheckedChange={setColdChain} />
               </div>
@@ -6263,7 +6263,7 @@ function BulkEditDialog({
                   <p className="flex items-center gap-1.5 font-medium text-xs">
                     <PenLine className="size-3.5 text-muted-foreground/70" aria-hidden="true" /> Signature Required
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-11 text-muted-foreground">
                     Require driver to capture signature on delivery.
                   </p>
                 </div>
@@ -6272,7 +6272,7 @@ function BulkEditDialog({
             )}
             {prop === "delivery_date" && (
               <div className="space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New delivery date</label>
+                <label className="block font-medium text-11 text-muted-foreground">New delivery date</label>
                 <input
                   type="date"
                   value={deliveryDate}
@@ -6283,7 +6283,7 @@ function BulkEditDialog({
             )}
             {prop === "drop_off" && (
               <div className="space-y-2">
-                <label className="block font-medium text-[11px] text-muted-foreground">New drop-off preference</label>
+                <label className="block font-medium text-11 text-muted-foreground">New drop-off preference</label>
                 <Select value={dropOff} onValueChange={setDropOff}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue placeholder="Choose…" />
@@ -7462,12 +7462,12 @@ export default function StopsPage() {
           {/* PICKUP */}
           <div className="px-3 pb-2 pt-2.5">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <span className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
                 Pickup
               </span>
               <div className="flex items-center gap-1">
                 <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                <span className="text-[10px] font-medium text-emerald-600">Active</span>
+                <span className="text-10 font-medium text-emerald-600">Active</span>
               </div>
             </div>
             <PickupSelector locations={locations} selected={pickup} onSelect={setPickup} />
@@ -7476,7 +7476,7 @@ export default function StopsPage() {
 
           {/* NEW STOP */}
           <div className="space-y-2 px-3 pt-2.5 pb-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <span className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
               New Stop
             </span>
 
@@ -7485,7 +7485,7 @@ export default function StopsPage() {
               <button
                 type="button"
                 onClick={() => setOcrOpen(true)}
-                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-[11px] font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
+                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-11 font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
               >
                 <Camera className="size-3.5" aria-hidden="true" />
                 OCR Label
@@ -7493,7 +7493,7 @@ export default function StopsPage() {
               <button
                 type="button"
                 onClick={() => setScanOpen(true)}
-                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-[11px] font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
+                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-11 font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
               >
                 <ScanLine className="size-3.5" aria-hidden="true" />
                 Scan Code
@@ -7563,7 +7563,7 @@ export default function StopsPage() {
                         value={newName}
                         onChange={(e) => setNewName(e.target.value.toUpperCase())}
                         placeholder="Full name *"
-                        className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/35"
+                        className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/35"
                       />
                     </div>
                     <div className="flex h-8 items-center gap-2 rounded-lg border border-input bg-card px-2.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
@@ -7573,7 +7573,7 @@ export default function StopsPage() {
                         onChange={(e) => setNewPhone(fmtPhone(e.target.value))}
                         placeholder="Phone * (555) 123-4567"
                         inputMode="tel"
-                        className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/35"
+                        className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/35"
                       />
                     </div>
                     {/* Apt / Suite / Unit (optional) — kept out of the validated street */}
@@ -7583,7 +7583,7 @@ export default function StopsPage() {
                         value={newApt}
                         onChange={(e) => setNewApt(e.target.value)}
                         placeholder="Apt / Suite / Unit (optional)"
-                        className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/35"
+                        className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/35"
                       />
                     </div>
                   </div>
@@ -7593,13 +7593,13 @@ export default function StopsPage() {
 
             {/* Ready feedback */}
             {newAddr && newName.trim() && isValidPhone(newPhone) && !creating && (
-              <p className="flex items-center gap-1 text-[11px] text-emerald-600">
+              <p className="flex items-center gap-1 text-11 text-emerald-600">
                 <CheckCircle2 className="size-3" aria-hidden="true" />
                 Ready — press + to create
               </p>
             )}
             {creating && (
-              <p className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+              <p className="flex items-center gap-1 text-11 text-muted-foreground/70">
                 <Loader2 className="size-3 animate-spin" aria-hidden="true" />
                 Creating stop…
               </p>
@@ -7662,7 +7662,7 @@ export default function StopsPage() {
                           </button>
                         </PopoverTrigger>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-[11px]">
+                      <TooltipContent side="bottom" className="text-11">
                         {filterLabel}
                       </TooltipContent>
                     </Tooltip>
@@ -7694,7 +7694,7 @@ export default function StopsPage() {
                         type="date"
                         value={dateFilter.match(/^\d{4}-\d{2}-\d{2}$/) ? dateFilter : ""}
                         onChange={(e) => e.target.value && setDateFilter(e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-[11px] text-foreground outline-none focus:border-primary"
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-11 text-foreground outline-none focus:border-primary"
                       />
                     </PopoverContent>
                   </Popover>
@@ -7714,7 +7714,7 @@ export default function StopsPage() {
                         <RotateCcw className="size-3.5" aria-hidden="true" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[11px]">
+                    <TooltipContent side="bottom" className="text-11">
                       Refresh
                     </TooltipContent>
                   </Tooltip>
@@ -7742,7 +7742,7 @@ export default function StopsPage() {
                     type="button"
                     onClick={() => setStatusTab(t.value as typeof statusTab)}
                     className={cn(
-                      "h-9 border-b-2 px-3 text-[11px] font-medium transition-colors",
+                      "h-9 border-b-2 px-3 text-11 font-medium transition-colors",
                       statusTab === t.value
                         ? "border-primary text-foreground"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -7750,7 +7750,7 @@ export default function StopsPage() {
                   >
                     {t.label}
                     {t.count > 0 && (
-                      <span className="ml-1 text-[10px] text-muted-foreground/60 dark:text-muted-foreground/75">
+                      <span className="ml-1 text-10 text-muted-foreground/60 dark:text-muted-foreground/75">
                         {t.count}
                       </span>
                     )}
@@ -7778,14 +7778,14 @@ export default function StopsPage() {
               {statusTab === "submitted" ? (
                 <>
                   <p className="font-semibold text-xs text-muted-foreground">All caught up</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                  <p className="mt-0.5 text-11 text-muted-foreground/70">
                     All submitted stops have been assigned to a driver
                   </p>
                 </>
               ) : (
                 <>
                   <p className="font-semibold text-xs text-muted-foreground">No stops</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                  <p className="mt-0.5 text-11 text-muted-foreground/70">
                     No stops today — type an address to add one
                   </p>
                 </>
@@ -7864,7 +7864,7 @@ export default function StopsPage() {
                   />
                   <span
                     className={cn(
-                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors",
+                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-10 font-semibold transition-colors",
                       isSel ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
                     )}
                   >
@@ -7873,22 +7873,22 @@ export default function StopsPage() {
                   {/* 3 lines max — Name · Address · TrackingID. City/state/zip
                       dropped (it was already in address). */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-semibold text-foreground leading-tight">
+                    <p className="truncate text-13 font-semibold text-foreground leading-tight">
                       {toTitle(s.recipient_name) || "—"}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">
+                    <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
                       {toTitle(s.address)}
                     </p>
                     {/* Third field: City, State ZIP (CEO 2026-07-13 — replaced phone),
                         SAME type treatment as the address line above. */}
-                    <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">
+                    <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
                       {[toTitle(s.city), `${s.state ?? ""} ${s.zip ?? ""}`.trim()].filter(Boolean).join(", ") || "—"}
                     </p>
                     {/* Tracking ID — brand blue for real ids (CEO 2026-07-13);
                         drafts keep the quiet "pending" tone. */}
                     <p
                       className={cn(
-                        "mt-0.5 truncate font-mono text-[10px] tabular-nums",
+                        "mt-0.5 truncate font-mono text-10 tabular-nums",
                         s.id.startsWith("draft_") ? "text-muted-foreground/50" : "text-primary",
                       )}
                     >
@@ -7899,7 +7899,7 @@ export default function StopsPage() {
                     {/* Quieter badges per spec — 9.5pt label, refined ring style */}
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-10 font-semibold ring-1",
                         s.status === "draft"
                           ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-violet-500/20"
                           : DELIVERED.includes(s.status)
@@ -7917,13 +7917,13 @@ export default function StopsPage() {
                         submit_error. Flag it so the user knows to fix & resubmit. */}
                     {s.submit_error && (
                       <span
-                        className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600 ring-1 ring-rose-200/60 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
+                        className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-10 font-semibold text-rose-600 ring-1 ring-rose-200/60 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
                         title={s.submit_error.reason ?? "Submit failed — fix & resubmit"}
                       >
                         Submit failed
                       </span>
                     )}
-                    <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                    <span className="text-10 text-muted-foreground/60 tabular-nums">
                       {fmtStopDate(s.created_at)}
                     </span>
                   </div>
@@ -7945,23 +7945,23 @@ export default function StopsPage() {
                   <span className="text-base font-bold text-foreground tabular-nums leading-none">
                     {filteredStops.length}
                   </span>
-                  <span className="text-[11px] text-muted-foreground/65">
+                  <span className="text-11 text-muted-foreground/65">
                     {statusTab !== "all" ? `of ${filteredAllItems.length}` : "showing"}
                   </span>
                 </span>
                 <div className="h-3 w-px bg-border/40" />
-                <span className="text-[11px] text-muted-foreground/65">{filterLabel}</span>
+                <span className="text-11 text-muted-foreground/65">{filterLabel}</span>
                 {(doneCount > 0 || activeCount > 0) && (
                   <>
                     <div className="h-3 w-px bg-border/40" />
                     {doneCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+                      <span className="inline-flex items-center gap-1 text-11 text-emerald-600">
                         <span className="size-1.5 rounded-full bg-emerald-500" />
                         {doneCount} delivered
                       </span>
                     )}
                     {activeCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-blue-600">
+                      <span className="inline-flex items-center gap-1 text-11 text-blue-600">
                         <motion.span
                           className="size-1.5 rounded-full bg-blue-500"
                           animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
@@ -7973,7 +7973,7 @@ export default function StopsPage() {
                   </>
                 )}
               </div>
-              <span className="text-[11px] font-medium text-muted-foreground/45 uppercase tracking-widest">
+              <span className="text-11 font-medium text-muted-foreground/45 uppercase tracking-widest">
                 {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             </div>
@@ -8010,7 +8010,7 @@ export default function StopsPage() {
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-11 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <X className="size-3" /> Clear selection
               </button>
@@ -8258,7 +8258,7 @@ export default function StopsPage() {
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-11 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X className="size-3" /> Clear selection
             </button>
@@ -8306,7 +8306,7 @@ export default function StopsPage() {
                 setMobileTab(key);
               }}
               className={cn(
-                "flex flex-1 flex-col items-center gap-1 py-3 font-semibold text-[11px] transition-colors",
+                "flex flex-1 flex-col items-center gap-1 py-3 font-semibold text-11 transition-colors",
                 navDisabled
                   ? "cursor-not-allowed text-muted-foreground/30"
                   : mobileTab === key
@@ -8367,7 +8367,7 @@ export default function StopsPage() {
                               type="button"
                               disabled={onlySubmitted}
                               onClick={() => setBulkEditOpen(true)}
-                              className="rounded-lg px-2.5 py-1 font-semibold text-[11px] text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                              className="rounded-lg px-2.5 py-1 font-semibold text-11 text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                             >
                               Edit
                             </button>
@@ -8382,7 +8382,7 @@ export default function StopsPage() {
                               type="button"
                               disabled={onlySubmitted || bulkSubmitting}
                               onClick={bulkSubmitDrafts}
-                              className="rounded-lg bg-primary px-3 py-1 font-bold text-[11px] text-primary-foreground shadow-sm transition-opacity hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg bg-primary px-3 py-1 font-bold text-11 text-primary-foreground shadow-sm transition-opacity hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {bulkSubmitting
                                 ? bulkProgress
@@ -8401,13 +8401,13 @@ export default function StopsPage() {
                       type="button"
                       disabled={bulkDeleting}
                       onClick={deleteSelected}
-                      className="rounded-lg px-2.5 py-1 font-semibold text-[11px] text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-rose-400 dark:hover:bg-rose-500/10"
+                      className="rounded-lg px-2.5 py-1 font-semibold text-11 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-rose-400 dark:hover:bg-rose-500/10"
                     >
                       {bulkDeleting ? "Deleting…" : "Delete"}
                     </button>
                   </div>
                   {mixed && (
-                    <span className="hidden text-[10px] text-muted-foreground/70 sm:inline">
+                    <span className="hidden text-10 text-muted-foreground/70 sm:inline">
                       Edit &amp; Submit apply to {selectedDraftIds.length} draft{selectedDraftIds.length > 1 ? "s" : ""}{" "}
                       only
                     </span>

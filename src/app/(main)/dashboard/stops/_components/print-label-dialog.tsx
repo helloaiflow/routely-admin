@@ -846,7 +846,7 @@ export function PrintLabelDialog({
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="text-xs leading-relaxed">
                 <p className="font-semibold">Drafts can&apos;t be printed yet.</p>
-                <p className="mt-0.5 text-[11px]">
+                <p className="mt-0.5 text-11">
                   This stop is still a draft, so it doesn&apos;t have a real RTL tracking number yet.
                   Submit (approve) the draft to create a tracked stop — then come back here to print its label.
                 </p>
@@ -876,7 +876,7 @@ export function PrintLabelDialog({
                   <Icon className="size-3.5 shrink-0" />
                   <span>{label}</span>
                   <span className={cn(
-                    "hidden text-[10px] font-medium sm:inline",
+                    "hidden text-10 font-medium sm:inline",
                     mode === id ? "text-muted-foreground" : "text-muted-foreground/70"
                   )}>{size}</span>
                 </button>
@@ -899,10 +899,10 @@ export function PrintLabelDialog({
                     : <ShippingLabel4x6V2 data={data} barcodeSvg={barcodeSvg} qrSvg={qrSvg} />}
                 </ScaledPreview>
               </div>
-              <p className="text-center text-[10px] text-muted-foreground/80">
+              <p className="text-center text-10 text-muted-foreground/80">
                 Preview · {paper.label} {paper.orient} · thermal
               </p>
-              <p className="text-center text-[10px] text-muted-foreground/60">
+              <p className="text-center text-10 text-muted-foreground/60">
                 {paper.w * 96} × {paper.h * 96} px @ 96 dpi · scale {previewScale.toFixed(2)}×
               </p>
             </div>
@@ -910,7 +910,7 @@ export function PrintLabelDialog({
             {/* Controls column */}
             <div className="flex flex-col gap-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <label className="mb-1 block text-11 font-semibold uppercase tracking-wider text-muted-foreground">
                   Label size
                 </label>
                 <Select value={printer} onValueChange={v => pickPrinter(v as PrinterId)}>
@@ -921,29 +921,29 @@ export function PrintLabelDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground/70">
+                <p className="mt-1.5 text-10 leading-relaxed text-muted-foreground/70">
                   Pick the label size, then choose your printer in the print dialog. Set your thermal printer
                   as the default and the dialog opens ready — orientation is handled by the driver.
                 </p>
               </div>
 
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="text-11 font-semibold uppercase tracking-wider text-muted-foreground">
                   Page setup
                 </p>
-                <p className="mt-1 break-all text-[11px] font-mono text-foreground/80">
+                <p className="mt-1 break-all text-11 font-mono text-foreground/80">
                   @page {`{ size: ${paper.w}in ${paper.h}in; margin: 0 }`}
                 </p>
-                <p className="mt-1 text-[10px] text-muted-foreground/70">
+                <p className="mt-1 text-10 text-muted-foreground/70">
                   Real physical size · single root · driver controls orientation.
                 </p>
               </div>
 
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="text-11 font-semibold uppercase tracking-wider text-muted-foreground">
                   Codes
                 </p>
-                <p className="mt-1 break-all text-[11px] text-foreground/85">
+                <p className="mt-1 break-all text-11 text-foreground/85">
                   Real Code 128 barcode · QR encodes <span className="font-mono">app.routelypro.com/track/RTL-…</span>
                 </p>
               </div>

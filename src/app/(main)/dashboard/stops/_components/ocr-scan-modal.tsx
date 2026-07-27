@@ -277,7 +277,7 @@ function ConfChip({ label, conf }: { label: string; conf: FieldConfidence }) {
   const c = CHIP_TONES[conf];
   return (
     <span
-      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", c.bg, c.text)}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-11 font-medium", c.bg, c.text)}
     >
       <span className={cn("size-1.5 rounded-full", c.dot)} />
       {label}
@@ -844,13 +844,13 @@ export default function OCRScanModal({
           </div>
           <div className="flex items-center gap-3">
             {windowTab === "scan" && (
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <label className="flex items-center gap-1.5 text-11 text-muted-foreground">
                 <Switch checked={useAI} onCheckedChange={toggleUseAI} disabled={state === "processing" || submitting} />
                 Use AI
               </label>
             )}
             {windowTab === "scan" && (
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <label className="flex items-center gap-1.5 text-11 text-muted-foreground">
                 <Switch
                   checked={debugMode}
                   onCheckedChange={toggleDebug}
@@ -916,7 +916,7 @@ export default function OCRScanModal({
                   <span className="relative ml-0.5 flex items-center justify-center">
                     {/* Pulsing glow ring (pure CSS) when there are pending failures */}
                     <span className="absolute inline-flex size-5 animate-ping rounded-full bg-rose-500/40" />
-                    <span className="relative flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                    <span className="relative flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-10 font-bold text-white">
                       {failedCount}
                     </span>
                   </span>
@@ -934,7 +934,7 @@ export default function OCRScanModal({
             </div>
             <div className="text-center">
               <p className="font-semibold text-sm text-foreground">Scan a shipping label</p>
-              <p className="mt-1.5 max-w-[260px] text-[13px] text-muted-foreground/65 leading-relaxed">
+              <p className="mt-1.5 max-w-[260px] text-13 text-muted-foreground/65 leading-relaxed">
                 Automatically extract address, name, and phone — all processed on-device.
               </p>
             </div>
@@ -955,7 +955,7 @@ export default function OCRScanModal({
                   }
                 }}
                 variant="outline"
-                className="h-11 w-full gap-2 rounded-xl border-border/60 text-[13px] font-medium text-foreground"
+                className="h-11 w-full gap-2 rounded-xl border-border/60 text-13 font-medium text-foreground"
               >
                 <FileImage className="size-4 text-muted-foreground" />
                 Upload from Gallery
@@ -1018,7 +1018,7 @@ export default function OCRScanModal({
                 <div className="absolute bottom-0 right-0 h-8 w-8 rounded-br border-b-[2.5px] border-r-[2.5px] border-white/85" />
               </div>
               <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-                <span className="rounded-full bg-black/55 px-3.5 py-1 text-[11px] text-white/85">
+                <span className="rounded-full bg-black/55 px-3.5 py-1 text-11 text-white/85">
                   Align label within frame
                 </span>
               </div>
@@ -1095,8 +1095,8 @@ export default function OCRScanModal({
               </div>
               {/* Per-label stopwatch */}
               <div className="flex w-full items-center justify-between">
-                <p className="text-[11px] text-muted-foreground/55">Processing on-device · no data sent</p>
-                <p className="font-mono text-[11px] text-muted-foreground/40">{fmtLabel(labelElapsedMs)}</p>
+                <p className="text-11 text-muted-foreground/55">Processing on-device · no data sent</p>
+                <p className="font-mono text-11 text-muted-foreground/40">{fmtLabel(labelElapsedMs)}</p>
               </div>
             </div>
           </div>
@@ -1110,7 +1110,7 @@ export default function OCRScanModal({
             </div>
             <div className="text-center">
               <p className="font-semibold text-sm text-foreground">Couldn't scan the label</p>
-              <p className="mt-2 max-w-[290px] text-[13px] text-muted-foreground/65 leading-relaxed">{errorMsg}</p>
+              <p className="mt-2 max-w-[290px] text-13 text-muted-foreground/65 leading-relaxed">{errorMsg}</p>
             </div>
             {capturedUrl && (
               <div className="w-full max-w-[200px] overflow-hidden rounded-xl opacity-40 ring-1 ring-border">
@@ -1129,7 +1129,7 @@ export default function OCRScanModal({
               <Button
                 onClick={() => onOpenChange(false)}
                 variant="outline"
-                className="h-11 w-full rounded-xl border-border/60 text-[13px] font-medium"
+                className="h-11 w-full rounded-xl border-border/60 text-13 font-medium"
               >
                 Close
               </Button>
@@ -1161,14 +1161,14 @@ export default function OCRScanModal({
                         {reviewName && <ConfChip label="Name" conf={nameConf} />}
                         {reviewPhone && <ConfChip label="Phone" conf={phoneConf} />}
                         {!reviewAddress && !reviewName && !reviewPhone && (
-                          <span className="text-[11px] text-amber-600">No fields detected — fill in manually</span>
+                          <span className="text-11 text-amber-600">No fields detected — fill in manually</span>
                         )}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={retry}
-                      className="ml-1 flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent"
+                      className="ml-1 flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-11 font-medium text-muted-foreground transition-colors hover:bg-accent"
                     >
                       <RefreshCw className="size-3" />
                       Retry
@@ -1190,7 +1190,7 @@ export default function OCRScanModal({
 
               {/* Address */}
               <div className="mb-3">
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   Delivery Address <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -1202,16 +1202,16 @@ export default function OCRScanModal({
                     validateAddress(e.target.value);
                   }}
                   placeholder="123 Main St, Miami, FL 33101"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
                 {validating && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
+                  <p className="mt-1.5 flex items-center gap-1.5 text-11 text-muted-foreground/50">
                     <Loader2 className="size-3 animate-spin" />
                     Validating…
                   </p>
                 )}
                 {resolvedAddress && !validating && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <p className="mt-1.5 flex items-center gap-1.5 text-11 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="size-3 shrink-0" />
                     {[resolvedAddress.street, resolvedAddress.city, resolvedAddress.state, resolvedAddress.zip]
                       .filter(Boolean)
@@ -1246,7 +1246,7 @@ export default function OCRScanModal({
 
               {/* Name */}
               <div className="mb-3">
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   Recipient Name <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -1256,13 +1256,13 @@ export default function OCRScanModal({
                     setSubmitErrors([]);
                   }}
                   placeholder="Full name"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
               </div>
 
               {/* Phone */}
               <div className="mb-4">
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   Phone Number <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -1273,20 +1273,20 @@ export default function OCRScanModal({
                   }}
                   placeholder="(555) 123-4567"
                   inputMode="tel"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
               </div>
 
               {/* Gate code (optional) — captured + stored like other stop fields */}
               <div className="mb-4">
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   Gate Code <span className="font-normal text-muted-foreground/40">(optional)</span>
                 </label>
                 <input
                   value={reviewGateCode}
                   onChange={(e) => setReviewGateCode(e.target.value)}
                   placeholder="e.g. #1234"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
               </div>
 
@@ -1294,7 +1294,7 @@ export default function OCRScanModal({
               {(aiUsed || reviewDob || reviewOrderIds) && (
                 <div className="mb-4 grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                    <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                       Date of Birth
                     </label>
                     <input
@@ -1302,11 +1302,11 @@ export default function OCRScanModal({
                       onChange={(e) => setReviewDob(e.target.value)}
                       placeholder="MM/DD/YYYY"
                       inputMode="numeric"
-                      className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-13 text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                    <label className="mb-1.5 block text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                       Order IDs
                     </label>
                     <input
@@ -1318,7 +1318,7 @@ export default function OCRScanModal({
                     {itemsCount != null &&
                       reviewOrderIds.split(/[,\s]+/).filter((s) => /^\d{6,7}-\d{2}$/.test(s.trim())).length !==
                         itemsCount && (
-                        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        <p className="mt-1 text-11 text-amber-600 dark:text-amber-400">
                           Label says {itemsCount} item{itemsCount === 1 ? "" : "s"} — ID count doesn&apos;t match
                         </p>
                       )}
@@ -1328,11 +1328,11 @@ export default function OCRScanModal({
 
               {/* ── Package Options ── */}
               <div className="mb-5">
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                <p className="mb-2.5 text-11 font-semibold uppercase tracking-widest text-muted-foreground/50">
                   Package Options
                 </p>
                 <div className="mb-3">
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground/60">Type</p>
+                  <p className="mb-1.5 text-11 font-medium text-muted-foreground/60">Type</p>
                   <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted/40 p-1">
                     {(["rx", "standard", "internal", "cold"] as const).map((pt) => (
                       <button
@@ -1386,7 +1386,7 @@ export default function OCRScanModal({
                         type="button"
                         onClick={toggle}
                         className={cn(
-                          "flex h-9 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-[11px] font-medium transition-all",
+                          "flex h-9 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-11 font-medium transition-all",
                           active
                             ? "border-primary/40 bg-primary/10 text-primary"
                             : "border-border/50 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground",
@@ -1413,7 +1413,7 @@ export default function OCRScanModal({
                         }}
                         placeholder="0.00"
                         inputMode="decimal"
-                        className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/40"
+                        className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
                       />
                     </div>
                   )}
@@ -1423,10 +1423,10 @@ export default function OCRScanModal({
               {/* Submit validation errors */}
               {submitErrors.length > 0 && (
                 <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3">
-                  <p className="mb-1 text-[11px] font-semibold text-destructive">Fix before submitting:</p>
+                  <p className="mb-1 text-11 font-semibold text-destructive">Fix before submitting:</p>
                   {submitErrors.map((e, i) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: static error list per render
-                    <p key={i} className="text-[11px] text-destructive/80">
+                    <p key={i} className="text-11 text-destructive/80">
                       • {e}
                     </p>
                   ))}
@@ -1456,7 +1456,7 @@ export default function OCRScanModal({
                   onClick={() => onOpenChange(false)}
                   disabled={submitting}
                   variant="outline"
-                  className="h-11 w-full rounded-xl border-border/60 text-[13px] font-medium"
+                  className="h-11 w-full rounded-xl border-border/60 text-13 font-medium"
                 >
                   Cancel
                 </Button>

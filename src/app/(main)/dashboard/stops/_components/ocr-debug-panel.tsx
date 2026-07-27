@@ -56,7 +56,7 @@ function ms(n: number | null | undefined): string {
 function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="flex flex-col items-center rounded-lg bg-background px-2 py-1.5 ring-1 ring-border/40">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/50">{label}</span>
+      <span className="text-10 uppercase tracking-wider text-muted-foreground/50">{label}</span>
       <span className={cn("font-mono text-xs font-bold", warn ? "text-amber-600 dark:text-amber-400" : "text-foreground")}>
         {value}
       </span>
@@ -68,7 +68,7 @@ function Check({ ok, children }: { ok: boolean; children: ReactNode }) {
   return (
     <div className="flex items-start gap-1.5">
       <span className={cn("mt-0.5 shrink-0 font-bold", ok ? "text-emerald-500" : "text-rose-500")}>{ok ? "✓" : "✗"}</span>
-      <span className="text-[11px] text-foreground/80">{children}</span>
+      <span className="text-11 text-foreground/80">{children}</span>
     </div>
   );
 }
@@ -116,7 +116,7 @@ export default function OcrDebugPanel({
         <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
           OCR Debug
         </span>
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground/60">
+        <span className="ml-auto font-mono text-11 text-muted-foreground/60">
           {debug.provider} · {ms(clientMs)}
         </span>
         {open ? (
@@ -135,7 +135,7 @@ export default function OcrDebugPanel({
             <Stat label="Server" value={ms(debug.total_ms)} />
             <Stat label="Total" value={ms(clientMs)} warn={(clientMs ?? 0) > 4000} />
           </div>
-          <p className="text-[11px] text-muted-foreground/60">
+          <p className="text-11 text-muted-foreground/60">
             {debug.model} · img {kb}KB · score {debug.critical_score}/6
             {debug.used_second_pass ? " · 2nd-pass" : ""}
             {boxSlow ? " · ⚠ box slow (cold or overloaded)" : ""}
@@ -153,12 +153,12 @@ export default function OcrDebugPanel({
               <img src={image} className="max-h-40 w-full object-contain bg-black/80" />
             </button>
           )}
-          <p className="-mt-1.5 text-center text-[10px] text-muted-foreground/50">↑ exact image sent to Qwen (tap to zoom)</p>
+          <p className="-mt-1.5 text-center text-10 text-muted-foreground/50">↑ exact image sent to Qwen (tap to zoom)</p>
 
           {/* PHONE trace — where the phone dies */}
           <div className="rounded-lg bg-background/60 p-2.5 ring-1 ring-border/40">
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Phone trace</p>
-            <div className="space-y-1 font-mono text-[11px]">
+            <p className="mb-1.5 text-10 font-bold uppercase tracking-wider text-muted-foreground/60">Phone trace</p>
+            <div className="space-y-1 font-mono text-11">
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground/60">model.phone</span>
                 <span className="text-foreground">{rawp.phone ?? "null"}</span>
@@ -182,7 +182,7 @@ export default function OcrDebugPanel({
                 </span>
               </div>
             </div>
-            <div className="mt-1.5 text-[11px]">
+            <div className="mt-1.5 text-11">
               {rawp.phone && !cleaned.phone ? (
                 <span className="text-amber-600 dark:text-amber-400">
                   ⚠ Qwen saw a phone but cleanup rejected it (malformed/placeholder/&gt;10 digits)
@@ -199,17 +199,17 @@ export default function OcrDebugPanel({
 
           {/* Raw model output */}
           <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+            <p className="mb-1 text-10 font-bold uppercase tracking-wider text-muted-foreground/60">
               Qwen returned (raw)
             </p>
-            <pre className="max-h-52 overflow-auto rounded-lg bg-zinc-950 p-2.5 font-mono text-[11px] leading-relaxed text-emerald-300 ring-1 ring-border/40">
+            <pre className="max-h-52 overflow-auto rounded-lg bg-zinc-950 p-2.5 font-mono text-11 leading-relaxed text-emerald-300 ring-1 ring-border/40">
               {rawPretty || "(empty)"}
             </pre>
           </div>
 
           {/* Submit gate — the exact 3-field validation that decides success/fail */}
           <div className="rounded-lg bg-background/60 p-2.5 ring-1 ring-border/40">
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+            <p className="mb-1.5 text-10 font-bold uppercase tracking-wider text-muted-foreground/60">
               Submit gate (what the site expects)
             </p>
             <div className="space-y-1">

@@ -145,7 +145,7 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
             <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10">
               <AlertCircle className="size-6 text-emerald-500" />
             </div>
-            <p className="font-medium text-[13px] text-foreground">All caught up</p>
+            <p className="font-medium text-13 text-foreground">All caught up</p>
             <p className="max-w-[240px] text-xs text-muted-foreground/60 leading-relaxed">
               Labels that fail validation land here so you never lose them.
             </p>
@@ -187,12 +187,12 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-[13px] text-foreground">{item.name || "Unreadable name"}</p>
-                    <p className="truncate text-[11px] text-muted-foreground/70">
+                    <p className="truncate font-medium text-13 text-foreground">{item.name || "Unreadable name"}</p>
+                    <p className="truncate text-11 text-muted-foreground/70">
                       {[item.phone, item.address].filter(Boolean).join(" · ") || "No data extracted"}
                     </p>
                     {item.reasons.length > 0 && (
-                      <p className="mt-1 truncate text-[11px] text-rose-600 dark:text-rose-400">
+                      <p className="mt-1 truncate text-11 text-rose-600 dark:text-rose-400">
                         {item.reasons.join(" · ")}
                       </p>
                     )}
@@ -201,7 +201,7 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
                 <div className="mt-2.5 flex gap-2">
                   <Button
                     onClick={() => onResolve(item)}
-                    className="h-9 flex-1 rounded-lg text-[13px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+                    className="h-9 flex-1 rounded-lg text-13 font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     Resolve
                   </Button>
@@ -209,7 +209,7 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
                     onClick={() => discard(item.id)}
                     disabled={busyId === item.id}
                     variant="outline"
-                    className="h-9 rounded-lg border-border/60 px-3 text-[13px] font-medium text-muted-foreground"
+                    className="h-9 rounded-lg border-border/60 px-3 text-13 font-medium text-muted-foreground"
                   >
                     {busyId === item.id ? <Loader2 className="size-3.5 animate-spin" /> : "Discard"}
                   </Button>

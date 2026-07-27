@@ -709,7 +709,7 @@ export default function OCRBatchModal({
         {phase === "cap_warning" && (
           <div className="flex flex-1 flex-col gap-4 px-5 pb-8 pt-2">
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3.5">
-              <p className="mb-1 font-semibold text-[13px] text-amber-700 dark:text-amber-400">
+              <p className="mb-1 font-semibold text-13 text-amber-700 dark:text-amber-400">
                 Maximum 200 labels per batch
               </p>
               <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
@@ -734,7 +734,7 @@ export default function OCRBatchModal({
                     {/* biome-ignore lint/performance/noImgElement: ephemeral object URL */}
                     <img src={url} className="h-full w-full object-cover" />
                     <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
-                    <span className="absolute bottom-1 right-1 rounded bg-black/55 px-1 text-[10px] font-medium text-white">
+                    <span className="absolute bottom-1 right-1 rounded bg-black/55 px-1 text-10 font-medium text-white">
                       tap to zoom
                     </span>
                   </button>
@@ -742,7 +742,7 @@ export default function OCRBatchModal({
               </div>
             </div>
 
-            <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
+            <p className="text-11 text-muted-foreground/60 text-center leading-relaxed">
               The first <strong>{total}</strong> labels are ready to scan. Upload the remaining ones in a new batch
               after this one.
             </p>
@@ -758,7 +758,7 @@ export default function OCRBatchModal({
               <Button
                 onClick={close}
                 variant="outline"
-                className="h-11 w-full rounded-xl border-border/60 font-medium text-[13px]"
+                className="h-11 w-full rounded-xl border-border/60 font-medium text-13"
               >
                 Cancel
               </Button>
@@ -820,7 +820,7 @@ export default function OCRBatchModal({
                 <>
                   <div className="flex items-center gap-2">
                     <Loader2 className="size-4 animate-spin text-primary" />
-                    <p className="font-medium text-[13px] text-foreground">{paused ? "Paused" : progressLabel}</p>
+                    <p className="font-medium text-13 text-foreground">{paused ? "Paused" : progressLabel}</p>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
                     <motion.div
@@ -830,7 +830,7 @@ export default function OCRBatchModal({
                       transition={{ ease: "easeOut", duration: 0.3 }}
                     />
                   </div>
-                  <p className="font-mono text-[11px] text-muted-foreground/40">{fmtMs(labelElapsedMs)}</p>
+                  <p className="font-mono text-11 text-muted-foreground/40">{fmtMs(labelElapsedMs)}</p>
                 </>
               )}
             </div>
@@ -854,7 +854,7 @@ export default function OCRBatchModal({
               <Button
                 onClick={togglePause}
                 variant="outline"
-                className="h-10 flex-1 gap-1.5 rounded-xl border-border/60 font-medium text-[13px]"
+                className="h-10 flex-1 gap-1.5 rounded-xl border-border/60 font-medium text-13"
               >
                 {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
                 {paused ? "Resume" : "Pause"}
@@ -862,13 +862,13 @@ export default function OCRBatchModal({
               <Button
                 onClick={skip}
                 variant="outline"
-                className="h-10 flex-1 gap-1.5 rounded-xl border-border/60 font-medium text-[13px]"
+                className="h-10 flex-1 gap-1.5 rounded-xl border-border/60 font-medium text-13"
               >
                 <ChevronRight className="size-3.5" />
                 Skip
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground/50">Esc or ✕ cancels the rest — created drafts stay</p>
+            <p className="text-11 text-muted-foreground/50">Esc or ✕ cancels the rest — created drafts stay</p>
           </div>
         )}
 
@@ -916,7 +916,7 @@ export default function OCRBatchModal({
                       <p className="truncate font-medium text-xs text-foreground">{it.file.name}</p>
                       <p
                         className={cn(
-                          "truncate text-[11px]",
+                          "truncate text-11",
                           it.status === "success" && "text-emerald-600 dark:text-emerald-400",
                           it.status === "failed" && "text-rose-600 dark:text-rose-400",
                           it.status === "skipped" && "text-amber-600 dark:text-amber-400",
@@ -947,7 +947,7 @@ export default function OCRBatchModal({
                     <Button
                       onClick={startCorrection}
                       variant="outline"
-                      className="h-11 w-full rounded-xl border-border/60 font-medium text-[13px]"
+                      className="h-11 w-full rounded-xl border-border/60 font-medium text-13"
                     >
                       Review failed one by one
                     </Button>
@@ -956,7 +956,7 @@ export default function OCRBatchModal({
                 <Button
                   onClick={close}
                   variant="outline"
-                  className="h-11 w-full rounded-xl border-border/60 font-medium text-[13px]"
+                  className="h-11 w-full rounded-xl border-border/60 font-medium text-13"
                 >
                   Close
                 </Button>

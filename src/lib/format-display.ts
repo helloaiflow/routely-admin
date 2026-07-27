@@ -22,7 +22,7 @@ const KEEP_UPPER = new Set([
   // directionals
   "N", "S", "E", "W", "NE", "NW", "SE", "SW",
   // common address/entity abbreviations that read wrong in Title Case
-  "PO", "US", "USA", "LLC", "INC", "II", "III", "IV",
+  "PO", "US", "USA", "LLC", "INC", "II", "III", "IV", "AI",
   // Operating state only. The full USPS state list collides with Spanish name
   // particles (DE/LA = Delaware/Louisiana vs "de la Rosa") — Routely's data is
   // Florida-only (zones.state_id='FL' across the board), so FL suffices.

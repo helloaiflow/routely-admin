@@ -791,7 +791,7 @@ export function HubsTab() {
           {form.visibility === "dedicated" && (
             <StackRow label="Tenants" hint="Who can use this hub">
               <SearchMultiSelect
-                items={tenants.map((t) => ({ id: String(t.tenant_id), label: t.name, hint: `#${t.tenant_id}` }))}
+                items={tenants.map((t) => ({ id: String(t.tenant_id), label: formatDisplayCase(t.name), hint: `#${t.tenant_id}` }))}
                 selected={form.tenantIds.map(String)}
                 onToggle={(id) =>
                   setForm((f) => ({

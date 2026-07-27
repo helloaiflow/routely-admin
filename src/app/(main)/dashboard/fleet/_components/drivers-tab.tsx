@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Ban,
+  ClipboardList,
+  List,
   Building2,
   ChevronDown,
   ChevronsUpDown,
@@ -54,6 +55,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
+import { MobileTabBar } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
@@ -332,6 +334,9 @@ export function DriversTab() {
   // Selected driver → drives the center form + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Mobile (<sm) tri-pane navigation: List · Details · Map (Stops pattern).
+  const [mobileTab, setMobileTab] = useState<"list" | "detail" | "map">("list");
+
   // Resilient load: on a transient failure at mount, retry once after a short
   // delay before surfacing the error.
   function loadDrivers(retry = true) {
@@ -438,6 +443,7 @@ export function DriversTab() {
   }
 
   function openAdd() {
+    setMobileTab("detail");
     setCreating(true);
     setSelectedId(null);
     setEditing(null);
@@ -450,6 +456,7 @@ export function DriversTab() {
   // Select a row → load it into the inline editor. The autosave baseline is the
   // record's own serialized payload — edits are detected against it.
   function selectDriver(driver: Driver) {
+    setMobileTab("detail");
     setCreating(false);
     setSelectedId(driver.id);
     setEditing(driver);
@@ -488,6 +495,7 @@ export function DriversTab() {
 
   // Close the center panel entirely (back to empty state).
   function closeForm() {
+    setMobileTab("list");
     setCreating(false);
     setSelectedId(null);
     setEditing(null);
@@ -881,8 +889,11 @@ export function DriversTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {/* ═══ LEFT COLUMN — the list (Stops split: 20% / min 260px) ═══ */}
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:w-[20%] sm:min-w-[260px] sm:shrink-0">
+      {/* ═══ LEFT COLUMN — the list (v2 split: 17% / min 240px; map gets the rest) ═══ */}
+      <div className={cn(
+        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:flex sm:w-[17%] sm:min-w-[240px] sm:shrink-0 sm:pb-0",
+        mobileTab === "list" ? "flex" : "hidden",
+      )}>
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -968,8 +979,11 @@ export function DriversTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — inline editable form (Stops split: 25%) ═══ */}
-      <div className="hidden h-full flex-col overflow-hidden border-r border-border/50 bg-card sm:flex sm:w-[25%] sm:shrink-0">
+      {/* ═══ CENTER COLUMN — inline editable form (v2 split: 21% / min 300px) ═══ */}
+      <div className={cn(
+        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 sm:flex sm:w-[21%] sm:min-w-[300px] sm:shrink-0 sm:pb-0",
+        mobileTab === "detail" ? "flex" : "hidden",
+      )}>
         {showForm ? (
           centerForm
         ) : (
@@ -985,29 +999,26 @@ export function DriversTab() {
         )}
       </div>
 
-      {/* ═══ MAP COLUMN — persistent (flex-1, Stops split) ═══ */}
-      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 sm:block sm:flex-1">
+      {/* ═══ MAP COLUMN — persistent (flex-1, now ~62% of the screen) ═══ */}
+      <div className={cn(
+        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 sm:block sm:flex-1 sm:pb-0",
+        mobileTab === "map" ? "block" : "hidden",
+      )}>
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />
       </div>
 
-      {/* ═══ MOBILE — full-screen overlay: form + map stacked ═══ */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            key={editing?.id ?? "new"}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background sm:hidden"
-          >
-            {centerForm}
-            <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
-              <DriverMapPanel driver={selectedDriver} hubs={hubs} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ═══ MOBILE — sticky bottom nav (List · Details · Map) ═══ */}
+      <MobileTabBar
+        active={mobileTab}
+        onChange={setMobileTab}
+        hasSelection={showForm}
+        tabs={[
+          { key: "list", label: "Drivers", icon: List },
+          { key: "detail", label: "Details", icon: ClipboardList },
+          { key: "map", label: "Map", icon: MapIcon },
+        ]}
+      />
+
 
       {/* Status change confirm — rendered regardless of view */}
       <StatusConfirm

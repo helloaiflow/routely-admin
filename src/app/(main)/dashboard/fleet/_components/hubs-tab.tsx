@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Building2,
+  ClipboardList,
+  List,
   ChevronDown,
   CircleCheck,
   Clock,
@@ -37,6 +38,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
+import { MobileTabBar, Stepper, TimeSelect } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
@@ -243,6 +245,9 @@ export function HubsTab() {
   // Selected hub → drives the center form + the right map column.
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Mobile (<sm) tri-pane navigation: List · Details · Map (Stops pattern).
+  const [mobileTab, setMobileTab] = useState<"list" | "detail" | "map">("list");
+
   // Resilient load: on a transient failure at mount, retry once after a short
   // delay before surfacing the error (keeps the list from getting stuck empty).
   function load(retry = true) {
@@ -295,6 +300,7 @@ export function HubsTab() {
   }
 
   function openAdd() {
+    setMobileTab("detail");
     setCreating(true);
     setSelectedId(null);
     setEditing(null);
@@ -307,6 +313,7 @@ export function HubsTab() {
   // Select a row → load it into the inline editor. The autosave baseline is the
   // record's own serialized payload — edits are detected against it.
   function selectHub(hub: Hub) {
+    setMobileTab("detail");
     setCreating(false);
     setSelectedId(hub.id);
     setEditing(hub);
@@ -346,6 +353,7 @@ export function HubsTab() {
 
   // Close the center panel entirely (back to empty state).
   function closeForm() {
+    setMobileTab("list");
     setCreating(false);
     setSelectedId(null);
     setEditing(null);
@@ -636,19 +644,17 @@ export function HubsTab() {
           note="Defaults a route inherits from this hub — overridable per route."
         >
           <FieldRow label="Start time">
-            <input
-              type="time"
+            <TimeSelect
               value={form.rdStartTime}
-              onChange={(e) => setForm((f) => ({ ...f, rdStartTime: e.target.value }))}
-              className={cn(ROW_INPUT, "w-[130px] font-mono tabular-nums")}
+              onChange={(v) => setForm((f) => ({ ...f, rdStartTime: v }))}
+              ariaLabel="Start time"
             />
           </FieldRow>
           <FieldRow label="End time">
-            <input
-              type="time"
+            <TimeSelect
               value={form.rdEndTime}
-              onChange={(e) => setForm((f) => ({ ...f, rdEndTime: e.target.value }))}
-              className={cn(ROW_INPUT, "w-[130px] font-mono tabular-nums")}
+              onChange={(v) => setForm((f) => ({ ...f, rdEndTime: v }))}
+              ariaLabel="End time"
             />
           </FieldRow>
           {endBeforeStart && (
@@ -658,25 +664,19 @@ export function HubsTab() {
           )}
 
           <FieldRow label="Minutes per stop">
-            <input
-              type="number"
-              min={0}
+            <Stepper
               value={form.rdMinutesPerStop}
-              onChange={(e) => setForm((f) => ({ ...f, rdMinutesPerStop: e.target.value }))}
-              placeholder="5"
-              inputMode="numeric"
-              className={cn(ROW_INPUT, "w-[110px] tabular-nums")}
+              onChange={(v) => setForm((f) => ({ ...f, rdMinutesPerStop: v }))}
+              min={1} max={120} unit="m"
+              ariaLabel="minutes per stop"
             />
           </FieldRow>
           <FieldRow label="Max stops">
-            <input
-              type="number"
-              min={0}
+            <Stepper
               value={form.rdMaxStops}
-              onChange={(e) => setForm((f) => ({ ...f, rdMaxStops: e.target.value }))}
-              placeholder="0 = unlimited"
-              inputMode="numeric"
-              className={cn(ROW_INPUT, "w-[130px] tabular-nums")}
+              onChange={(v) => setForm((f) => ({ ...f, rdMaxStops: v }))}
+              min={0} max={200} step={5} zeroLabel="∞"
+              ariaLabel="max stops"
             />
           </FieldRow>
 
@@ -737,8 +737,11 @@ export function HubsTab() {
         backgroundSize: "20px 20px",
       }}
     >
-      {/* ═══ LEFT COLUMN — the list (Stops split: 20% / min 260px) ═══ */}
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:w-[20%] sm:min-w-[260px] sm:shrink-0">
+      {/* ═══ LEFT COLUMN — the list (v2 split: 17% / min 240px; map gets the rest) ═══ */}
+      <div className={cn(
+        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:flex sm:w-[17%] sm:min-w-[240px] sm:shrink-0 sm:pb-0",
+        mobileTab === "list" ? "flex" : "hidden",
+      )}>
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -823,8 +826,11 @@ export function HubsTab() {
         </div>
       </div>
 
-      {/* ═══ CENTER COLUMN — inline editable form (Stops split: 25%) ═══ */}
-      <div className="hidden h-full flex-col overflow-hidden border-r border-border/50 bg-card sm:flex sm:w-[25%] sm:shrink-0">
+      {/* ═══ CENTER COLUMN — inline editable form (v2 split: 21% / min 300px) ═══ */}
+      <div className={cn(
+        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 sm:flex sm:w-[21%] sm:min-w-[300px] sm:shrink-0 sm:pb-0",
+        mobileTab === "detail" ? "flex" : "hidden",
+      )}>
         {showForm ? (
           centerForm
         ) : (
@@ -840,29 +846,26 @@ export function HubsTab() {
         )}
       </div>
 
-      {/* ═══ MAP COLUMN — persistent (flex-1, Stops split) ═══ */}
-      <div className="hidden h-full min-h-0 overflow-hidden bg-muted/20 sm:block sm:flex-1">
+      {/* ═══ MAP COLUMN — persistent (flex-1, now ~62% of the screen) ═══ */}
+      <div className={cn(
+        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 sm:block sm:flex-1 sm:pb-0",
+        mobileTab === "map" ? "block" : "hidden",
+      )}>
         <HubMapPanel hub={selectedHub} />
       </div>
 
-      {/* ═══ MOBILE — full-screen overlay: form + map stacked ═══ */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            key={editing?.id ?? "new"}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-background sm:hidden"
-          >
-            {centerForm}
-            <div className="h-72 shrink-0 overflow-hidden border-border/50 border-t">
-              <HubMapPanel hub={selectedHub} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ═══ MOBILE — sticky bottom nav (List · Details · Map) ═══ */}
+      <MobileTabBar
+        active={mobileTab}
+        onChange={setMobileTab}
+        hasSelection={showForm}
+        tabs={[
+          { key: "list", label: "Hubs", icon: List },
+          { key: "detail", label: "Details", icon: ClipboardList },
+          { key: "map", label: "Map", icon: MapIcon },
+        ]}
+      />
+
     </div>
   );
 }

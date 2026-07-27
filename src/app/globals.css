@@ -315,11 +315,23 @@ These serve as the fallback; there is no separate default.css file. */
 
 html {
   overscroll-behavior: none;
-  font-size: 13.5px; /* Dense data-desk scale (Webull-style) — the global zoom dial: all rem-based sizing scales from here */
+  /* Responsive density dial (design 3b) — THE one place that scales the app.
+   * Every text/control is rem-based (text-13/11/10 tokens ≙ approved px at
+   * 13.5px root), so these steps scale the whole UI uniformly:
+   *   ≤1366px laptops → 12.5px (max data density)
+   *   ≥1440px         → 13px
+   *   ≥1680px         → 13.5px (the approved reference feel)
+   *   ≥2200px 4K      → 14.5px (don't go ant-sized)
+   * Stepped media queries over clamp(): breakpoints are deliberate, testable
+   * design decisions; clamp would interpolate sizes nobody signed off on. */
+  font-size: 12.5px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+@media (min-width: 1440px) { html { font-size: 13px; } }
+@media (min-width: 1680px) { html { font-size: 13.5px; } }
+@media (min-width: 2200px) { html { font-size: 14.5px; } }
 
 .disable-transitions * {
   transition: none !important;

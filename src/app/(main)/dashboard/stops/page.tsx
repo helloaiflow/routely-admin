@@ -92,6 +92,10 @@ async function fetchJsonSafe(url: string, timeoutMs = 15_000): Promise<Record<st
 import { fetchFailedScansCount, resolveFailedScan } from "@/lib/ocr/failed-scans-client";
 import { cn } from "@/lib/utils";
 import { FieldRow } from "@/components/form-rows";
+
+/* Mini-map placeholder tone — matches Google Maps LIGHT tile gray. Intentionally
+ * theme-independent: the real map tiles do not follow the app theme. */
+const MAP_TILE_BG = "#e8eaed";
 import { formatDisplayCase } from "@/lib/format-display";
 
 import type { OCRSubmitData } from "./_components/ocr-scan-modal";
@@ -352,7 +356,7 @@ function statusAccent(s: string) {
       glow: "from-rose-500/20",
       border: "border-rose-300",
       dot: "bg-rose-500",
-      dotHex: "#ef4444",
+      dotHex: "var(--destructive)",
       badge: "bg-rose-500 text-white border-rose-500",
     };
   if (s === "draft")
@@ -1487,7 +1491,7 @@ function RouteLayer({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 13,
+                  fontSize: "var(--text-13)",
                   fontWeight: 900,
                   color: "white",
                   lineHeight: 1,
@@ -1513,12 +1517,12 @@ function RouteLayer({
                   width: 32,
                   height: 32,
                   borderRadius: "50%",
-                  background: "#ef4444",
+                  background: "var(--destructive)",
                   border: "3px solid white",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 13,
+                  fontSize: "var(--text-13)",
                   fontWeight: 900,
                   color: "white",
                   lineHeight: 1,
@@ -1529,8 +1533,8 @@ function RouteLayer({
               >
                 B
               </div>
-              <div style={{ width: 2, height: 8, background: "#ef4444", opacity: 0.7 }} />
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#ef4444", opacity: 0.5 }} />
+              <div style={{ width: 2, height: 8, background: "var(--destructive)", opacity: 0.7 }} />
+              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--destructive)", opacity: 0.5 }} />
             </div>
           </div>
         </AdvancedMarker>
@@ -1731,7 +1735,7 @@ function GoogleMap({
                   }}
                 >
                   {/* Street View */}
-                  <div style={{ position: "relative", height: 110, background: "#e8eaed", overflow: "hidden" }}>
+                  <div style={{ position: "relative", height: 110, background: MAP_TILE_BG, overflow: "hidden" }}>
                     <img
                       src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.pickupCoord.lat},${result.pickupCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
                       alt="Street view"
@@ -1761,7 +1765,7 @@ function GoogleMap({
                         padding: "2px 8px",
                       }}
                     >
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
                         PICKUP
                       </span>
                     </div>
@@ -1778,7 +1782,7 @@ function GoogleMap({
                         pointerEvents: "none",
                       }}
                     >
-                      <span style={{ fontSize: 8.5, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
+                      <span style={{ fontSize: "var(--text-9)", fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                         Click to expand
                       </span>
                     </div>
@@ -1808,7 +1812,7 @@ function GoogleMap({
                     {pickupName && (
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: "var(--text-12)",
                           fontWeight: 800,
                           color: mapDark ? "hsl(var(--foreground))" : "#0f172a",
                           margin: "0 0 2px",
@@ -1820,7 +1824,7 @@ function GoogleMap({
                     )}
                     <p
                       style={{
-                        fontSize: 11,
+                        fontSize: "var(--text-11)",
                         fontWeight: 500,
                         color: mapDark ? "hsl(var(--muted-foreground))" : "#64748b",
                         margin: 0,
@@ -1831,7 +1835,7 @@ function GoogleMap({
                     </p>
                     <p
                       style={{
-                        fontSize: 10,
+                        fontSize: "var(--text-10)",
                         color: mapDark ? "hsl(var(--muted-foreground) / 0.7)" : "#94a3b8",
                         margin: "2px 0 0",
                       }}
@@ -1857,7 +1861,7 @@ function GoogleMap({
                           flexShrink: 0,
                         }}
                       />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)" }}>Pickup point A</span>
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--primary)" }}>Pickup point A</span>
                     </div>
                   </div>
                 </div>
@@ -1898,7 +1902,7 @@ function GoogleMap({
                   }}
                 >
                   {/* Street View */}
-                  <div style={{ position: "relative", height: 110, background: "#e8eaed", overflow: "hidden" }}>
+                  <div style={{ position: "relative", height: 110, background: MAP_TILE_BG, overflow: "hidden" }}>
                     <img
                       src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.deliveryCoord.lat},${result.deliveryCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
                       alt="Street view"
@@ -1928,7 +1932,7 @@ function GoogleMap({
                         padding: "2px 8px",
                       }}
                     >
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
                         DELIVERY
                       </span>
                     </div>
@@ -1945,7 +1949,7 @@ function GoogleMap({
                         pointerEvents: "none",
                       }}
                     >
-                      <span style={{ fontSize: 8.5, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
+                      <span style={{ fontSize: "var(--text-9)", fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                         Click to expand
                       </span>
                     </div>
@@ -1975,7 +1979,7 @@ function GoogleMap({
                     {deliveryName && (
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: "var(--text-12)",
                           fontWeight: 800,
                           color: mapDark ? "hsl(var(--foreground))" : "#0f172a",
                           margin: "0 0 2px",
@@ -1987,7 +1991,7 @@ function GoogleMap({
                     )}
                     <p
                       style={{
-                        fontSize: 11,
+                        fontSize: "var(--text-11)",
                         fontWeight: 500,
                         color: mapDark ? "hsl(var(--muted-foreground))" : "#64748b",
                         margin: 0,
@@ -1998,7 +2002,7 @@ function GoogleMap({
                     </p>
                     <p
                       style={{
-                        fontSize: 10,
+                        fontSize: "var(--text-10)",
                         color: mapDark ? "hsl(var(--muted-foreground) / 0.7)" : "#94a3b8",
                         margin: "2px 0 0",
                       }}
@@ -2015,8 +2019,8 @@ function GoogleMap({
                         gap: 6,
                       }}
                     >
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#ef4444" }}>Delivery point B</span>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--destructive)", flexShrink: 0 }} />
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--destructive)" }}>Delivery point B</span>
                     </div>
                   </div>
                 </div>
@@ -2061,11 +2065,11 @@ function GoogleMap({
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                     <Truck style={{ width: 13, height: 13, color: "rgba(255,255,255,0.7)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, fontWeight: 900, color: "white", lineHeight: 1 }}>{result.time}</span>
+                    <span style={{ fontSize: "var(--text-13)", fontWeight: 900, color: "white", lineHeight: 1 }}>{result.time}</span>
                     {isRush && (
                       <span
                         style={{
-                          fontSize: 9,
+                          fontSize: "var(--text-9)",
                           fontWeight: 700,
                           background: "rgba(251,146,60,0.3)",
                           color: "rgb(254,215,170)",
@@ -2079,8 +2083,8 @@ function GoogleMap({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Distance</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: "white" }}>{result.dist}</span>
+                      <span style={{ fontSize: "var(--text-10)", color: "rgba(255,255,255,0.5)" }}>Distance</span>
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white" }}>{result.dist}</span>
                     </div>
                     {/* Cost fields (gas / tolls / trip cost) intentionally hidden —
                         not relevant for operational dispatch. Route calculations
@@ -2123,10 +2127,10 @@ function GoogleMap({
           >
             <Zap className="size-3" aria-hidden="true" />
             <div>
-              <p style={{ fontSize: 10.5, fontWeight: 700, color: "rgb(251,146,60)", lineHeight: 1.2, margin: 0 }}>
+              <p style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "rgb(251,146,60)", lineHeight: 1.2, margin: 0 }}>
                 Rush hour
               </p>
-              <p style={{ fontSize: 9, color: "rgba(251,146,60,0.65)", lineHeight: 1.2, margin: 0 }}>
+              <p style={{ fontSize: "var(--text-9)", color: "rgba(251,146,60,0.65)", lineHeight: 1.2, margin: 0 }}>
                 +30–45 min expected
               </p>
             </div>
@@ -2421,7 +2425,7 @@ function GoogleMap({
                 style={{
                   textAlign: "center",
                   marginTop: 12,
-                  fontSize: 11.5,
+                  fontSize: "var(--text-12)",
                   color: "rgba(255,255,255,0.4)",
                   fontWeight: 500,
                 }}

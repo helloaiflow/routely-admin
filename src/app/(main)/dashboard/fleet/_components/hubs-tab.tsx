@@ -94,7 +94,7 @@ type FormState = {
   rdMinutesPerStop: string; // minutes in the UI, stored ×60 as seconds
   rdMaxStops: string;
   rdRoundTrip: boolean;
-  // End To — route_defaults.end_address (only when not round-trip).
+  // End To — route_defaults.end_address (the return depot; only when round-trip).
   endValue: string;
   endSelected: boolean;
   rdEndLine1: string;
@@ -226,9 +226,11 @@ function payloadFromForm(f: FormState): Record<string, unknown> {
     const maxStops = Number(f.rdMaxStops);
     if (!Number.isNaN(maxStops) && maxStops > 0) routeDefaults.max_stops = Math.round(maxStops);
   }
+  // Business rule (CEO 2026-07): Round-trip ON = the route returns to a base at
+  // the end → End To names that return depot. One-way = ends at the last stop,
+  // no end address at all.
   if (f.rdRoundTrip) {
     routeDefaults.round_trip = true;
-  } else {
     const endAddress = buildAddress(f.rdEndLine1, f.rdEndCity, f.rdEndState, f.rdEndZip);
     if (endAddress) routeDefaults.end_address = endAddress;
   }
@@ -675,12 +677,12 @@ export function HubsTab() {
             />
           </StackRow>
 
-          {!form.rdRoundTrip && (
-            <StackRow label="End To" hint="Route end">
+          {form.rdRoundTrip && (
+            <StackRow label="End To" hint="Return depot">
               <AddressField
                 value={form.endValue}
                 selected={form.endSelected}
-                placeholder="Search end address…"
+                placeholder="Search return address…"
                 onChange={(v) => setForm((f) => ({ ...f, endValue: v, endSelected: false }))}
                 onPlaceDetails={onEndPlace}
                 onClear={clearEnd}
@@ -760,7 +762,25 @@ export function HubsTab() {
           <FieldRow label="Round-trip">
             <Switch
               checked={form.rdRoundTrip}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, rdRoundTrip: v }))}
+              onCheckedChange={(v) =>
+                setForm((f) => {
+                  // Turning RT on with an empty End To → prefill the return
+                  // depot with the start address (editable afterwards).
+                  if (v && !f.endValue && f.startSelected) {
+                    return {
+                      ...f,
+                      rdRoundTrip: true,
+                      endValue: f.startValue,
+                      endSelected: true,
+                      rdEndLine1: f.line1,
+                      rdEndCity: f.city,
+                      rdEndState: f.state,
+                      rdEndZip: f.zip,
+                    };
+                  }
+                  return { ...f, rdRoundTrip: v };
+                })
+              }
             />
           </FieldRow>
         </Group>
@@ -1006,8 +1026,15 @@ export function HubsTab() {
           centerForm
         ) : (
           <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
-            <div className="mb-5 w-full">
-              <IsoDepotScene variant="empty" />
+            <div className="mb-5 w-full max-w-[240px] overflow-hidden rounded-2xl shadow-sm ring-1 ring-border/60">
+              {/* Higgsfield isometric depot — premium hero for the empty state */}
+              <img
+                src="/art/iso-hub.png"
+                alt=""
+                aria-hidden="true"
+                className="block w-full dark:opacity-90"
+                loading="lazy"
+              />
             </div>
             <p className="type-body-sm font-bold text-foreground">No hub selected</p>
             <p className="type-caption mt-1.5 max-w-[200px] leading-relaxed">
@@ -1095,27 +1122,26 @@ function HubRow({
             </span>
           )}
         </div>
-        {/* Line 2 — address · window · max, one muted line + RT right */}
+        {/* Line 2 — address LEFT (truncates w/ tooltip), schedule/max/RT RIGHT
+            (never clipped) — keeps every datum visible in the dense row. */}
         <div className="mt-px flex items-center justify-between gap-2">
           {(() => {
-            const meta = [
-              formatDisplayCase(addressLine(hub)),
-              `${c.start}–${c.end}`,
-              `max ${c.maxStops}`,
-            ]
-              .filter((x) => x && x !== "—–—")
-              .join(" · ");
+            const addr = formatDisplayCase(addressLine(hub));
             return (
-              <p className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug" title={meta}>
-                {meta || "—"}
+              <p className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug" title={addr}>
+                {addr || "—"}
               </p>
             );
           })()}
-          {c.roundtrip && (
-            <span className="flex shrink-0 items-center gap-0.5 text-10 text-muted-foreground/60">
-              <Repeat className="size-3" aria-hidden="true" /> RT
-            </span>
-          )}
+          <span className="flex shrink-0 items-center gap-1.5 font-mono text-10 tabular-nums text-muted-foreground/60">
+            {c.start !== "—" && <span>{c.end !== "—" ? `${c.start}–${c.end}` : c.start}</span>}
+            {c.maxStops !== "—" && c.maxStops !== "∞" && <span>max {c.maxStops}</span>}
+            {c.roundtrip && (
+              <span className="flex items-center gap-0.5">
+                <Repeat className="size-3" aria-hidden="true" /> RT
+              </span>
+            )}
+          </span>
         </div>
       </div>
     </div>

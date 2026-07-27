@@ -1003,8 +1003,15 @@ export function DriversTab() {
           centerForm
         ) : (
           <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
-            <div className="mb-5 w-full">
-              <IsoCourierScene variant="empty" />
+            <div className="mb-5 w-full max-w-[240px] overflow-hidden rounded-2xl shadow-sm ring-1 ring-border/60">
+              {/* Higgsfield isometric courier van — premium hero for the empty state */}
+              <img
+                src="/art/iso-driver.png"
+                alt=""
+                aria-hidden="true"
+                className="block w-full dark:opacity-90"
+                loading="lazy"
+              />
             </div>
             <p className="type-body-sm font-bold text-foreground">No driver selected</p>
             <p className="type-caption mt-1.5 max-w-[200px] leading-relaxed">
@@ -1097,12 +1104,13 @@ function DriverRow({
           </span>
         </div>
         {/* Line 2 — phone · hubs · vehicle merged into one muted line */}
+        {/* Line 2 — phone · hubs LEFT (truncates w/ tooltip), vehicle RIGHT
+            (own slot, never swallowed by the truncation). */}
         <div className="mt-px flex items-center justify-between gap-2">
           {(() => {
             const meta = [
               formatPhone(driver.phone),
               driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids)),
-              vehicle,
             ]
               .filter((x) => x && x !== "—")
               .join(" · ");
@@ -1112,6 +1120,11 @@ function DriverRow({
               </p>
             );
           })()}
+          {vehicle && (
+            <span className="max-w-[38%] truncate text-10 text-muted-foreground/60" title={vehicle}>
+              {vehicle}
+            </span>
+          )}
         </div>
       </div>
     </div>

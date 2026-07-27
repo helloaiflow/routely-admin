@@ -176,7 +176,7 @@ function SummaryRow({ revenueSeries }: { revenueSeries: Array<{ day: string; rev
           </Badge>
         </div>
         <div>
-          <ChartContainer config={revenueChartConfig} className="h-10 w-full rounded-md border">
+          <ChartContainer config={revenueChartConfig} className="h-(--spacing-control-h) w-full rounded-md border">
             <ComposedChart data={revenueSeries} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
               <XAxis dataKey="day" hide />
               <YAxis hide domain={[midpoint - halfRange, midpoint + halfRange]} />

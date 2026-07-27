@@ -239,19 +239,19 @@ export function LabelDetailSheet({
                 <>
                   <Button
                     onClick={() => printLabelPng(o.shippo?.label_url, `Label ${o.order_id}`)}
-                    className="h-10 flex-1 gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90"
+                    className="h-(--spacing-control-h) flex-1 gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90"
                   >
                     <Printer className="size-4" aria-hidden="true" />
                     Print
                   </Button>
-                  <Button asChild variant="outline" className="h-10 gap-1.5 border-border/60">
+                  <Button asChild variant="outline" className="h-(--spacing-control-h) gap-1.5 border-border/60">
                     <a href={o.shippo?.label_url} target="_blank" rel="noreferrer" download>
                       <Download className="size-4" aria-hidden="true" />
                       PNG
                     </a>
                   </Button>
                   {o.shippo?.tracking_url && (
-                    <Button asChild variant="outline" className="h-10 gap-1.5 border-border/60">
+                    <Button asChild variant="outline" className="h-(--spacing-control-h) gap-1.5 border-border/60">
                       <a href={o.shippo.tracking_url} target="_blank" rel="noreferrer">
                         <Truck className="size-4" aria-hidden="true" />
                         Track
@@ -260,14 +260,14 @@ export function LabelDetailSheet({
                   )}
                 </>
               ) : o.shippo?.tracking_url ? (
-                <Button asChild variant="outline" className="h-10 flex-1 gap-1.5 border-border/60">
+                <Button asChild variant="outline" className="h-(--spacing-control-h) flex-1 gap-1.5 border-border/60">
                   <a href={o.shippo.tracking_url} target="_blank" rel="noreferrer">
                     <ExternalLink className="size-4" aria-hidden="true" />
                     Check status on carrier site
                   </a>
                 </Button>
               ) : (
-                <p className="flex h-10 flex-1 items-center justify-center gap-1.5 text-13 text-muted-foreground">
+                <p className="flex h-(--spacing-control-h) flex-1 items-center justify-center gap-1.5 text-13 text-muted-foreground">
                   <MapPin className="size-3.5" aria-hidden="true" />
                   No label actions available
                 </p>

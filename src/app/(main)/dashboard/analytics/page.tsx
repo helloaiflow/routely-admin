@@ -43,7 +43,7 @@ const performanceConfig = {
 
 export default function AnalyticsPage() {
   return (
-    <div className="@container/main flex flex-col gap-4 bg-muted/40 p-4 md:gap-6 md:p-6">
+    <div className="@container/main flex flex-col gap-4 bg-muted/40 p-4 md:gap-4 md:p-6">
       {/* Top toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
                 <Badge variant="secondary">+0 vs prev</Badge>
               </div>
               <div className="text-muted-foreground text-sm">Previous period: 0</div>
-              <ChartContainer config={sparklineConfig} className="h-12 w-full rounded-md border">
+              <ChartContainer config={sparklineConfig} className="h-(--spacing-control-h) w-full rounded-md border">
                 <AreaChart data={SPARKLINE_DATA} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
                   <XAxis dataKey="day" hide />
                   <YAxis hide domain={[0, 1]} />

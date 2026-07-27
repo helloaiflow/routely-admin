@@ -129,7 +129,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
       <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
         {/* ── Toolbar — lives INSIDE the card, separated by border-b ── */}
         <div className="flex flex-col gap-2 border-border/60 border-b px-3 py-2.5 sm:flex-row sm:items-center">
-          <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+          <div className="flex h-(--spacing-control-h) flex-1 items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
             <Search className="size-3.5 shrink-0 text-primary/60" aria-hidden="true" />
             <input
               value={query}
@@ -152,7 +152,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
             >
               <SelectTrigger
                 size="sm"
-                className="h-9 w-[130px] border-border/60 text-13"
+                className="h-(--spacing-control-h) w-[130px] border-border/60 text-13"
                 aria-label="Filter by status"
               >
                 <SelectValue />
@@ -175,7 +175,7 @@ export function LabelsTable({ orders }: { orders: LabelOrder[] }) {
             >
               <SelectTrigger
                 size="sm"
-                className="h-9 w-[110px] border-border/60 text-13"
+                className="h-(--spacing-control-h) w-[110px] border-border/60 text-13"
                 aria-label="Filter by carrier"
               >
                 <SelectValue />

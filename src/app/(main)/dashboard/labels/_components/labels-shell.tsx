@@ -95,7 +95,7 @@ export function LabelsShell() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button asChild className="h-9 gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90">
+        <Button asChild className="h-(--spacing-control-h) gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90">
           <a href="/dashboard/orders/new">
             <Plus className="size-4" aria-hidden="true" />
             <span className="hidden sm:inline">Buy Label</span>
@@ -151,9 +151,9 @@ function OverviewSkeleton() {
 function TableSkeleton() {
   return (
     <div className="space-y-2">
-      <Skeleton className="h-9 rounded-lg" />
+      <Skeleton className="h-(--spacing-control-h) rounded-lg" />
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <Skeleton key={i} className="h-12 rounded-lg" />
+        <Skeleton key={i} className="h-(--spacing-row-h) rounded-lg" />
       ))}
     </div>
   );

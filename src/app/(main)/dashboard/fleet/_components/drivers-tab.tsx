@@ -243,7 +243,7 @@ function HubMultiSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-8 w-full justify-between font-normal text-[13px]"
+            className="h-8 w-full justify-between font-normal text-13"
           >
             <span className="flex items-center gap-2 truncate">
               <Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -663,7 +663,7 @@ export function DriversTab() {
       <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
         <div className={cn("h-[3px] w-full", inactive ? "bg-muted-foreground/40" : "bg-primary")} />
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
-          <span className="font-mono text-[10px] text-primary dark:text-white/80">
+          <span className="font-mono text-10 text-primary dark:text-white/80">
             {editing ? "Driver" : "New driver"}
           </span>
           <div className="flex items-center gap-1">
@@ -725,22 +725,22 @@ export function DriversTab() {
             </p>
           )}
           {(form.line1 || headerAddr) && (
-            <p className="truncate text-[11px] text-muted-foreground/55">
+            <p className="truncate text-11 text-muted-foreground/55">
               {[form.line1, headerAddr].filter(Boolean).join(" · ")}
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {inactive ? (
-              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-border">
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-semibold text-muted-foreground ring-1 ring-border">
                 Inactive
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
                 Active
               </span>
             )}
             {form.vehicle.trim() && (
-              <span className="inline-flex max-w-[160px] items-center truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+              <span className="inline-flex max-w-[160px] items-center truncate rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
                 {form.vehicle.trim()}
               </span>
             )}
@@ -838,13 +838,13 @@ export function DriversTab() {
         <div className="flex min-h-4 items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             {error ? (
-              <p className="truncate text-[11px] text-rose-500">{error}</p>
+              <p className="truncate text-11 text-rose-500">{error}</p>
             ) : saving ? (
-              <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <p className="inline-flex items-center gap-1 text-11 text-muted-foreground">
                 <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Saving…
               </p>
             ) : savedTick ? (
-              <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+              <p className="inline-flex items-center gap-1 text-11 text-emerald-600 dark:text-emerald-500">
                 <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
               </p>
             ) : null}
@@ -853,7 +853,7 @@ export function DriversTab() {
             type="button"
             onClick={cancelForm}
             disabled={saving}
-            className="shrink-0 text-[11px] text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+            className="shrink-0 text-11 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
           >
             Cancel
           </button>
@@ -892,7 +892,7 @@ export function DriversTab() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search drivers…"
                 aria-label="Search drivers"
-                className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/40"
+                className="h-full w-full min-w-0 bg-transparent text-13 outline-none placeholder:text-muted-foreground/40"
               />
             </div>
             <Button size="sm" className="h-9 shrink-0" onClick={openAdd}>
@@ -905,7 +905,7 @@ export function DriversTab() {
           >
             <SelectTrigger
               size="sm"
-              className="h-8 w-full border-border/60 bg-background text-[13px]"
+              className="h-8 w-full border-border/60 bg-background text-13"
               aria-label="Filter by status"
             >
               <SelectValue />
@@ -948,7 +948,7 @@ export function DriversTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+            <p className="px-4 py-10 text-center text-13 text-muted-foreground">
               No drivers match those filters.
             </p>
           ) : (
@@ -1061,24 +1061,24 @@ function DriverRow({
         <Users className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-foreground leading-tight">{driver.name}</p>
-        <p className="mt-0.5 truncate font-mono text-[11px] tabular-nums text-foreground/65 leading-tight">
+        <p className="truncate text-13 font-semibold text-foreground leading-tight">{driver.name}</p>
+        <p className="mt-0.5 truncate font-mono text-11 tabular-nums text-foreground/65 leading-tight">
           {formatPhone(driver.phone)}
         </p>
-        <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">
+        <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
           {driver.all_hubs ? "All hubs" : hubNames(ids)}
         </p>
         {vehicle && (
-          <p className="mt-0.5 truncate text-[10px] text-muted-foreground/50 leading-tight">{vehicle}</p>
+          <p className="mt-0.5 truncate text-10 text-muted-foreground/50 leading-tight">{vehicle}</p>
         )}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 self-center">
         {inactive ? (
-          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground ring-1 ring-border">
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-semibold text-muted-foreground ring-1 ring-border">
             Inactive
           </span>
         ) : (
-          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+          <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
             Active
           </span>
         )}
@@ -1215,7 +1215,7 @@ function Group({
       </button>
       {open && (
         <div className="px-3 pb-2">
-          {note && <p className="mb-1 text-[11px] text-muted-foreground/55 leading-snug">{note}</p>}
+          {note && <p className="mb-1 text-11 text-muted-foreground/55 leading-snug">{note}</p>}
           {children}
         </div>
       )}
@@ -1226,7 +1226,7 @@ function Group({
 // Shared borderless, right-aligned control style for FieldRow inputs — mirrors
 // the Stops detail form (h-7, underline-on-focus, 13px medium, right-aligned).
 const ROW_INPUT =
-  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-[13px] font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
+  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-13 font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
 
 // Stops FieldRow: label LEFT, control RIGHT, thin divider between rows.
 function FieldRow({
@@ -1243,13 +1243,13 @@ function FieldRow({
   return (
     <div className="border-b border-border/[0.07] py-2 last:border-0">
       <div className="flex items-center justify-between gap-4">
-        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
           {label}
           {required && <span className="ml-0.5 text-rose-500">*</span>}
         </span>
         <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
       </div>
-      {error && <p className="mt-1 text-right text-[11px] text-rose-500">{error}</p>}
+      {error && <p className="mt-1 text-right text-11 text-rose-500">{error}</p>}
     </div>
   );
 }
@@ -1268,7 +1268,7 @@ function StackRow({
   return (
     <div className="space-y-1.5 border-b border-border/[0.07] py-2 last:border-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
         {hint && <span className="type-caption truncate">{hint}</span>}
       </div>
       {children}
@@ -1306,7 +1306,7 @@ function AddressField({
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}
           placeholder={placeholder}
-          className="h-8 border-0 bg-transparent pr-16 text-[13px] focus-visible:border-0 focus-visible:ring-0"
+          className="h-8 border-0 bg-transparent pr-16 text-13 focus-visible:border-0 focus-visible:ring-0"
         />
         <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
           {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}

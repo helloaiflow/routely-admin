@@ -516,7 +516,7 @@ export function HubsTab() {
       <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
         <div className="h-[3px] w-full bg-primary" />
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
-          <span className="font-mono text-[10px] text-primary dark:text-white/80">
+          <span className="font-mono text-10 text-primary dark:text-white/80">
             {editing ? "Hub" : "New hub"}
           </span>
           <div className="flex items-center gap-1">
@@ -549,15 +549,15 @@ export function HubsTab() {
             </p>
           )}
           {headerAddr && (
-            <p className="truncate text-[11px] text-muted-foreground/55">{headerAddr}</p>
+            <p className="truncate text-11 text-muted-foreground/55">{headerAddr}</p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {form.is_default && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
                 <Star className="size-3" aria-hidden="true" /> Default
               </span>
             )}
-            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
               {form.rdRoundTrip ? "Round-trip" : "One-way"}
             </span>
           </div>
@@ -607,12 +607,12 @@ export function HubsTab() {
               value={form.timezone}
               onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
             >
-              <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-[13px] text-foreground focus:ring-0">
+              <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>
               <SelectContent align="end">
                 {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value} className="text-[13px]">
+                  <SelectItem key={tz.value} value={tz.value} className="text-13">
                     {tz.label}
                   </SelectItem>
                 ))}
@@ -651,7 +651,7 @@ export function HubsTab() {
             />
           </FieldRow>
           {endBeforeStart && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-500">
+            <p className="text-11 text-amber-600 dark:text-amber-500">
               End time is at or before the start time — the route may not fit in the day.
             </p>
           )}
@@ -694,13 +694,13 @@ export function HubsTab() {
         <div className="flex min-h-4 items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             {error ? (
-              <p className="truncate text-[11px] text-rose-500">{error}</p>
+              <p className="truncate text-11 text-rose-500">{error}</p>
             ) : saving ? (
-              <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <p className="inline-flex items-center gap-1 text-11 text-muted-foreground">
                 <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Saving…
               </p>
             ) : savedTick ? (
-              <p className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+              <p className="inline-flex items-center gap-1 text-11 text-emerald-600 dark:text-emerald-500">
                 <CircleCheck className="size-3.5" aria-hidden="true" /> Saved
               </p>
             ) : null}
@@ -709,7 +709,7 @@ export function HubsTab() {
             type="button"
             onClick={cancelForm}
             disabled={saving}
-            className="shrink-0 text-[11px] text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+            className="shrink-0 text-11 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
           >
             Cancel
           </button>
@@ -748,7 +748,7 @@ export function HubsTab() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search hubs…"
                 aria-label="Search hubs"
-                className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/40"
+                className="h-full w-full min-w-0 bg-transparent text-13 outline-none placeholder:text-muted-foreground/40"
               />
             </div>
             <Button size="sm" className="h-9 shrink-0" onClick={openAdd}>
@@ -761,7 +761,7 @@ export function HubsTab() {
           >
             <SelectTrigger
               size="sm"
-              className="h-8 w-full border-border/60 bg-background text-[13px]"
+              className="h-8 w-full border-border/60 bg-background text-13"
               aria-label="Filter by roundtrip"
             >
               <SelectValue />
@@ -804,7 +804,7 @@ export function HubsTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+            <p className="px-4 py-10 text-center text-13 text-muted-foreground">
               No hubs match those filters.
             </p>
           ) : (
@@ -909,29 +909,29 @@ function HubRow({
         <Building2 className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-foreground leading-tight">{hub.name}</p>
+        <p className="truncate text-13 font-semibold text-foreground leading-tight">{hub.name}</p>
         {a.line1 && (
-          <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">{a.line1}</p>
+          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{a.line1}</p>
         )}
         {cityLine && (
-          <p className="mt-0.5 truncate text-[11px] text-foreground/65 leading-tight">{cityLine}</p>
+          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{cityLine}</p>
         )}
-        <p className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-muted-foreground/50">
+        <p className="mt-0.5 truncate font-mono text-10 tabular-nums text-muted-foreground/50">
           {c.start}–{c.end} · max {c.maxStops}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 self-center">
         {hub.is_default ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary ring-1 ring-primary/20">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
             <Star className="size-3" aria-hidden="true" /> Default
           </span>
         ) : (
-          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
             Hub
           </span>
         )}
         {c.roundtrip && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60">
+          <span className="inline-flex items-center gap-1 text-10 text-muted-foreground/60">
             <Repeat className="size-3" aria-hidden="true" /> RT
           </span>
         )}
@@ -999,7 +999,7 @@ function Group({
       </button>
       {open && (
         <div className="px-3 pb-2">
-          {note && <p className="mb-1 text-[11px] text-muted-foreground/55 leading-snug">{note}</p>}
+          {note && <p className="mb-1 text-11 text-muted-foreground/55 leading-snug">{note}</p>}
           {children}
         </div>
       )}
@@ -1037,7 +1037,7 @@ function AddressField({
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}
           placeholder={placeholder}
-          className="h-8 border-0 bg-transparent pr-16 text-[13px] focus-visible:border-0 focus-visible:ring-0"
+          className="h-8 border-0 bg-transparent pr-16 text-13 focus-visible:border-0 focus-visible:ring-0"
         />
         <div className="pointer-events-none absolute right-2.5 flex items-center gap-1.5">
           {selected && <CircleCheck className="size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />}
@@ -1060,7 +1060,7 @@ function AddressField({
 // Shared borderless, right-aligned control style for FieldRow inputs — mirrors
 // the Stops detail form (h-7, underline-on-focus, 13px medium, right-aligned).
 const ROW_INPUT =
-  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-[13px] font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
+  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-13 font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
 
 // Stops FieldRow: label LEFT, control RIGHT, thin divider between rows.
 function FieldRow({
@@ -1077,13 +1077,13 @@ function FieldRow({
   return (
     <div className="border-b border-border/[0.07] py-2 last:border-0">
       <div className="flex items-center justify-between gap-4">
-        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">
+        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
           {label}
           {required && <span className="ml-0.5 text-rose-500">*</span>}
         </span>
         <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
       </div>
-      {error && <p className="mt-1 text-right text-[11px] text-rose-500">{error}</p>}
+      {error && <p className="mt-1 text-right text-11 text-rose-500">{error}</p>}
     </div>
   );
 }
@@ -1102,7 +1102,7 @@ function StackRow({
   return (
     <div className="space-y-1.5 border-b border-border/[0.07] py-2 last:border-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="shrink-0 text-[11px] text-muted-foreground/65 leading-snug">{label}</span>
+        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
         {hint && <span className="type-caption truncate">{hint}</span>}
       </div>
       {children}

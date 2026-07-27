@@ -53,6 +53,10 @@ export function AddressAutocomplete({
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // True only when the latest value change came from the user typing in THIS
+  // input. Programmatic value changes (record loaded into the form, select)
+  // must never fetch predictions or open the dropdown.
+  const typedRef = useRef(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -65,7 +69,7 @@ export function AddressAutocomplete({
     }
   }, []);
 
-  // Fetch predictions on value change
+  // Fetch predictions on value change — but only for USER-TYPED changes.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!value || value.length < 3) {
@@ -73,6 +77,13 @@ export function AddressAutocomplete({
       setOpen(false);
       return;
     }
+    if (!typedRef.current) {
+      // Programmatic change (form pre-fill / selection): keep the dropdown shut.
+      setPredictions([]);
+      setOpen(false);
+      return;
+    }
+    typedRef.current = false;
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
@@ -146,7 +157,10 @@ export function AddressAutocomplete({
         <input
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            typedRef.current = true;
+            onChange(e.target.value);
+          }}
           onFocus={() => {
             if (predictions.length > 0) {
               updatePosition();

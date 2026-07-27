@@ -334,7 +334,7 @@ function MapFallback({ text }: { text: string }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
       <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
-      <p className="max-w-[200px] px-3 text-center text-[11px] leading-snug text-muted-foreground/55">{text}</p>
+      <p className="max-w-[200px] px-3 text-center text-11 leading-snug text-muted-foreground/55">{text}</p>
     </div>
   );
 }
@@ -410,7 +410,7 @@ export function FleetRouteMap({
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
           <div className="flex flex-col items-center gap-2.5 rounded-2xl bg-card px-6 py-4 shadow-xl ring-1 ring-border/60">
             <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" />
-            <p className="font-semibold text-[11px] text-muted-foreground">
+            <p className="font-semibold text-11 text-muted-foreground">
               {twoPoint ? "Calculating route…" : "Locating…"}
             </p>
           </div>

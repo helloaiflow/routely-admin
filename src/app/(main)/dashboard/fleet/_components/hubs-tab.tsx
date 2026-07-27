@@ -41,7 +41,9 @@ import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
-import { DriverAvatarRow, MobileTabBar, SearchMultiSelect, Stepper, TimeSelect } from "./field-controls";
+import { AvatarGroup } from "@/components/ui/avatar-group";
+
+import { MobileTabBar, SearchMultiSelect, Stepper, TimeSelect } from "./field-controls";
 import { IsoDepotScene } from "./fleet-art";
 import { FleetRouteMap } from "./fleet-route-map";
 
@@ -826,10 +828,13 @@ export function HubsTab() {
                 emptyText="No drivers found."
                 icon={Users}
               />
-              <DriverAvatarRow
-                drivers={driverOpts.filter((d) => relations.allowed.includes(d.id))}
-                emptyText="No drivers allowed yet."
-              />
+              <div className="py-1">
+                <AvatarGroup
+                  people={driverOpts.filter((d) => relations.allowed.includes(d.id))}
+                  max={6}
+                  emptyText="No drivers allowed yet."
+                />
+              </div>
             </StackRow>
             <StackRow label="Blocked drivers" hint="Never assigned here">
               <SearchMultiSelect
@@ -842,11 +847,14 @@ export function HubsTab() {
                 icon={Ban}
                 badgeTone="destructive"
               />
-              <DriverAvatarRow
-                drivers={driverOpts.filter((d) => relations.blocked.includes(d.id))}
-                blocked
-                emptyText="No drivers blocked."
-              />
+              <div className="py-1">
+                <AvatarGroup
+                  people={driverOpts.filter((d) => relations.blocked.includes(d.id))}
+                  max={6}
+                  tone="blocked"
+                  emptyText="No drivers blocked."
+                />
+              </div>
             </StackRow>
           </Group>
         )}
@@ -1061,7 +1069,7 @@ function HubRow({
         }
       }}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-2.5 border-b border-l-2 border-border/50 px-2.5 py-2 text-left transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
         selected
           ? "border-l-primary bg-blue-50 dark:bg-primary/20"
           : "border-l-transparent bg-card hover:bg-muted/30",
@@ -1069,39 +1077,46 @@ function HubRow({
     >
       <span
         className={cn(
-          "mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg",
+          "grid size-7 shrink-0 place-items-center rounded-lg",
           hub.is_default ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
         )}
       >
-        <Building2 className="size-4" aria-hidden="true" />
+        <Building2 className="size-3.5" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-13 font-semibold text-foreground leading-tight">{formatDisplayCase(hub.name)}</p>
-        {a.line1 && (
-          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{formatDisplayCase(a.line1)}</p>
-        )}
-        {cityLine && (
-          <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">{formatDisplayCase(cityLine)}</p>
-        )}
-        <p className="mt-0.5 truncate font-mono text-10 tabular-nums text-muted-foreground/50">
-          {c.start}–{c.end} · max {c.maxStops}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1 self-center">
-        {hub.is_default ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
-            <Star className="size-3" aria-hidden="true" /> Default
-          </span>
-        ) : (
-          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
-            Hub
-          </span>
-        )}
-        {c.roundtrip && (
-          <span className="inline-flex items-center gap-1 text-10 text-muted-foreground/60">
-            <Repeat className="size-3" aria-hidden="true" /> RT
-          </span>
-        )}
+        {/* Line 1 — name + Default marker */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-12 font-semibold text-foreground leading-snug">
+            {formatDisplayCase(hub.name)}
+          </p>
+          {hub.is_default && (
+            <span className="flex shrink-0 items-center gap-1 text-10 font-medium text-primary">
+              <Star className="size-3" aria-hidden="true" /> Default
+            </span>
+          )}
+        </div>
+        {/* Line 2 — address · window · max, one muted line + RT right */}
+        <div className="mt-px flex items-center justify-between gap-2">
+          {(() => {
+            const meta = [
+              formatDisplayCase(addressLine(hub)),
+              `${c.start}–${c.end}`,
+              `max ${c.maxStops}`,
+            ]
+              .filter((x) => x && x !== "—–—")
+              .join(" · ");
+            return (
+              <p className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug" title={meta}>
+                {meta || "—"}
+              </p>
+            );
+          })()}
+          {c.roundtrip && (
+            <span className="flex shrink-0 items-center gap-0.5 text-10 text-muted-foreground/60">
+              <Repeat className="size-3" aria-hidden="true" /> RT
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

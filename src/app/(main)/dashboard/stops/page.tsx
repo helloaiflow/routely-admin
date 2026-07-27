@@ -7848,9 +7848,10 @@ export default function StopsPage() {
                     }
                   }}
                   className={cn(
-                    // 2px left status border + bg shifts only on selection. No
-                    // inline boxShadow, no per-row hex stripes.
-                    "flex w-full cursor-pointer items-start gap-2.5 border-b border-l-2 border-border/50 px-2.5 py-2 text-left transition-colors",
+                    // Dense 2-line recipe (Linear-style): left status border +
+                    // name/meta on line 1, everything secondary merged with "·"
+                    // on line 2. No numbered circle — the footer carries counts.
+                    "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
                     leftBorder,
                     isSel ? "bg-blue-50 dark:bg-primary/20" : "bg-card hover:bg-muted/30",
                   )}
@@ -7859,72 +7860,62 @@ export default function StopsPage() {
                     checked={selectedIds.has(s.id)}
                     onCheckedChange={() => toggleSelectOne(s.id)}
                     onClick={(e) => e.stopPropagation()}
-                    className="mt-0.5 size-3.5 shrink-0"
+                    className="size-3.5 shrink-0"
                   />
-                  <span
-                    className={cn(
-                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-10 font-semibold transition-colors",
-                      isSel ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {filteredStops.length - i}
-                  </span>
-                  {/* 3 lines max — Name · Address · TrackingID. City/state/zip
-                      dropped (it was already in address). */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-13 font-semibold text-foreground leading-tight">
-                      {toTitle(s.recipient_name) || "—"}
-                    </p>
-                    <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
-                      {toTitle(s.address)}
-                    </p>
-                    {/* Third field: City, State ZIP (CEO 2026-07-13 — replaced phone),
-                        SAME type treatment as the address line above. */}
-                    <p className="mt-0.5 truncate text-11 text-foreground/65 leading-tight">
-                      {[toTitle(s.city), `${s.state ?? ""} ${s.zip ?? ""}`.trim()].filter(Boolean).join(", ") || "—"}
-                    </p>
-                    {/* Tracking ID — brand blue for real ids (CEO 2026-07-13);
-                        drafts keep the quiet "pending" tone. */}
-                    <p
-                      className={cn(
-                        "mt-0.5 truncate font-mono text-10 tabular-nums",
-                        s.id.startsWith("draft_") ? "text-muted-foreground/50" : "text-primary",
-                      )}
-                    >
-                      {s.id.startsWith("draft_") ? "Tracking pending" : s.stop_id || "—"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1 self-center">
-                    {/* Quieter badges per spec — 9.5pt label, refined ring style */}
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-10 font-semibold ring-1",
-                        s.status === "draft"
-                          ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-violet-500/20"
-                          : DELIVERED.includes(s.status)
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-emerald-500/20"
-                            : TRANSIT.includes(s.status)
-                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-blue-500/20"
-                              : FAILED.includes(s.status)
-                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 ring-rose-500/20"
-                                : "bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-amber-500/20",
-                      )}
-                    >
-                      {statusLabel(s.status)}
-                    </span>
-                    {/* Recovered draft: a submit failed → fell back to draft +
-                        submit_error. Flag it so the user knows to fix & resubmit. */}
-                    {s.submit_error && (
+                    {/* Line 1 — name + status (6px dot + colored 10px label) */}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-12 font-semibold text-foreground leading-snug">
+                        {toTitle(s.recipient_name) || "—"}
+                      </p>
                       <span
-                        className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-10 font-semibold text-rose-600 ring-1 ring-rose-200/60 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30"
-                        title={s.submit_error.reason ?? "Submit failed — fix & resubmit"}
+                        className={cn(
+                          "flex shrink-0 items-center gap-1 text-10 font-medium",
+                          s.submit_error
+                            ? "text-rose-500"
+                            : s.status === "draft"
+                              ? "text-violet-500"
+                              : DELIVERED.includes(s.status)
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : TRANSIT.includes(s.status)
+                                  ? "text-blue-600 dark:text-blue-400"
+                                  : FAILED.includes(s.status)
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-amber-600 dark:text-amber-500",
+                        )}
+                        title={s.submit_error ? (s.submit_error.reason ?? "Submit failed — fix & resubmit") : undefined}
                       >
-                        Submit failed
+                        <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+                        {s.submit_error ? "Submit failed" : statusLabel(s.status)}
                       </span>
-                    )}
-                    <span className="text-10 text-muted-foreground/60 tabular-nums">
-                      {fmtStopDate(s.created_at)}
-                    </span>
+                    </div>
+                    {/* Line 2 — address · city ST zip · tracking, one muted line
+                        (tooltip carries the full text) + date right */}
+                    <div className="mt-px flex items-center justify-between gap-2">
+                      {(() => {
+                        const addr = [
+                          toTitle(s.address),
+                          [toTitle(s.city), `${s.state ?? ""} ${s.zip ?? ""}`.trim()].filter(Boolean).join(", "),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
+                        const tracking = s.id.startsWith("draft_") ? "" : s.stop_id || "";
+                        return (
+                          <p
+                            className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug"
+                            title={[addr, tracking].filter(Boolean).join(" · ")}
+                          >
+                            {addr || "—"}
+                            {tracking && (
+                              <span className="font-mono text-10 tabular-nums text-primary/80"> · {tracking}</span>
+                            )}
+                          </p>
+                        );
+                      })()}
+                      <span className="shrink-0 text-10 text-muted-foreground/60 tabular-nums">
+                        {fmtStopDate(s.created_at)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );

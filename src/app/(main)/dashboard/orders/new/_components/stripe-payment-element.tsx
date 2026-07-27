@@ -239,7 +239,7 @@ export function StripePaymentElement({
       <div>
         {/* ── SAVED PAYMENT METHODS (Vercel-style) ── */}
         {savedLoading ? (
-          <div className="mb-5 flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="mb-5 flex items-center gap-2 text-muted-foreground text-13">
             <Loader2 className="size-4 animate-spin" /> Loading saved cards…
           </div>
         ) : (
@@ -267,7 +267,7 @@ export function StripePaymentElement({
                       <CardBrandIcon brand={pm.brand} />
 
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm capitalize">
+                        <p className="font-semibold text-13 capitalize">
                           {pm.brand} ···· {pm.last4}
                         </p>
                         <p className="text-muted-foreground text-xs">
@@ -303,7 +303,7 @@ export function StripePaymentElement({
                     <Plus className="size-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-sm">Use a new payment method</p>
+                    <p className="font-semibold text-13">Use a new payment method</p>
                     <p className="text-muted-foreground text-xs">Card, Apple Pay, Google Pay</p>
                   </div>
                   <div
@@ -325,17 +325,17 @@ export function StripePaymentElement({
 
         {/* ── NEW CARD FORM (Stripe PaymentElement) ── */}
         {showNewForm && (
-          <div className="mb-5 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="mb-5 overflow-hidden rounded-xl border bg-card shadow-sm">
             <div className="h-0.5 w-full" style={{ background: "linear-gradient(90deg, #635bff 0%, var(--primary) 100%)" }} />
             <div className="p-5">
               {loading && (
                 <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
-                  <span className="text-sm">Loading payment form…</span>
+                  <span className="text-13">Loading payment form…</span>
                 </div>
               )}
               {error && !loading && (
-                <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-400 text-sm">
+                <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-400 text-13">
                   {error}
                 </div>
               )}
@@ -350,7 +350,7 @@ export function StripePaymentElement({
 
         {/* Error for saved card pay */}
         {error && !showNewForm && (
-          <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-400 text-sm">{error}</div>
+          <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-400 text-13">{error}</div>
         )}
 
         {/* Submit */}
@@ -358,7 +358,7 @@ export function StripePaymentElement({
           type="button"
           onClick={handleSubmit}
           disabled={!canPay}
-          className="flex h-13 w-full items-center justify-center gap-2.5 rounded-xl bg-primary font-bold text-sm text-white shadow-lg shadow-primary/30 transition-[opacity,transform] hover:bg-primary/90 active:scale-[0.99] disabled:opacity-40"
+          className="flex h-13 w-full items-center justify-center gap-2.5 rounded-xl bg-primary font-bold text-13 text-white shadow-lg shadow-primary/30 transition-[opacity,transform] hover:bg-primary/90 active:scale-[0.99] disabled:opacity-40"
         >
           {submitting ? (
             <>

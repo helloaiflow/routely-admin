@@ -110,10 +110,10 @@ function parseAddress(full: string): Pick<ShippoAddress, "street1" | "city" | "s
 /* WHITE fields (bg-card) — bg-background inherited the page's grey tint and
  * made every input look washed inside the white cards. */
 const fieldCls =
-  "h-9 w-full rounded-lg border-border/60 bg-card px-2.5 text-base shadow-none placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-13";
+  "h-(--spacing-control-h) w-full rounded-lg border-border/60 bg-card px-2.5 text-13 shadow-none placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-13";
 
 /* Section card — shared across all steps so spacing/borders stay identical. */
-const cardCls = "rounded-2xl border border-border/60 bg-card p-4 sm:p-5";
+const cardCls = "rounded-xl border border-border/60 bg-card p-4 sm:p-4";
 
 /* Destructive treatment for invalid controls (paired with aria-invalid). */
 const errCls = "border-destructive/60 focus-visible:border-destructive focus-visible:ring-destructive/15";
@@ -228,14 +228,14 @@ function AddressSearch({
   return (
     <div className="relative w-full">
       {/* Stops-toolbar-style search shell */}
-      <div className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+      <div className="flex h-(--spacing-control-h) items-center gap-2 rounded-xl border border-border/60 bg-card px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
         <MapPin className="size-3.5 shrink-0 text-primary/60" />
         <input
           value={input}
           onChange={handleChange}
           onKeyDown={(e) => e.stopPropagation()}
           placeholder={placeholder}
-          className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-13"
+          className="h-full w-full min-w-0 bg-transparent text-13 outline-none placeholder:text-muted-foreground/50 sm:text-13"
         />
         {loading && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
       </div>
@@ -419,7 +419,7 @@ function StepTrack({ step }: { step: Step }) {
 function WizardBar({ children }: { step?: Step; children: React.ReactNode }) {
   return (
     <div
-      className="sticky bottom-0 z-40 -mx-4 mt-6 rounded-t-2xl border-border/40 border-t border-x bg-card/95 px-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-card/85 sm:-mx-6 sm:px-6"
+      className="sticky bottom-0 z-40 -mx-4 mt-6 rounded-t-2xl border-border/40 border-t border-x bg-card/95 px-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-card/85 sm:-mx-6 sm:px-4"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}
     >
       <div className="mx-auto max-w-2xl">{children}</div>
@@ -769,7 +769,7 @@ export default function BuyLabelPage() {
   const postpayUsable = postpay.enabled && selectedRate != null && postpay.available >= selectedRate.client_price;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-4 sm:px-6 sm:pt-6">
+    <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-4 sm:px-4 sm:pt-3">
       {/* ── Header ── */}
       <div className="mb-4 text-center sm:mb-5">
         <h1 className="type-page-title">Buy a Shipping Label</h1>
@@ -788,7 +788,7 @@ export default function BuyLabelPage() {
         <div
           ref={errorRef}
           role="alert"
-          className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-destructive text-sm"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-destructive text-13"
         >
           <X className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0">{error}</span>
@@ -802,8 +802,8 @@ export default function BuyLabelPage() {
         <div className="space-y-5">
           <Card className="gap-0 overflow-hidden border-border/60 p-0 shadow-sm">
             {/* ── Route: From → To journey ── */}
-            <div className="p-4 sm:p-5">
-              {/* FROM node — the rail lives INSIDE this row (top-8 → bottom-0),
+            <div className="p-4 sm:p-4">
+              {/* FROM node — the rail lives INSIDE this row (top-4 → bottom-0),
                   so it always spans exactly the gap down to the TO avatar, no
                   matter how tall the custom-address fields make the row. */}
               <div className="flex gap-3 pb-5">
@@ -812,7 +812,7 @@ export default function BuyLabelPage() {
                     <Truck className="size-3.5 text-primary" />
                   </span>
                   <div
-                    className="absolute top-8 bottom-0 left-1/2 -translate-x-1/2 border-primary/40 border-l border-dashed"
+                    className="absolute top-4 bottom-0 left-1/2 -translate-x-1/2 border-primary/40 border-l border-dashed"
                     aria-hidden="true"
                   />
                 </div>
@@ -1034,12 +1034,12 @@ export default function BuyLabelPage() {
             <Separator className="bg-border/60" />
 
             {/* ── Recipient ── */}
-            <div className="p-4 sm:p-5">
+            <div className="p-4 sm:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <span className="grid size-6 place-items-center rounded-md bg-primary/10">
                   <User className="size-3 text-primary" />
                 </span>
-                <h2 className="font-semibold text-sm">Recipient</h2>
+                <h2 className="font-semibold text-13">Recipient</h2>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
@@ -1095,12 +1095,12 @@ export default function BuyLabelPage() {
             <Separator className="bg-border/60" />
 
             {/* ── Package ── */}
-            <div className="p-4 sm:p-5">
+            <div className="p-4 sm:p-4">
               <div className="mb-3 flex items-center gap-2">
                 <span className="grid size-6 place-items-center rounded-md bg-primary/10">
                   <Box className="size-3 text-primary" />
                 </span>
-                <h2 className="font-semibold text-sm">Package</h2>
+                <h2 className="font-semibold text-13">Package</h2>
               </div>
 
               <div className="mb-3">
@@ -1226,10 +1226,10 @@ export default function BuyLabelPage() {
             {ratesLoading ? (
               <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
                 <Loader2 className="size-5 animate-spin text-primary" />
-                <p className="text-sm">Getting live rates…</p>
+                <p className="text-13">Getting live rates…</p>
               </div>
             ) : rates.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">
+              <div className="py-6 text-center text-muted-foreground text-13">
                 No rates — go back and check the details.
               </div>
             ) : (
@@ -1293,7 +1293,7 @@ export default function BuyLabelPage() {
                                 {provider}
                               </span>
                             )}
-                            <span className="font-semibold text-sm">{provider}</span>
+                            <span className="font-semibold text-13">{provider}</span>
                             <span className="text-11 text-muted-foreground">
                               {group.length} service{group.length === 1 ? "" : "s"}
                             </span>
@@ -1351,7 +1351,7 @@ export default function BuyLabelPage() {
                                     </p>
                                   </div>
                                   <div className="flex shrink-0 items-center gap-2">
-                                    <p className="font-bold text-sm tabular-nums">${r.client_price.toFixed(2)}</p>
+                                    <p className="font-bold text-13 tabular-nums">${r.client_price.toFixed(2)}</p>
                                     <div
                                       className={cn(
                                         "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-all",
@@ -1423,7 +1423,7 @@ export default function BuyLabelPage() {
               </ReviewRow>
             </div>
             <div className="mt-3 flex items-center justify-between border-border/60 border-t pt-3">
-              <span className="font-semibold text-sm">Total</span>
+              <span className="font-semibold text-13">Total</span>
               <span className="font-bold text-base tabular-nums">${selectedRate.client_price.toFixed(2)}</span>
             </div>
           </section>
@@ -1469,14 +1469,14 @@ export default function BuyLabelPage() {
             )}
 
             {checkingOut || (!orderId && !error) ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground" aria-live="polite">
+              <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground" aria-live="polite">
                 <Loader2 className="size-4 animate-spin text-primary" />
-                <span className="text-sm">Preparing secure checkout…</span>
+                <span className="text-13">Preparing secure checkout…</span>
               </div>
             ) : !orderId && error ? (
               /* checkout failed (e.g. rate expired) — clearing the error re-arms
                  the auto-checkout effect for a clean retry */
-              <Button variant="outline" onClick={() => setError("")} className="h-11 w-full gap-1.5 rounded-xl">
+              <Button variant="outline" onClick={() => setError("")} className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl">
                 <RotateCcw className="size-4" />
                 Try Again
               </Button>
@@ -1498,7 +1498,7 @@ export default function BuyLabelPage() {
                 <Button
                   onClick={handlePostpayConfirm}
                   disabled={checkingOut || purchasing}
-                  className="h-12 w-full gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
+                  className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
                 >
                   {purchasing ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
                   Confirm & Pay ${selectedRate.client_price.toFixed(2)}
@@ -1508,7 +1508,7 @@ export default function BuyLabelPage() {
 
             {purchasing && paymentType === "card" && (
               <div
-                className="mt-3 flex items-center justify-center gap-2 text-muted-foreground text-sm"
+                className="mt-3 flex items-center justify-center gap-2 text-muted-foreground text-13"
                 aria-live="polite"
               >
                 <Loader2 className="size-4 animate-spin text-primary" />
@@ -1527,13 +1527,13 @@ export default function BuyLabelPage() {
               <CheckCircle2 className="size-6 text-emerald-600" />
             </div>
             <h2 className="type-section-title">Label Purchased!</h2>
-            <p className="mt-1 text-muted-foreground text-sm">
+            <p className="mt-1 text-muted-foreground text-13">
               {selectedRate?.provider} {selectedRate?.service} → {to.name}
             </p>
 
             <div className="mx-auto mt-4 max-w-sm rounded-xl border bg-muted/30 px-4 py-3">
               <p className="font-medium text-10 text-muted-foreground uppercase tracking-widest">Tracking Number</p>
-              <p className="mt-1 break-all font-mono font-semibold text-sm tabular-nums">{result.tracking_number}</p>
+              <p className="mt-1 break-all font-mono font-semibold text-13 tabular-nums">{result.tracking_number}</p>
               <a
                 href={result.tracking_url}
                 target="_blank"
@@ -1568,18 +1568,18 @@ export default function BuyLabelPage() {
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
               <Button
                 onClick={printLabel}
-                className="h-11 gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90"
+                className="h-(--spacing-control-h) gap-1.5 bg-primary font-semibold text-white hover:bg-primary/90"
               >
                 <Printer className="size-4" />
                 Print Label
               </Button>
-              <Button asChild variant="outline" className="h-11 gap-1.5">
+              <Button asChild variant="outline" className="h-(--spacing-control-h) gap-1.5">
                 <a href={result.label_url} target="_blank" rel="noreferrer" download>
                   <Download className="size-4" />
                   Download PNG
                 </a>
               </Button>
-              <Button variant="ghost" onClick={resetAll} className="h-11 gap-1.5 text-muted-foreground">
+              <Button variant="ghost" onClick={resetAll} className="h-(--spacing-control-h) gap-1.5 text-muted-foreground">
                 <RotateCcw className="size-4" />
                 Buy Another
               </Button>
@@ -1594,7 +1594,7 @@ export default function BuyLabelPage() {
           {step === "details" && (
             <Button
               onClick={handleGetRates}
-              className="h-12 w-full gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
+              className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
             >
               Get Rates
               <ArrowRight className="size-4" />
@@ -1602,7 +1602,7 @@ export default function BuyLabelPage() {
           )}
           {step === "service" && (
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep("details")} className="h-12 gap-1.5 bg-background">
+              <Button variant="outline" onClick={() => setStep("details")} className="h-(--spacing-control-h) gap-1.5 bg-background">
                 <ArrowLeft className="size-4" />
                 Back
               </Button>
@@ -1614,7 +1614,7 @@ export default function BuyLabelPage() {
                   setStep("payment");
                 }}
                 disabled={!selectedRate}
-                className="h-12 flex-1 gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
+                className="h-(--spacing-control-h) flex-1 gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
               >
                 Review{selectedRate ? ` · $${selectedRate.client_price.toFixed(2)}` : ""}
                 <ArrowRight className="size-4" />
@@ -1627,13 +1627,13 @@ export default function BuyLabelPage() {
                 variant="ghost"
                 onClick={() => setStep("service")}
                 disabled={purchasing}
-                className="h-10 gap-1.5 text-muted-foreground"
+                className="h-(--spacing-control-h) gap-1.5 text-muted-foreground"
               >
                 <ArrowLeft className="size-4" />
                 Back
               </Button>
               {selectedRate && (
-                <span className="text-muted-foreground text-sm">
+                <span className="text-muted-foreground text-13">
                   Total{" "}
                   <span className="font-bold text-foreground tabular-nums">
                     ${selectedRate.client_price.toFixed(2)}

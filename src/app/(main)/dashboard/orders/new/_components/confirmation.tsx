@@ -50,7 +50,7 @@ export function ConfirmationScreen({ data, onNewOrder }: { data: ConfirmationDat
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl md:p-8">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-2xl md:p-4">
         <div className="text-center">
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/30">
             <div className="flex size-14 items-center justify-center rounded-full bg-emerald-500">
@@ -58,10 +58,10 @@ export function ConfirmationScreen({ data, onNewOrder }: { data: ConfirmationDat
             </div>
           </div>
           <h1 className="mb-1 type-page-title">Order confirmed</h1>
-          <p className="mb-8 text-muted-foreground text-sm">
+          <p className="mb-8 text-muted-foreground text-13">
             {isDispatched ? "Your package is ready for pickup" : "We\u2019re processing your order"}
           </p>
-          <div className="mb-6 rounded-2xl border border-border bg-card p-6">
+          <div className="mb-6 rounded-xl border border-border bg-card p-4">
             <p className="mb-2 text-muted-foreground text-xs uppercase tracking-wide">Tracking number</p>
             <p className="select-all font-mono font-semibold text-3xl tabular-nums tracking-tight md:text-4xl">
               {data.tracking_number}
@@ -71,20 +71,20 @@ export function ConfirmationScreen({ data, onNewOrder }: { data: ConfirmationDat
           <div className="mb-8 grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-10 text-muted-foreground uppercase tracking-wide">Distance</p>
-              <p className="mt-1 font-semibold text-sm">{data.miles.toFixed(1)} mi</p>
+              <p className="mt-1 font-semibold text-13">{data.miles.toFixed(1)} mi</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-10 text-muted-foreground uppercase tracking-wide">Total</p>
-              <p className="mt-1 font-semibold text-sm tabular-nums">${data.total.toFixed(2)}</p>
+              <p className="mt-1 font-semibold text-13 tabular-nums">${data.total.toFixed(2)}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
               <p className="text-10 text-muted-foreground uppercase tracking-wide">Status</p>
-              <p className="mt-1 font-semibold text-emerald-600 text-sm capitalize">
+              <p className="mt-1 font-semibold text-emerald-600 text-13 capitalize">
                 {data.dispatch_status.replace("_", " ")}
               </p>
             </div>
           </div>
-          <p className="mb-6 text-muted-foreground text-sm">{etaLabel}</p>
+          <p className="mb-6 text-muted-foreground text-13">{etaLabel}</p>
           <div className="space-y-2">
             <Button
               variant="outline"

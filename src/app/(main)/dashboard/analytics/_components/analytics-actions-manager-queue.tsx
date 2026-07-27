@@ -46,7 +46,7 @@ export function ActionsManagerQueue() {
           <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <p className="text-muted-foreground text-xs">Intervention mix</p>
-              <Badge variant="outline" className="h-5 px-2 text-[11px] tabular-nums">
+              <Badge variant="outline" className="h-5 px-2 text-11 tabular-nums">
                 Escalate {formatCurrency(174000, { noDecimals: true })}
               </Badge>
             </div>
@@ -107,7 +107,7 @@ export function ActionsManagerQueue() {
               <div key={`${item.priority}-${item.dealId}`} className="space-y-1 rounded-md border px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-sm">{item.dealId}</span>
-                  <Badge variant="outline" className="h-5 px-2 text-[11px]">
+                  <Badge variant="outline" className="h-5 px-2 text-11">
                     {item.priority}
                   </Badge>
                 </div>

@@ -350,7 +350,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
             </DialogHeader>
             <div className="flex flex-col gap-3 py-2">
               <div className="space-y-3 rounded-xl border border-border bg-card/50 p-3">
-                <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+                <p className="font-semibold text-10 text-muted-foreground uppercase tracking-wider">
                   {"\u{1F4E6}"} Package &amp; Recipient
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -363,7 +363,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       value={form.recipient_name}
                       onChange={(e) => set("recipient_name", e.target.value)}
                     />
-                    {errors.recipient_name && <p className="text-[10px] text-destructive">{errors.recipient_name}</p>}
+                    {errors.recipient_name && <p className="text-10 text-destructive">{errors.recipient_name}</p>}
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs">
@@ -376,7 +376,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       maxLength={14}
                       onChange={(e) => set("recipient_phone", formatPhone(e.target.value))}
                     />
-                    {errors.recipient_phone && <p className="text-[10px] text-destructive">{errors.recipient_phone}</p>}
+                    {errors.recipient_phone && <p className="text-10 text-destructive">{errors.recipient_phone}</p>}
                   </div>
                 </div>
                 <div className="grid gap-1">
@@ -389,7 +389,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     value={form.recipient_email}
                     onChange={(e) => set("recipient_email", e.target.value)}
                   />
-                  {errors.recipient_email && <p className="text-[10px] text-destructive">{errors.recipient_email}</p>}
+                  {errors.recipient_email && <p className="text-10 text-destructive">{errors.recipient_email}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1">
@@ -413,7 +413,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                         <ScanLine className="size-3.5" />
                       </button>
                     </div>
-                    {errors.rx_number && <p className="text-[10px] text-destructive">{errors.rx_number}</p>}
+                    {errors.rx_number && <p className="text-10 text-destructive">{errors.rx_number}</p>}
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs">
@@ -431,12 +431,12 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                         ))}
                       </SelectContent>
                     </Select>
-                    {errors.package_type && <p className="text-[10px] text-destructive">{errors.package_type}</p>}
+                    {errors.package_type && <p className="text-10 text-destructive">{errors.package_type}</p>}
                   </div>
                 </div>
               </div>
               <div className="space-y-3 rounded-xl border border-border bg-card/50 p-3">
-                <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+                <p className="font-semibold text-10 text-muted-foreground uppercase tracking-wider">
                   {"\u{1F4CD}"} Addresses
                 </p>
                 <div className="grid gap-1">
@@ -454,7 +454,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 {distanceInfo && (
                   <div className="flex items-center gap-2 px-1">
                     <div className="h-px flex-1 border-muted-foreground/25 border-t border-dashed" />
-                    <span className="flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-0.5 text-11 text-muted-foreground">
                       <ArrowRight className="size-3" />
                       {distanceInfo.miles} mi &middot; {distanceInfo.duration}
                     </span>
@@ -483,7 +483,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       value={form.delivery_city}
                       onChange={(e) => set("delivery_city", e.target.value)}
                     />
-                    {errors.delivery_city && <p className="text-[10px] text-destructive">{errors.delivery_city}</p>}
+                    {errors.delivery_city && <p className="text-10 text-destructive">{errors.delivery_city}</p>}
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs">State</Label>
@@ -502,7 +502,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       value={form.delivery_zip}
                       onChange={(e) => set("delivery_zip", e.target.value)}
                     />
-                    {errors.delivery_zip && <p className="text-[10px] text-destructive">{errors.delivery_zip}</p>}
+                    {errors.delivery_zip && <p className="text-10 text-destructive">{errors.delivery_zip}</p>}
                   </div>
                 </div>
                 <div className="grid gap-1">
@@ -523,7 +523,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     />
                     <div className="flex-1">
                       <p className="font-medium text-xs">Collect on delivery (COD)</p>
-                      <p className="text-[10px] text-muted-foreground">Driver will collect payment at drop-off</p>
+                      <p className="text-10 text-muted-foreground">Driver will collect payment at drop-off</p>
                     </div>
                   </label>
                   {(form.collect_cod as unknown as boolean) && (
@@ -548,7 +548,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 </div>
               </div>
               <div className="space-y-3 rounded-xl border border-border bg-card/50 p-3">
-                <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+                <p className="font-semibold text-10 text-muted-foreground uppercase tracking-wider">
                   {"\u{1F5D3}"} Delivery Schedule
                 </p>
                 <div className="grid gap-1.5">
@@ -567,8 +567,8 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     >
                       <span className="text-base">{"\u26A1"}</span>
                       <span className="font-semibold text-xs">Same Day</span>
-                      <span className="font-medium text-[10px] text-amber-600">+$49.99</span>
-                      {!sameDayAvailable && <span className="text-[10px] text-muted-foreground">After 2 PM</span>}
+                      <span className="font-medium text-10 text-amber-600">+$49.99</span>
+                      {!sameDayAvailable && <span className="text-10 text-muted-foreground">After 2 PM</span>}
                     </button>
                     <button
                       type="button"
@@ -580,7 +580,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     >
                       <span className="text-base">{"\u{1F4C5}"}</span>
                       <span className="font-semibold text-xs">Next Day</span>
-                      <span className="text-[10px] text-muted-foreground">Standard</span>
+                      <span className="text-10 text-muted-foreground">Standard</span>
                     </button>
                     <button
                       type="button"
@@ -589,7 +589,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     >
                       <span className="text-base">{"\u{1F5D3}"}</span>
                       <span className="font-semibold text-xs">Custom</span>
-                      <span className="text-[10px] text-muted-foreground">Pick a date</span>
+                      <span className="text-10 text-muted-foreground">Pick a date</span>
                     </button>
                   </div>
                   {form.delivery_type === "custom" && (
@@ -608,15 +608,15 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     />
                   )}
                   {form.delivery_date && form.delivery_type !== "custom" && (
-                    <p className="pl-1 text-[11px] text-muted-foreground">
+                    <p className="pl-1 text-11 text-muted-foreground">
                       {"\u{1F4C6}"} {form.delivery_type === "same_day" ? "Today" : "Tomorrow"} &middot;{" "}
                       {form.delivery_date}
                     </p>
                   )}
                   {form.delivery_type !== "same_day" && sameDayAvailable && (
-                    <p className="pl-1 text-[10px] text-amber-600">{"\u23F0"} Same day available until 2:00 PM ET</p>
+                    <p className="pl-1 text-10 text-amber-600">{"\u23F0"} Same day available until 2:00 PM ET</p>
                   )}
-                  {errors.delivery_date && <p className="text-[10px] text-destructive">{errors.delivery_date}</p>}
+                  {errors.delivery_date && <p className="text-10 text-destructive">{errors.delivery_date}</p>}
                 </div>
                 <div className="grid gap-1">
                   <Label className="text-xs">Notes (optional)</Label>
@@ -659,7 +659,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                   </div>
                   <div className="flex-1 space-y-2 text-xs">
                     <div>
-                      <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">Pickup</p>
+                      <p className="font-medium text-10 text-muted-foreground uppercase tracking-wider">Pickup</p>
                       <p className="font-medium text-foreground leading-snug">{form.pickup_address}</p>
                     </div>
                     {distanceInfo && (
@@ -675,7 +675,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       </div>
                     )}
                     <div>
-                      <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">Delivery</p>
+                      <p className="font-medium text-10 text-muted-foreground uppercase tracking-wider">Delivery</p>
                       <p className="font-medium text-foreground leading-snug">
                         {form.delivery_address}
                         {form.delivery_city ? `, ${form.delivery_city}` : ""}
@@ -756,7 +756,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                   </span>
                 </div>
                 {price.is_trial && (
-                  <p className="pt-0.5 text-center text-[10px] text-emerald-600">
+                  <p className="pt-0.5 text-center text-10 text-emerald-600">
                     {"\u2713"} Free trial &mdash; no charge today
                   </p>
                 )}
@@ -835,7 +835,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
               <div className="divide-y rounded-lg border text-xs">
                 {orderResult.tracking_number && (
                   <div className="flex flex-col items-center gap-2 border-b px-3 py-3">
-                    <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
+                    <p className="font-semibold text-10 text-muted-foreground uppercase tracking-widest">
                       Tracking Number
                     </p>
                     <p className="font-bold font-mono text-foreground text-xl tabular-nums tracking-widest">

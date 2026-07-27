@@ -25,7 +25,7 @@ export function OcrScanButton({ className }: { className?: string }) {
             <ScanLine />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-[11px]">
+        <TooltipContent side="bottom" className="text-11">
           Scan label (OCR)
         </TooltipContent>
       </Tooltip>

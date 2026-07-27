@@ -265,7 +265,7 @@ function LatencyGauge({ value, p95 }: { value: number; p95: number }) {
           <span className="text-muted-foreground text-xs">average</span>
         </div>
       </div>
-      <div className="mt-3 flex w-full max-w-[220px] items-center justify-between text-[10px] text-muted-foreground">
+      <div className="mt-3 flex w-full max-w-[220px] items-center justify-between text-10 text-muted-foreground">
         <span>0</span>
         <span className="rounded bg-muted px-1.5 py-0.5">p95 {fmtMs(p95)}</span>
         <span>{fmtMs(max)}</span>

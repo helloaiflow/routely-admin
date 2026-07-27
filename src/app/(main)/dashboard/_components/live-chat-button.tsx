@@ -172,7 +172,7 @@ export function LiveChatButton() {
               <div className="flex items-center gap-2.5">
                 <div className="relative">
                   <Avatar className="size-8">
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 font-bold text-[10px] text-white">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 font-bold text-10 text-white">
                       S
                     </AvatarFallback>
                   </Avatar>
@@ -180,7 +180,7 @@ export function LiveChatButton() {
                 </div>
                 <div>
                   <p className="font-semibold text-sm leading-tight">Sofia</p>
-                  <p className="text-[11px] text-muted-foreground">Routely Support</p>
+                  <p className="text-11 text-muted-foreground">Routely Support</p>
                 </div>
               </div>
               <Button
@@ -202,7 +202,7 @@ export function LiveChatButton() {
                     >
                       <p>{msg.text}</p>
                       <p
-                        className={`mt-1 text-[10px] ${msg.from === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}
+                        className={`mt-1 text-10 ${msg.from === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}
                       >
                         {msg.time}
                       </p>
@@ -237,7 +237,7 @@ export function LiveChatButton() {
                   <IconArrowUp className="size-4" />
                 </Button>
               </form>
-              <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+              <p className="mt-1.5 text-center text-10 text-muted-foreground">
                 Or call{" "}
                 <a href="tel:+18889201907" className="font-medium underline underline-offset-2">
                   (888) 920-1907

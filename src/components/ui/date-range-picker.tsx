@@ -77,7 +77,7 @@ function MiniCal({ viewYear, viewMonth, range, selecting, onDayClick, onPrev, on
       {/* Day headers */}
       <div className="mb-1 grid grid-cols-7 text-center">
         {DAYS.map((d) => (
-          <div key={d} className="text-[11px] font-medium text-muted-foreground py-1">{d}</div>
+          <div key={d} className="text-11 font-medium text-muted-foreground py-1">{d}</div>
         ))}
       </div>
 

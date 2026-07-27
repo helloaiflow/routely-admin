@@ -211,7 +211,7 @@ const ledgerColumns: ColumnDef<LedgerRow>[] = [
     cell: ({ row }) => (
       <div className="flex max-w-64 flex-col gap-1">
         {row.original.priority ? (
-          <Badge variant="outline" className={cn("text-[10px] uppercase", priorityTone[row.original.priority])}>
+          <Badge variant="outline" className={cn("text-10 uppercase", priorityTone[row.original.priority])}>
             {row.original.priority}
           </Badge>
         ) : null}

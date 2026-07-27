@@ -18,7 +18,7 @@ export function SidebarSupportCard() {
       {/* Mobile: compact pill — subtle, single line, leaves the drawer roomy. */}
       <Link
         href="/dashboard/support"
-        className="flex h-9 items-center gap-2 rounded-lg border border-border/60 px-3 font-medium text-[13px] text-foreground transition-colors hover:bg-accent md:hidden"
+        className="flex h-9 items-center gap-2 rounded-lg border border-border/60 px-3 font-medium text-13 text-foreground transition-colors hover:bg-accent md:hidden"
       >
         <LifeBuoy className="size-4 shrink-0 text-primary" />
         Support

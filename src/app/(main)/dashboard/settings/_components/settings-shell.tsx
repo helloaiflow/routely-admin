@@ -129,7 +129,7 @@ export function SettingsShell() {
             <TabsTrigger
               key={key}
               value={key}
-              className="group shrink-0 gap-1.5 px-2.5 text-[13px] sm:px-3 sm:text-sm"
+              className="group shrink-0 gap-1.5 px-2.5 text-13 sm:px-3 sm:text-sm"
             >
               <Icon className="size-3.5 sm:size-4" aria-hidden="true" />
               <span className="whitespace-nowrap">{label}</span>

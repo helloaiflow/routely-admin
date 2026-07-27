@@ -244,7 +244,7 @@ export function BillingTab({
                       <t.icon className={cn("size-4", selected ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
                       <span className="font-medium text-xs">{t.label}</span>
                       {t.disabled && (
-                        <Badge variant="outline" className="absolute -top-2 right-1 h-4 text-[10px]">
+                        <Badge variant="outline" className="absolute -top-2 right-1 h-4 text-10">
                           Soon
                         </Badge>
                       )}
@@ -350,7 +350,7 @@ export function BillingTab({
                   {isSaving && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />}
                   {isSaved && <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />}
                   {!eligible && (
-                    <Badge variant="outline" className="h-5 shrink-0 text-[10px]">
+                    <Badge variant="outline" className="h-5 shrink-0 text-10">
                       Pro+
                     </Badge>
                   )}
@@ -392,11 +392,11 @@ function CreditCardVisual({
         </div>
         <div className="flex items-end justify-between text-xs">
           <div className="min-w-0">
-            <p className="text-[10px] text-white/60 uppercase tracking-wider">Card holder</p>
+            <p className="text-10 text-white/60 uppercase tracking-wider">Card holder</p>
             <p className="truncate font-medium">{hasCard ? "On file" : "No card yet"}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-white/60 uppercase tracking-wider">
+            <p className="text-10 text-white/60 uppercase tracking-wider">
               {hasCard && expMonth ? "Expires" : ""}
             </p>
             <p className="font-medium capitalize">

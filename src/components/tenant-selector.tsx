@@ -69,7 +69,7 @@ export function TenantSelector() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-80 w-56 overflow-y-auto">
-        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <DropdownMenuLabel className="text-10 uppercase tracking-wider text-muted-foreground">
           Tenant scope
         </DropdownMenuLabel>
         <DropdownMenuItem onClick={() => select("all")} className="gap-2">
@@ -83,7 +83,7 @@ export function TenantSelector() {
               className={cn("size-3.5", current === String(t.tenant_id) ? "opacity-100" : "opacity-0")}
             />
             <span className="truncate">{t.name}</span>
-            <span className="ml-auto font-mono text-[10px] text-muted-foreground">#{t.tenant_id}</span>
+            <span className="ml-auto font-mono text-10 text-muted-foreground">#{t.tenant_id}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

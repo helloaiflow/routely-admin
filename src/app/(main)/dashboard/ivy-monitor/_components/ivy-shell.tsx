@@ -337,7 +337,7 @@ export function IvyShell() {
             <TabsTrigger value="scans" className="gap-1.5">
               Scans
               {scans.length > 0 && (
-                <Badge className="h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-[10px] text-white tabular-nums">
+                <Badge className="h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-10 text-white tabular-nums">
                   {scans.length}
                 </Badge>
               )}
@@ -438,10 +438,10 @@ export function IvyShell() {
                         <m.Icon className="size-3.5" aria-hidden="true" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-[13px]">{s.recipient || "Unknown"}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">{s.stop_id || s.address || "—"}</span>
+                        <span className="block truncate font-medium text-13">{s.recipient || "Unknown"}</span>
+                        <span className="block truncate text-11 text-muted-foreground">{s.stop_id || s.address || "—"}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{relTime(s.started_at)}</span>
+                      <span className="shrink-0 text-11 text-muted-foreground">{relTime(s.started_at)}</span>
                     </button>
                   );
                 })}
@@ -461,7 +461,7 @@ export function IvyShell() {
                 {logistics.routeList.length === 0 && <p className="type-desc">Nothing yet.</p>}
                 {logistics.routeList.slice(0, 5).map((r) => (
                   <div key={r.name} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-[13px]">
+                    <div className="flex items-center justify-between gap-2 text-13">
                       <span className="truncate font-medium">{r.name}</span>
                       <span className="shrink-0 tabular-nums">
                         {r.total} <span className="font-normal text-muted-foreground">· {r.rate}%</span>
@@ -487,7 +487,7 @@ export function IvyShell() {
                   { k: "failed" as const, label: "Failed", n: t?.failed ?? 0 },
                   { k: "processing" as const, label: "In process", n: t?.processing ?? 0 },
                 ]).map((row) => (
-                  <div key={row.k} className="flex items-center justify-between gap-2 text-[13px]">
+                  <div key={row.k} className="flex items-center justify-between gap-2 text-13">
                     <span className="flex items-center gap-2">
                       <span className={cn("size-2 rounded-full", META[row.k].dot)} aria-hidden="true" />
                       {row.label}
@@ -496,7 +496,7 @@ export function IvyShell() {
                   </div>
                 ))}
                 <div className="!mt-3 border-t pt-2.5">
-                  <div className="flex items-center justify-between gap-2 text-[13px]">
+                  <div className="flex items-center justify-between gap-2 text-13">
                     <span className="text-muted-foreground">Success rate</span>
                     <span className="font-semibold text-primary tabular-nums">{t?.successRate ?? 0}%</span>
                   </div>
@@ -508,7 +508,7 @@ export function IvyShell() {
                   <div className="!mt-3 space-y-1.5 border-t pt-2.5">
                     <span className="type-label text-muted-foreground">Where it broke</span>
                     {failStages.map(([stage, n]) => (
-                      <div key={stage} className="flex items-center justify-between gap-2 text-[13px]">
+                      <div key={stage} className="flex items-center justify-between gap-2 text-13">
                         <span className="inline-flex items-center gap-2 text-muted-foreground">
                           <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />
                           {stage}
@@ -533,9 +533,9 @@ export function IvyShell() {
               <CardContent className="space-y-2">
                 {logistics.cityList.length === 0 && <p className="type-desc">No cities yet.</p>}
                 {logistics.cityList.slice(0, 5).map((c, i) => (
-                  <div key={c.name} className="flex items-center justify-between gap-2 text-[13px]">
+                  <div key={c.name} className="flex items-center justify-between gap-2 text-13">
                     <span className="inline-flex min-w-0 items-center gap-2">
-                      <span className="grid size-5 shrink-0 place-items-center rounded bg-muted font-semibold text-[10px] text-muted-foreground tabular-nums">{i + 1}</span>
+                      <span className="grid size-5 shrink-0 place-items-center rounded bg-muted font-semibold text-10 text-muted-foreground tabular-nums">{i + 1}</span>
                       <span className="truncate">{c.name}</span>
                     </span>
                     <span className="shrink-0 font-semibold tabular-nums">{c.n}</span>

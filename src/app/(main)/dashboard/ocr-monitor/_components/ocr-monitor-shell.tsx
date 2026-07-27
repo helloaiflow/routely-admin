@@ -248,7 +248,7 @@ export function OcrMonitorShell() {
                 <TabsTrigger value="scans" className="gap-1.5">
                   Scans
                   {linkedScans.length > 0 && (
-                    <Badge className="h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-[10px] text-white tabular-nums">
+                    <Badge className="h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-10 text-white tabular-nums">
                       {linkedScans.length}
                     </Badge>
                   )}

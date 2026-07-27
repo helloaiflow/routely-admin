@@ -270,7 +270,7 @@ export function LayoutControls() {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground/55">Controls the AI scanner used for label OCR.</p>
+              <p className="text-11 text-muted-foreground/55">Controls the AI scanner used for label OCR.</p>
             </div>
 
             <Button type="button" size="sm" variant="outline" className="w-full text-xs" onClick={handleRestore}>

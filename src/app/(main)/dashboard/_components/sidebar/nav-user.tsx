@@ -71,7 +71,7 @@ export function NavUser({
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-semibold text-xs">{user.name}</span>
                 {/* Email must ALWAYS be fully visible — no truncate; wraps if needed. */}
-                <span className="whitespace-nowrap text-[10px] tracking-tight text-muted-foreground leading-tight">{user.email}</span>
+                <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">{user.email}</span>
               </div>
               <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -92,7 +92,7 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate font-semibold text-xs">{user.name}</span>
-                  <span className="whitespace-nowrap text-[10px] tracking-tight text-muted-foreground leading-tight">{user.email}</span>
+                  <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -147,14 +147,14 @@ export function NavUser({
                     <Link href="/dashboard/support">
                       <Webhook />
                       API
-                      <span className="ml-auto text-[10px] text-muted-foreground">Soon</span>
+                      <span className="ml-auto text-10 text-muted-foreground">Soon</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/support">
                       <Terminal />
                       Terminal
-                      <span className="ml-auto text-[10px] text-muted-foreground">Soon</span>
+                      <span className="ml-auto text-10 text-muted-foreground">Soon</span>
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>

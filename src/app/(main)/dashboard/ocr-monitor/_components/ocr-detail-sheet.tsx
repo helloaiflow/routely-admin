@@ -126,7 +126,7 @@ export function OcrDetailSheet({ scan, onClose }: { scan: Scan | null; onClose: 
                                   <span
                                     key={k}
                                     className={cn(
-                                      "inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] capitalize",
+                                      "inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-10 capitalize",
                                       ok
                                         ? "border-success/25 bg-success/10 text-success"
                                         : "border-border bg-muted/40 text-muted-foreground line-through",
@@ -137,7 +137,7 @@ export function OcrDetailSheet({ scan, onClose }: { scan: Scan | null; onClose: 
                                 );
                               })}
                               {typeof f.order_ids_count === "number" && f.order_ids_count > 0 && (
-                                <span className="inline-flex items-center gap-0.5 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                                <span className="inline-flex items-center gap-0.5 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-10 text-primary">
                                   {f.order_ids_count} order id{f.order_ids_count === 1 ? "" : "s"}
                                 </span>
                               )}

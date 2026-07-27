@@ -203,14 +203,14 @@ export function InvoicesTab() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium text-sm">{inv.periodLabel}</p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground tabular-nums">{inv.number}</p>
+                        <p className="truncate font-mono text-11 text-muted-foreground tabular-nums">{inv.number}</p>
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-semibold text-sm tabular-nums">{money(inv.total)}</p>
                         <Badge
                           variant="outline"
                           className={cn(
-                            "mt-0.5 h-4 text-[10px]",
+                            "mt-0.5 h-4 text-10",
                             inv.status === "paid"
                               ? "border-success/25 bg-success/10 text-success"
                               : "border-warning/30 bg-warning/15 text-warning-foreground dark:text-warning",
@@ -247,7 +247,7 @@ export function InvoicesTab() {
                     <img src="/img/routelyLogoBlack.svg" alt="Routely" className="h-8 w-auto dark:invert sm:h-9" />
                     <div className="text-right">
                       <p className="font-bold text-lg tracking-tight">INVOICE</p>
-                      <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{selected.number}</p>
+                      <p className="font-mono text-11 text-muted-foreground tabular-nums">{selected.number}</p>
                     </div>
                   </div>
 

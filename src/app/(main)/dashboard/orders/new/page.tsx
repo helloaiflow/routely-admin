@@ -110,7 +110,7 @@ function parseAddress(full: string): Pick<ShippoAddress, "street1" | "city" | "s
 /* WHITE fields (bg-card) — bg-background inherited the page's grey tint and
  * made every input look washed inside the white cards. */
 const fieldCls =
-  "h-9 w-full rounded-lg border-border/60 bg-card px-2.5 text-base shadow-none placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-[13px]";
+  "h-9 w-full rounded-lg border-border/60 bg-card px-2.5 text-base shadow-none placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-13";
 
 /* Section card — shared across all steps so spacing/borders stay identical. */
 const cardCls = "rounded-2xl border border-border/60 bg-card p-4 sm:p-5";
@@ -129,7 +129,7 @@ function FL({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode
 /** Inline field error — 11px below the control, never shifts siblings around. */
 function FieldErr({ msg }: { msg?: string }) {
   if (!msg) return null;
-  return <p className="mt-1 text-[11px] text-destructive">{msg}</p>;
+  return <p className="mt-1 text-11 text-destructive">{msg}</p>;
 }
 
 /* ── Review row (step 3): icon + section + values + Edit → jump back ──────── */
@@ -150,7 +150,7 @@ function ReviewRow({
         <Icon className="size-3 text-primary" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1 text-xs leading-snug">
-        <p className="mb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-[0.12em]">{label}</p>
+        <p className="mb-0.5 font-semibold text-10 text-muted-foreground uppercase tracking-[0.12em]">{label}</p>
         {children}
       </div>
       <button
@@ -235,7 +235,7 @@ function AddressSearch({
           onChange={handleChange}
           onKeyDown={(e) => e.stopPropagation()}
           placeholder={placeholder}
-          className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-[13px]"
+          className="h-full w-full min-w-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 sm:text-13"
         />
         {loading && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
       </div>
@@ -254,7 +254,7 @@ function AddressSearch({
               <MapPin className="mt-0.5 size-3 shrink-0 text-primary" />
               <div className="min-w-0">
                 <p className="truncate font-medium text-xs">{p.main_text}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{p.secondary_text}</p>
+                <p className="truncate text-10 text-muted-foreground">{p.secondary_text}</p>
               </div>
             </button>
           ))}
@@ -299,7 +299,7 @@ function PickupSelector({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold text-xs">{title}</span>
-          <span className="block truncate text-[11px] text-muted-foreground leading-tight">{subtitle}</span>
+          <span className="block truncate text-11 text-muted-foreground leading-tight">{subtitle}</span>
         </span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
@@ -325,7 +325,7 @@ function PickupSelector({
               </span>
               <span className="min-w-0">
                 <span className="block truncate font-semibold text-xs">{l.name}</span>
-                <span className="block truncate text-[11px] text-muted-foreground leading-tight">{l.address}</span>
+                <span className="block truncate text-11 text-muted-foreground leading-tight">{l.address}</span>
               </span>
             </button>
           ))}
@@ -405,9 +405,9 @@ function StepTrack({ step }: { step: Step }) {
               {done ? (
                 <CheckCircle2 className="size-3" aria-hidden="true" />
               ) : (
-                <span className="font-semibold text-[10px] tabular-nums">{s.n}</span>
+                <span className="font-semibold text-10 tabular-nums">{s.n}</span>
               )}
-              <span className="font-medium text-[11px]">{s.label}</span>
+              <span className="font-medium text-11">{s.label}</span>
             </div>
           </div>
         );
@@ -817,7 +817,7 @@ export default function BuyLabelPage() {
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="mb-1.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+                  <p className="mb-1.5 font-semibold text-10 text-muted-foreground uppercase tracking-[0.14em]">
                     Ship From
                   </p>
                   <PickupSelector
@@ -932,7 +932,7 @@ export default function BuyLabelPage() {
                   <MapPin className="size-3.5 text-emerald-600" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="mb-1.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+                  <p className="mb-1.5 font-semibold text-10 text-muted-foreground uppercase tracking-[0.14em]">
                     Ship To
                   </p>
                   {/* SAME design language as Ship From: once an address is
@@ -945,14 +945,14 @@ export default function BuyLabelPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-xs text-foreground">{to.street1}</p>
-                        <p className="truncate text-[11px] text-muted-foreground leading-tight">
+                        <p className="truncate text-11 text-muted-foreground leading-tight">
                           {[to.city, `${to.state} ${to.zip}`.trim()].filter(Boolean).join(", ")}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setTo((t) => ({ ...t, street1: "", street2: "", city: "", zip: "" }))}
-                        className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-[11px] text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-primary"
+                        className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-11 text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-primary"
                       >
                         Change
                       </button>
@@ -1165,7 +1165,7 @@ export default function BuyLabelPage() {
                           >
                             {p.label}
                           </span>
-                          <span className="block truncate text-[10px] text-muted-foreground tabular-nums">{p.sub}</span>
+                          <span className="block truncate text-10 text-muted-foreground tabular-nums">{p.sub}</span>
                         </span>
                       </button>
                     );
@@ -1218,7 +1218,7 @@ export default function BuyLabelPage() {
                 </span>
                 <h2 className="type-card-title">Choose a Service</h2>
               </div>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-11 text-muted-foreground">
                 {to.city}, {to.state} {to.zip}
               </span>
             </div>
@@ -1286,7 +1286,7 @@ export default function BuyLabelPage() {
                             ) : (
                               <span
                                 className={cn(
-                                  "flex h-8 w-14 shrink-0 items-center justify-center rounded-lg border font-bold text-[11px]",
+                                  "flex h-8 w-14 shrink-0 items-center justify-center rounded-lg border font-bold text-11",
                                   CARRIER_STYLE[provider] ?? "border-border bg-muted text-foreground",
                                 )}
                               >
@@ -1294,12 +1294,12 @@ export default function BuyLabelPage() {
                               </span>
                             )}
                             <span className="font-semibold text-sm">{provider}</span>
-                            <span className="text-[11px] text-muted-foreground">
+                            <span className="text-11 text-muted-foreground">
                               {group.length} service{group.length === 1 ? "" : "s"}
                             </span>
                             <span className="ml-auto flex shrink-0 items-center gap-2">
                               {!open && (
-                                <span className="font-semibold text-[11px] text-muted-foreground tabular-nums">
+                                <span className="font-semibold text-11 text-muted-foreground tabular-nums">
                                   from ${fromPrice.toFixed(2)}
                                 </span>
                               )}
@@ -1332,19 +1332,19 @@ export default function BuyLabelPage() {
                                 >
                                   <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                      <span className="font-semibold text-[13px]">{r.service}</span>
+                                      <span className="font-semibold text-13">{r.service}</span>
                                       {r.rate_id === cheapestId && (
-                                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-[10px] text-emerald-600">
+                                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-10 text-emerald-600">
                                           Cheapest
                                         </span>
                                       )}
                                       {fastest && (
-                                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-[10px] text-amber-700 dark:text-amber-400">
+                                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-10 text-amber-700 dark:text-amber-400">
                                           Fastest
                                         </span>
                                       )}
                                     </div>
-                                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                    <p className="mt-0.5 text-11 text-muted-foreground">
                                       {r.days != null
                                         ? `${r.days} business day${r.days === 1 ? "" : "s"}`
                                         : "Transit time varies"}
@@ -1445,7 +1445,7 @@ export default function BuyLabelPage() {
                   <CreditCard className="size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0">
                     <span className="block font-semibold text-xs">Card</span>
-                    <span className="block text-[11px] text-muted-foreground">Pay now</span>
+                    <span className="block text-11 text-muted-foreground">Pay now</span>
                   </span>
                 </label>
                 <label
@@ -1460,7 +1460,7 @@ export default function BuyLabelPage() {
                   <ReceiptText className="size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0">
                     <span className="block font-semibold text-xs">Invoice</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
+                    <span className="block truncate text-11 text-muted-foreground">
                       {postpayUsable ? `$${postpay.available.toFixed(2)} available` : "Over credit limit"}
                     </span>
                   </span>
@@ -1532,7 +1532,7 @@ export default function BuyLabelPage() {
             </p>
 
             <div className="mx-auto mt-4 max-w-sm rounded-xl border bg-muted/30 px-4 py-3">
-              <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-widest">Tracking Number</p>
+              <p className="font-medium text-10 text-muted-foreground uppercase tracking-widest">Tracking Number</p>
               <p className="mt-1 break-all font-mono font-semibold text-sm tabular-nums">{result.tracking_number}</p>
               <a
                 href={result.tracking_url}
@@ -1546,7 +1546,7 @@ export default function BuyLabelPage() {
             </div>
 
             {result.recipient_notified && to.email && (
-              <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 font-medium text-[11px] text-emerald-700">
+              <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 font-medium text-11 text-emerald-700">
                 <CheckCircle2 className="size-3" />
                 Tracking sent to {to.email}
               </p>

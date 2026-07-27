@@ -38,12 +38,12 @@ export function PlansTab({ plan }: { plan: string }) {
                 />
               )}
               {isCurrent && (
-                <Badge className="absolute top-4 right-4 gap-1 bg-primary text-[10px] text-primary-foreground shadow-sm">
+                <Badge className="absolute top-4 right-4 gap-1 bg-primary text-10 text-primary-foreground shadow-sm">
                   <Check className="size-3" aria-hidden="true" /> Current
                 </Badge>
               )}
               {isFeatured && !isCurrent && (
-                <Badge variant="outline" className="absolute top-4 right-4 gap-1 border-primary/30 text-[10px] text-primary">
+                <Badge variant="outline" className="absolute top-4 right-4 gap-1 border-primary/30 text-10 text-primary">
                   <Sparkles className="size-3" aria-hidden="true" /> Popular
                 </Badge>
               )}

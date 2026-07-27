@@ -70,15 +70,15 @@ export function ConfirmationScreen({ data, onNewOrder }: { data: ConfirmationDat
           </div>
           <div className="mb-8 grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Distance</p>
+              <p className="text-10 text-muted-foreground uppercase tracking-wide">Distance</p>
               <p className="mt-1 font-semibold text-sm">{data.miles.toFixed(1)} mi</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</p>
+              <p className="text-10 text-muted-foreground uppercase tracking-wide">Total</p>
               <p className="mt-1 font-semibold text-sm tabular-nums">${data.total.toFixed(2)}</p>
             </div>
             <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Status</p>
+              <p className="text-10 text-muted-foreground uppercase tracking-wide">Status</p>
               <p className="mt-1 font-semibold text-emerald-600 text-sm capitalize">
                 {data.dispatch_status.replace("_", " ")}
               </p>

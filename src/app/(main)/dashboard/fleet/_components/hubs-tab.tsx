@@ -684,9 +684,11 @@ export function HubsTab() {
               {form.rdRoundTrip ? "Round-trip" : "One-way"}
             </span>
           </div>
-          {/* Corner avatar group — this hub's ALLOWED drivers (nothing when empty) */}
+          {/* Corner avatar group — this hub's ALLOWED drivers (nothing when
+              empty). bottom-1 keeps the rings clear of the header's bottom
+              border (overflow-hidden was clipping ~3px at -bottom-1). */}
           {editing && relations.allowed.length > 0 && (
-            <div className="absolute right-4 -bottom-1">
+            <div className="absolute right-4 bottom-1">
               <AvatarGroup
                 people={driverOpts.filter((d) => relations.allowed.includes(d.id))}
                 max={5}
@@ -899,6 +901,7 @@ export function HubsTab() {
           <Group
             icon={Users}
             title="Drivers"
+            defaultOpen={false}
             note={relationsBusy ? "Saving driver access…" : "Blocked always wins over allowed."}
           >
             <StackRow label="Allowed drivers" hint="Eligible for this hub">

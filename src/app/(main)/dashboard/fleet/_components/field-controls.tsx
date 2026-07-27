@@ -55,7 +55,8 @@ export function parseLooseTime(input: string): string | null {
     const m = core.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
     if (!m) return null;
     h = parseInt(m[1], 10);
-    min = m[2] ? parseInt(m[2].padEnd(2, "0"), 10) : 0;
+    // "1:5" reads as 1:05 (padStart), not 1:50 — matches how people type times.
+    min = m[2] ? parseInt(m[2].padStart(2, "0"), 10) : 0;
   }
   if (min > 59) return null;
   if (mer) {

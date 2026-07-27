@@ -56,6 +56,7 @@ import { formatDisplayCase } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
 
 import { MobileTabBar } from "./field-controls";
+import { IsoCourierScene } from "./fleet-art";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type Address = { line1?: string; city?: string; state?: string; zip?: string };
@@ -668,10 +669,12 @@ export function DriversTab() {
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
     <div className="flex min-h-full flex-col bg-card sm:min-h-0">
-      {/* Header — accent bar + identity block + command row (Stops detail pattern) */}
-      <div className="sticky top-0 z-10 shrink-0 border-border/50 border-b bg-card">
+      {/* Header — accent bar + identity block + command row (Stops detail pattern)
+          + isometric courier garnish behind the right edge (text stays on top) */}
+      <div className="relative sticky top-0 z-10 shrink-0 overflow-hidden border-border/50 border-b bg-card">
         <div className={cn("h-[3px] w-full", inactive ? "bg-muted-foreground/40" : "bg-primary")} />
-        <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
+        <IsoCourierScene variant="header" />
+        <div className="relative flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <span className="font-mono text-10 text-primary dark:text-white/80">
             {editing ? "Driver" : "New driver"}
           </span>
@@ -724,7 +727,7 @@ export function DriversTab() {
             </button>
           </div>
         </div>
-        <div className="px-4 pb-3">
+        <div className="relative px-4 pb-3">
           <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
             {formatDisplayCase(form.name.trim()) || "Untitled driver"}
           </p>
@@ -988,8 +991,8 @@ export function DriversTab() {
           centerForm
         ) : (
           <div className="flex h-full flex-col items-center justify-center bg-muted/15 px-8 text-center">
-            <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
-              <Users className="size-7 text-muted-foreground/30" aria-hidden="true" />
+            <div className="mb-5 w-full">
+              <IsoCourierScene variant="empty" />
             </div>
             <p className="type-body-sm font-bold text-foreground">No driver selected</p>
             <p className="type-caption mt-1.5 max-w-[200px] leading-relaxed">

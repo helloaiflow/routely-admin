@@ -1,3 +1,4 @@
+/* Radii tiers (density 1e): anchored (dialog/card)=rounded-xl; floating (popover/dropdown/tooltip)=rounded-md; Command=xl tier (it IS a dialog). */
 "use client"
 
 import * as React from "react"
@@ -75,7 +76,7 @@ function CommandInput({
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            "w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full text-13 outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
             className
           )}
           {...props}
@@ -111,7 +112,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn("py-6 text-center text-sm", className)}
+      className={cn("py-6 text-center text-13", className)}
       {...props}
     />
   )

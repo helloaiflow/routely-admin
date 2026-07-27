@@ -39,6 +39,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { formatDisplayCase } from "@/lib/format-display";
+import { Group, FieldRow, StackRow, ROW_INPUT } from "@/components/form-rows";
+import { type Address, addressLine as addressLineOf, buildAddress, formatAddr, fullAddress, hasAddr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { AvatarGroup } from "@/components/ui/avatar-group";
@@ -46,8 +48,6 @@ import { AvatarGroup } from "@/components/ui/avatar-group";
 import { MobileTabBar, SearchMultiSelect, Stepper, TimeSelect } from "./field-controls";
 import { IsoDepotScene } from "./fleet-art";
 import { FleetRouteMap } from "./fleet-route-map";
-
-type Address = { line1?: string; city?: string; state?: string; zip?: string };
 
 type RouteDefaults = {
   start_time?: string;
@@ -141,31 +141,6 @@ const TIMEZONES = [
   { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
 ];
 
-// Human-readable one-line address for the list.
-function addressLine(hub: Hub): string {
-  const a = hub.address ?? {};
-  const cityLine = [a.city, a.state, a.zip].filter(Boolean).join(", ").replace(/, (\d)/, " $1");
-  return [a.line1, cityLine].filter(Boolean).join(" · ");
-}
-
-// Joined address string used to pre-fill the autocomplete display value on edit.
-function formatAddr(a?: Address | null): string {
-  if (!a) return "";
-  return [a.line1, a.city, a.state, a.zip].filter(Boolean).join(", ");
-}
-
-function hasAddr(a?: Address | null): boolean {
-  return Boolean(a && (a.line1 || a.city || a.state || a.zip));
-}
-
-// Full one-line address string for map queries: "line1, City, ST zip".
-function fullAddress(a?: Address | null): string {
-  if (!a) return "";
-  const cityState = [a.city, a.state].filter(Boolean).join(", ");
-  const tail = [cityState, a.zip].filter(Boolean).join(" ").trim();
-  return [a.line1, tail].filter(Boolean).join(", ");
-}
-
 // Derive the list display values from a hub's route defaults.
 function routeCells(rd?: RouteDefaults | null) {
   return {
@@ -176,17 +151,6 @@ function routeCells(rd?: RouteDefaults | null) {
       rd?.default_time_at_stop != null ? `${Math.round(rd.default_time_at_stop / 60)}m` : "—",
     roundtrip: Boolean(rd?.round_trip),
   };
-}
-
-// Build an Address from four inputs, or undefined when they're all empty.
-function buildAddress(line1: string, city: string, state: string, zip: string): Address | undefined {
-  const addr: Address = {
-    line1: line1.trim() || undefined,
-    city: city.trim() || undefined,
-    state: state.trim() || undefined,
-    zip: zip.trim() || undefined,
-  };
-  return Object.values(addr).some(Boolean) ? addr : undefined;
 }
 
 // Serialize the form → API payload. Pure so manual save and autosave produce
@@ -576,7 +540,7 @@ export function HubsTab() {
       if (!q) return true;
       return (
         (hub.name ?? "").toLowerCase().includes(q) ||
-        addressLine(hub).toLowerCase().includes(q)
+        addressLineOf(hub.address).toLowerCase().includes(q)
       );
     });
   }, [hubs, query, rtFilter]);
@@ -1126,7 +1090,7 @@ function HubRow({
             (never clipped) — keeps every datum visible in the dense row. */}
         <div className="mt-px flex items-center justify-between gap-2">
           {(() => {
-            const addr = formatDisplayCase(addressLine(hub));
+            const addr = formatDisplayCase(addressLineOf(hub.address));
             return (
               <p className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug" title={addr}>
                 {addr || "—"}
@@ -1171,52 +1135,6 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
   return <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />;
 }
 
-// Collapsible section — borderless, divider-separated (matches Stops detail sections).
-function Group({
-  icon: Icon,
-  title,
-  note,
-  defaultOpen = true,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  title: string;
-  note?: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-b border-border/10 last:border-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:text-foreground"
-      >
-        <span className="flex items-center gap-1.5">
-          <Icon className="size-3.5 text-muted-foreground/50" aria-hidden={true} />
-          <span className="text-xs font-semibold tracking-[-0.01em] text-foreground/80">{title}</span>
-        </span>
-        <ChevronDown
-          className={cn(
-            "size-3.5 text-muted-foreground/35 transition-transform duration-200",
-            open && "rotate-180",
-          )}
-          aria-hidden="true"
-        />
-      </button>
-      {open && (
-        <div className="px-3 pb-2">
-          {note && <p className="mb-1 text-11 text-muted-foreground/55 leading-snug">{note}</p>}
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Stops-styled address input: emerald border + check when a place is chosen,
-// with a clear button. Wraps the shared AddressAutocomplete (borderless inside).
 function AddressField({
   value,
   selected,
@@ -1265,55 +1183,3 @@ function AddressField({
   );
 }
 
-// Shared borderless, right-aligned control style for FieldRow inputs — mirrors
-// the Stops detail form (h-7, underline-on-focus, 13px medium, right-aligned).
-const ROW_INPUT =
-  "h-7 min-w-0 rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right text-13 font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0 focus-visible:ring-0";
-
-// Stops FieldRow: label LEFT, control RIGHT, thin divider between rows.
-function FieldRow({
-  label,
-  required,
-  error,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b border-border/[0.07] py-2 last:border-0">
-      <div className="flex items-center justify-between gap-4">
-        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
-          {label}
-          {required && <span className="ml-0.5 text-rose-500">*</span>}
-        </span>
-        <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
-      </div>
-      {error && <p className="mt-1 text-right text-11 text-rose-500">{error}</p>}
-    </div>
-  );
-}
-
-// Wide variant for long controls (address autocompletes): label on top, control
-// full-width beneath — same divider rhythm as FieldRow.
-function StackRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5 border-b border-border/[0.07] py-2 last:border-0">
-      <div className="flex items-center justify-between gap-2">
-        <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
-        {hint && <span className="type-caption truncate">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}

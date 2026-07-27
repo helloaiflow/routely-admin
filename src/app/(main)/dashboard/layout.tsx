@@ -41,7 +41,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       >
         <header
           className={cn(
-            "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
+            "flex h-(--spacing-header-h) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--spacing-header-h)",
             "[html[data-navbar-style=sticky]_&]:sticky [html[data-navbar-style=sticky]_&]:top-0 [html[data-navbar-style=sticky]_&]:z-50 [html[data-navbar-style=sticky]_&]:overflow-hidden [html[data-navbar-style=sticky]_&]:rounded-t-[inherit] [html[data-navbar-style=sticky]_&]:bg-background/50 [html[data-navbar-style=sticky]_&]:backdrop-blur-md",
           )}
         >
@@ -63,9 +63,9 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        {/* Height derives from the h-12 (3rem) header + 1px border so it scales
-            with the root density dial instead of a hardcoded px offset. */}
-        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - 3rem - 1px)" }}>
+        {/* Height derives from the --spacing-header-h token + 1px border so it
+            scales with the density dial AND follows any header-height change. */}
+        <div className="bg-background p-0 overflow-y-auto" style={{ height: "calc(100svh - var(--spacing-header-h) - 1px)" }}>
           {children}
         </div>
 

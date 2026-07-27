@@ -91,6 +91,7 @@ async function fetchJsonSafe(url: string, timeoutMs = 15_000): Promise<Record<st
 }
 import { fetchFailedScansCount, resolveFailedScan } from "@/lib/ocr/failed-scans-client";
 import { cn } from "@/lib/utils";
+import { FieldRow } from "@/components/form-rows";
 import { formatDisplayCase } from "@/lib/format-display";
 
 import type { OCRSubmitData } from "./_components/ocr-scan-modal";
@@ -2507,15 +2508,6 @@ function FormSection({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0">
-      <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">{label}</span>
-      <div className="flex min-w-0 items-center justify-end gap-1.5">{children}</div>
     </div>
   );
 }

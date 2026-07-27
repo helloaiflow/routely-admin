@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatPhoneInput } from "@/lib/format";
 
 import {
   ArrowRight,
@@ -80,13 +81,6 @@ const PACKAGE_TYPES = [
   { id: "urgent", label: "\u26A1 Urgent" },
   { id: "document", label: "\u{1F4CB} Document" },
 ];
-
-function formatPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
 
 function nextBusinessDay(from: Date): Date {
   const d = new Date(from);
@@ -374,7 +368,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       value={form.recipient_phone}
                       inputMode="numeric"
                       maxLength={14}
-                      onChange={(e) => set("recipient_phone", formatPhone(e.target.value))}
+                      onChange={(e) => set("recipient_phone", formatPhoneInput(e.target.value))}
                     />
                     {errors.recipient_phone && <p className="text-10 text-destructive">{errors.recipient_phone}</p>}
                   </div>

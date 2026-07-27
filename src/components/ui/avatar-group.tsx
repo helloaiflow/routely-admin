@@ -16,11 +16,15 @@ import { cn } from "@/lib/utils";
 
 export type AvatarPerson = { id: string; name: string; imageUrl?: string | null };
 
-/** Deterministic hue from a name — stable across renders and sessions. */
+/* Brand-anchored avatar spectrum: blues/indigos/violets/teals around the
+ * Routely blue — deterministic per name, never a random rainbow. */
+const BRAND_HUES = [217, 226, 240, 262, 205, 191, 172] as const;
+
+/** Deterministic brand hue from a name — stable across renders and sessions. */
 export function nameHue(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return h % 360;
+  return BRAND_HUES[h % BRAND_HUES.length];
 }
 
 export function nameInitials(name: string): string {
@@ -45,15 +49,17 @@ export function PersonAvatar({
     <Avatar
       className={cn(
         size,
-        ring && "ring-2",
+        ring ? "ring-2" : "ring-1 ring-background",
         ring && (tone === "blocked" ? "ring-rose-500/60" : "ring-background"),
         className,
       )}
     >
       {person.imageUrl ? <AvatarImage src={person.imageUrl} alt={person.name} /> : null}
       <AvatarFallback
-        className="text-10 font-bold text-white"
-        style={{ backgroundColor: `hsl(${nameHue(person.name)} 55% 42%)` }}
+        className="text-10 font-semibold text-white"
+        style={{
+          background: `linear-gradient(135deg, hsl(${nameHue(person.name)} 72% 52% / 0.92), hsl(${nameHue(person.name)} 78% 40%))`,
+        }}
       >
         {nameInitials(person.name)}
       </AvatarFallback>

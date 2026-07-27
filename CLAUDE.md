@@ -2,6 +2,16 @@
 
 AI-powered medical courier logistics SaaS — Florida market.
 
+## North Star: LLM-Operated Platform (CEO directive, 2026-07-27 — ALWAYS design for this)
+
+This entire platform is being built to be **administered by an LLM** — trained/developed agentic agents plus n8n processes will operate it, not just humans. Every design and code decision must assume a machine operator:
+
+- **API-first, machine-first**: every core operation reachable via clean, deterministic, documented endpoints — never UI-only flows for anything an agent will need to do. Idempotent writes, structured errors.
+- **Structured data over free text**: enum/token fields (e.g. `route_defaults.optimize_type`, `route_zone`, `visibility`) exist so agents can read/write them programmatically. Prefer adding a structured field over parsing prose.
+- **Routes are the flagship**: the end goal is *inject stops → the LLM creates and develops the routes and manages on-demand dispatch*. Hub `route_defaults` (start/end times, max_stops, round_trip, end_address, optimize_type) are the agent's configuration inputs — keep them complete, typed, and API-writable. Forward-compat fields are stored today precisely so the future route agent can consume them.
+- **n8n is a first-class citizen**: webhooks/events for state changes (stop created, approved, delivered, label printed) should be emittable so workflows can react.
+- When in doubt between a human-convenience shortcut and an agent-consumable structure, choose the structure.
+
 ## Repos
 - `routely-web` → routelypro.com (Next.js, marketing + onboarding)
 - `routely-admin` → admin.routelypro.com (Next.js, operations portal)

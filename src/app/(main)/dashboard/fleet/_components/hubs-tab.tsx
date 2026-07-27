@@ -8,7 +8,6 @@ import {
   Building2,
   ClipboardList,
   List,
-  Lock,
   ChevronDown,
   CircleCheck,
   Clock,
@@ -45,8 +44,7 @@ import { cn } from "@/lib/utils";
 
 import { AvatarGroup } from "@/components/ui/avatar-group";
 
-import { MobileTabBar, SearchMultiSelect, Stepper, TimeSelect } from "./field-controls";
-import { IsoDepotScene } from "./fleet-art";
+import { MobileTabBar, SearchMultiSelect, Stepper, TimeCombobox } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type RouteDefaults = {
@@ -57,6 +55,7 @@ type RouteDefaults = {
   end_time?: string;
   max_stops?: number;
   round_trip?: boolean;
+  optimize_type?: "round_trip" | "last_stop" | "other" | null;
 };
 
 type Hub = {
@@ -104,6 +103,8 @@ type FormState = {
   // Access (tenant scoping): pool = all tenants; dedicated = tenantIds only.
   visibility: "pool" | "dedicated";
   tenantIds: number[];
+  // Forward-compat: stored/displayed only — no optimizer behavior wired yet.
+  optimizeType: "" | "round_trip" | "last_stop" | "other";
 };
 
 const EMPTY_FORM: FormState = {
@@ -131,6 +132,7 @@ const EMPTY_FORM: FormState = {
   rdEndZip: "",
   visibility: "pool",
   tenantIds: [],
+  optimizeType: "",
 };
 
 // Common US timezones for the compact picker (default America/New_York).
@@ -198,6 +200,7 @@ function payloadFromForm(f: FormState): Record<string, unknown> {
     const endAddress = buildAddress(f.rdEndLine1, f.rdEndCity, f.rdEndState, f.rdEndZip);
     if (endAddress) routeDefaults.end_address = endAddress;
   }
+  if (f.optimizeType) routeDefaults.optimize_type = f.optimizeType;
   payload.route_defaults = routeDefaults;
   payload.visibility = f.visibility;
   payload.tenant_ids = f.visibility === "dedicated" ? f.tenantIds : [];
@@ -336,6 +339,7 @@ export function HubsTab() {
       rdEndZip: rd.end_address?.zip ?? "",
       visibility: hub.visibility === "dedicated" ? "dedicated" : "pool",
       tenantIds: Array.isArray(hub.tenant_ids) ? hub.tenant_ids : [],
+      optimizeType: (rd.optimize_type as FormState["optimizeType"]) ?? "",
     };
   }
 
@@ -566,7 +570,8 @@ export function HubsTab() {
           + isometric depot garnish behind the right edge (text stays on top) */}
       <div className="relative sticky top-0 z-10 shrink-0 overflow-hidden border-border/50 border-b bg-card">
         <div className="h-[3px] w-full bg-primary" />
-        <IsoDepotScene variant="header" />
+        {/* Stops-class header treatment: soft accent wash, no artwork */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/15 to-transparent" aria-hidden="true" />
         <div className="relative flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <span className="font-mono text-10 text-primary dark:text-white/80">
             {editing ? "Hub" : "New hub"}
@@ -654,107 +659,6 @@ export function HubsTab() {
             </StackRow>
           )}
 
-          <FieldRow label="Timezone">
-            <Select
-              value={form.timezone}
-              onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
-            >
-              <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
-                <SelectValue placeholder="Select timezone" />
-              </SelectTrigger>
-              <SelectContent align="end">
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value} className="text-13">
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-
-          <FieldRow label="Default hub">
-            <Switch
-              checked={form.is_default}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-            />
-          </FieldRow>
-        </Group>
-
-        {/* ── Route defaults ── */}
-        <Group
-          icon={Clock}
-          title="Route defaults"
-          note="Defaults a route inherits from this hub — overridable per route."
-        >
-          <FieldRow label="Start time">
-            <TimeSelect
-              value={form.rdStartTime}
-              onChange={(v) => setForm((f) => ({ ...f, rdStartTime: v }))}
-              ariaLabel="Start time"
-            />
-          </FieldRow>
-          <FieldRow label="End time">
-            <TimeSelect
-              value={form.rdEndTime}
-              onChange={(v) => setForm((f) => ({ ...f, rdEndTime: v }))}
-              ariaLabel="End time"
-            />
-          </FieldRow>
-          {endBeforeStart && (
-            <p className="text-11 text-amber-600 dark:text-amber-500">
-              End time is at or before the start time — the route may not fit in the day.
-            </p>
-          )}
-
-          <FieldRow label="Minutes per stop">
-            <Stepper
-              value={form.rdMinutesPerStop}
-              onChange={(v) => setForm((f) => ({ ...f, rdMinutesPerStop: v }))}
-              min={1} max={120} unit="m"
-              ariaLabel="minutes per stop"
-            />
-          </FieldRow>
-          <FieldRow label="Max stops">
-            <Stepper
-              value={form.rdMaxStops}
-              onChange={(v) => setForm((f) => ({ ...f, rdMaxStops: v }))}
-              min={0} max={200} step={5} zeroLabel="∞"
-              ariaLabel="max stops"
-            />
-          </FieldRow>
-
-          <FieldRow label="Round-trip">
-            <Switch
-              checked={form.rdRoundTrip}
-              onCheckedChange={(v) =>
-                setForm((f) => {
-                  // Turning RT on with an empty End To → prefill the return
-                  // depot with the start address (editable afterwards).
-                  if (v && !f.endValue && f.startSelected) {
-                    return {
-                      ...f,
-                      rdRoundTrip: true,
-                      endValue: f.startValue,
-                      endSelected: true,
-                      rdEndLine1: f.line1,
-                      rdEndCity: f.city,
-                      rdEndState: f.state,
-                      rdEndZip: f.zip,
-                    };
-                  }
-                  return { ...f, rdRoundTrip: v };
-                })
-              }
-            />
-          </FieldRow>
-        </Group>
-
-        {/* ── Access — pool vs dedicated tenant scoping ── */}
-        <Group
-          icon={Lock}
-          title="Access"
-          note="Pool: every tenant can use this hub (stops stay tenant-filtered). Dedicated: only the tenants listed below."
-        >
           <FieldRow label="Visibility">
             <div className="flex overflow-hidden rounded-lg border border-border/60">
               {(["pool", "dedicated"] as const).map((v) => (
@@ -793,6 +697,122 @@ export function HubsTab() {
               />
             </StackRow>
           )}
+          <FieldRow label="Round-trip">
+            <Switch
+              checked={form.rdRoundTrip}
+              onCheckedChange={(v) =>
+                setForm((f) => {
+                  // Turning RT on with an empty End To → prefill the return
+                  // depot with the start address (editable afterwards).
+                  if (v && !f.endValue && f.startSelected) {
+                    return {
+                      ...f,
+                      rdRoundTrip: true,
+                      endValue: f.startValue,
+                      endSelected: true,
+                      rdEndLine1: f.line1,
+                      rdEndCity: f.city,
+                      rdEndState: f.state,
+                      rdEndZip: f.zip,
+                    };
+                  }
+                  return { ...f, rdRoundTrip: v };
+                })
+              }
+            />
+          </FieldRow>
+          {/* Forward-compat: stored & displayed only — the optimizer is not
+              built yet, so NOTHING routes off this value. null = unset. */}
+          <FieldRow label="Optimize type">
+            <Select
+              value={form.optimizeType || undefined}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, optimizeType: v === "__clear__" ? "" : (v as FormState["optimizeType"]) }))
+              }
+            >
+              <SelectTrigger className="h-(--spacing-control-h-sm) w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {form.optimizeType && (
+                  <SelectItem value="__clear__" className="text-11 text-muted-foreground">Clear</SelectItem>
+                )}
+                <SelectItem value="round_trip" className="text-13">Round trip</SelectItem>
+                <SelectItem value="last_stop" className="text-13">Last stop</SelectItem>
+                <SelectItem value="other" className="text-13">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </FieldRow>
+
+          <FieldRow label="Timezone">
+            <Select
+              value={form.timezone}
+              onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
+            >
+              <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value} className="text-13">
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldRow>
+
+          <FieldRow label="Default hub">
+            <Switch
+              checked={form.is_default}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
+            />
+          </FieldRow>
+        </Group>
+
+        {/* ── Route defaults ── */}
+        <Group
+          icon={Clock}
+          title="Route defaults"
+          note="Defaults a route inherits from this hub — overridable per route."
+        >
+          <FieldRow label="Start time">
+            <TimeCombobox
+              value={form.rdStartTime}
+              onChange={(v) => setForm((f) => ({ ...f, rdStartTime: v }))}
+              ariaLabel="Start time"
+            />
+          </FieldRow>
+          <FieldRow label="End time">
+            <TimeCombobox
+              value={form.rdEndTime}
+              onChange={(v) => setForm((f) => ({ ...f, rdEndTime: v }))}
+              ariaLabel="End time"
+            />
+          </FieldRow>
+          {endBeforeStart && (
+            <p className="text-11 text-amber-600 dark:text-amber-500">
+              End time is at or before the start time — the route may not fit in the day.
+            </p>
+          )}
+
+          <FieldRow label="Minutes per stop">
+            <Stepper
+              value={form.rdMinutesPerStop}
+              onChange={(v) => setForm((f) => ({ ...f, rdMinutesPerStop: v }))}
+              min={1} max={120} unit="m"
+              ariaLabel="minutes per stop"
+            />
+          </FieldRow>
+          <FieldRow label="Max stops">
+            <Stepper
+              value={form.rdMaxStops}
+              onChange={(v) => setForm((f) => ({ ...f, rdMaxStops: v }))}
+              min={0} max={200} step={5} zeroLabel="∞"
+              ariaLabel="max stops"
+            />
+          </FieldRow>
+
         </Group>
 
         {/* ── Drivers — allowed / blocked for this hub (saved instantly) ── */}

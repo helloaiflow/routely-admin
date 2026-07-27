@@ -28,40 +28,112 @@ for (let h = 0; h < 24; h++) {
 
 const CLEAR = "__clear__";
 
-/** Foolproof time field: a select in 15-min steps — no free typing, no typos.
- *  Emits "HH:MM" (identical payload format) or "" when cleared. */
-export function TimeSelect({
+/** 12-hour display for an HH:MM 24h value: "13:15" → "1:15 PM". */
+export function formatTime12(hhmm: string): string {
+  const m = hhmm.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return hhmm;
+  let h = parseInt(m[1], 10);
+  const mer = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${mer}`;
+}
+
+/** Loose time parse → canonical HH:MM 24h, or null when unparseable.
+ * Accepts "1:15 PM", "1:15pm", "115pm", "13:15", "1:15", "7", "0730". */
+export function parseLooseTime(input: string): string | null {
+  const t = input.trim().toLowerCase().replace(/\s+/g, "").replace(/\./g, "");
+  if (!t) return null;
+  let mer: "a" | "p" | null = null;
+  let core = t;
+  const mm = core.match(/(am|pm|a|p)$/);
+  if (mm) { mer = mm[1][0] as "a" | "p"; core = core.slice(0, -mm[1].length); }
+  let h: number, min: number;
+  if (/^\d{3,4}$/.test(core)) {          // compact: 115 / 0730 / 1315
+    h = parseInt(core.slice(0, core.length - 2), 10);
+    min = parseInt(core.slice(-2), 10);
+  } else {
+    const m = core.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+    if (!m) return null;
+    h = parseInt(m[1], 10);
+    min = m[2] ? parseInt(m[2].padEnd(2, "0"), 10) : 0;
+  }
+  if (min > 59) return null;
+  if (mer) {
+    if (h < 1 || h > 12) return null;
+    if (mer === "p" && h !== 12) h += 12;
+    if (mer === "a" && h === 12) h = 0;
+  } else if (h > 23) {
+    return null;
+  }
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+/** Editable 12-hour time combobox: shows the 15-min grid AND accepts free
+ * typing ("1:15 PM", "115pm", "13:15"). Emits canonical HH:MM 24h — payload
+ * format unchanged. Invalid input shows an inline error and never saves. */
+export function TimeCombobox({
   value,
   onChange,
   ariaLabel,
 }: {
-  value: string;
+  value: string;               // HH:MM 24h or ""
   onChange: (v: string) => void;
   ariaLabel: string;
 }) {
-  // A stored value off the 15-min grid (legacy data) is kept as an extra option
-  // so the select never silently rewrites it.
-  const options = value && !TIME_OPTIONS.includes(value)
-    ? [value, ...TIME_OPTIONS]
-    : TIME_OPTIONS;
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null); // null = not editing
+  const [invalid, setInvalid] = useState(false);
+  const shown = draft ?? (value ? formatTime12(value) : "");
+
+  const commit = (raw: string) => {
+    const t = raw.trim();
+    if (!t) { setDraft(null); setInvalid(false); onChange(""); return; }
+    const parsed = parseLooseTime(t);
+    if (!parsed) { setInvalid(true); return; } // keep draft; never save garbage
+    setDraft(null); setInvalid(false); setOpen(false); onChange(parsed);
+  };
+
   return (
-    <Select value={value || undefined} onValueChange={(v) => onChange(v === CLEAR ? "" : v)}>
-      <SelectTrigger
-        size="sm"
-        aria-label={ariaLabel}
-        className="h-7 w-[110px] justify-end gap-1 border-0 bg-transparent pr-1 font-mono text-13 font-medium tabular-nums text-foreground focus:ring-0"
-      >
-        <SelectValue placeholder="—" />
-      </SelectTrigger>
-      <SelectContent align="end" className="max-h-64">
-        {value && <SelectItem value={CLEAR} className="text-11 text-muted-foreground">Clear</SelectItem>}
-        {options.map((t) => (
-          <SelectItem key={t} value={t} className="font-mono text-13 tabular-nums">
-            {t}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex flex-col items-end">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <input
+            value={shown}
+            aria-label={ariaLabel}
+            aria-invalid={invalid || undefined}
+            placeholder="—"
+            onFocus={() => setOpen(true)}
+            onChange={(e) => { setDraft(e.target.value); setInvalid(false); }}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+            className={cn(
+              "h-(--spacing-control-h-sm) w-[110px] rounded-none border-0 border-b bg-transparent px-0.5 text-right font-mono text-13 font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:ring-0",
+              invalid ? "border-rose-500/70 text-rose-600" : "border-transparent focus:border-primary/40",
+            )}
+          />
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="max-h-64 w-[130px] overflow-y-auto p-1"
+        >
+          {TIME_OPTIONS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); setDraft(null); setInvalid(false); setOpen(false); onChange(t); }}
+              className={cn(
+                "block w-full rounded-sm px-2 py-1 text-left font-mono text-13 tabular-nums transition-colors hover:bg-accent",
+                value === t && "bg-accent font-semibold",
+              )}
+            >
+              {formatTime12(t)}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
+      {invalid && <p className="mt-0.5 text-10 text-rose-500">Invalid time — try "1:15 PM"</p>}
+    </div>
   );
 }
 

@@ -60,7 +60,6 @@ import { cn } from "@/lib/utils";
 import { PersonAvatar } from "@/components/ui/avatar-group";
 
 import { MobileTabBar } from "./field-controls";
-import { IsoCourierScene } from "./fleet-art";
 import { FleetRouteMap } from "./fleet-route-map";
 
 type Hub = {
@@ -613,11 +612,6 @@ export function DriversTab() {
 
   const inactive = editing ? editing.status !== "active" : false;
 
-  // City/state/zip line for the detail header identity block.
-  const headerAddr = [form.city, form.state, form.zip]
-    .filter(Boolean)
-    .join(", ")
-    .replace(/, (\d)/, " $1");
 
   // Stops detail-header icon-button recipe (shared by every header command).
   const HEADER_BTN =
@@ -630,7 +624,14 @@ export function DriversTab() {
           + isometric courier garnish behind the right edge (text stays on top) */}
       <div className="relative sticky top-0 z-10 shrink-0 overflow-hidden border-border/50 border-b bg-card">
         <div className={cn("h-[3px] w-full", inactive ? "bg-muted-foreground/40" : "bg-primary")} />
-        <IsoCourierScene variant="header" />
+        {/* Stops-class header treatment: status-driven soft wash, no artwork */}
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 bg-gradient-to-b to-transparent",
+            inactive ? "from-muted-foreground/15" : "from-primary/15",
+          )}
+          aria-hidden="true"
+        />
         <div className="relative flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <span className="font-mono text-10 text-primary dark:text-white/80">
             {editing ? "Driver" : "New driver"}
@@ -684,29 +685,10 @@ export function DriversTab() {
             </button>
           </div>
         </div>
-        <div className="relative flex items-start gap-2.5 px-4 pb-3">
-          {form.name.trim() && (
-            <PersonAvatar
-              person={{ id: editing?.id ?? "new", name: form.name.trim() }}
-              size="size-9"
-              ring={false}
-              className="mt-0.5 shrink-0"
-            />
-          )}
-          <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-base text-foreground leading-tight tracking-tight">
+        <div className="relative px-4 pb-3">
+          <p className="truncate pr-12 font-bold text-base text-foreground leading-tight tracking-tight">
             {formatDisplayCase(form.name.trim()) || "Untitled driver"}
           </p>
-          {form.phone && (
-            <p className="mt-0.5 truncate font-mono text-xs font-medium text-muted-foreground/70 leading-tight tabular-nums">
-              {form.phone}
-            </p>
-          )}
-          {(form.line1 || headerAddr) && (
-            <p className="truncate text-11 text-muted-foreground/55">
-              {formatDisplayCase([form.line1, headerAddr].filter(Boolean).join(" · "))}
-            </p>
-          )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {inactive ? (
               <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-semibold text-muted-foreground ring-1 ring-border">
@@ -717,13 +699,16 @@ export function DriversTab() {
                 Active
               </span>
             )}
-            {form.vehicle.trim() && (
-              <span className="inline-flex max-w-[160px] items-center truncate rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
-                {form.vehicle.trim()}
-              </span>
-            )}
           </div>
-          </div>
+          {/* Corner avatar — overlaps the gradient edge, bottom-right */}
+          {form.name.trim() && (
+            <PersonAvatar
+              person={{ id: editing?.id ?? "new", name: form.name.trim() }}
+              size="size-9"
+              ring={false}
+              className={cn("absolute right-4 -bottom-1 shadow-sm", inactive && "grayscale opacity-80")}
+            />
+          )}
         </div>
       </div>
 
@@ -898,6 +883,15 @@ export function DriversTab() {
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
+          {/* Count chip — respects the active filter: filtered · total */}
+          <div className="flex items-center justify-end">
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-10 font-medium tabular-nums text-muted-foreground ring-1 ring-border">
+              <span className="font-semibold text-foreground">{filtered.length}</span>
+              {statusFilter === "all" ? "drivers" : statusFilter}
+              <span className="text-muted-foreground/50">·</span>
+              {(drivers ?? []).length} total
+            </span>
+          </div>
         </div>
 
         {/* List — independent scroll */}

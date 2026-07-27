@@ -1037,7 +1037,7 @@ export function StopEditSheet({
         // Desktop: inline 440px column, doesn't block the grid. FIXED tall height
         // so the full form (all collapsibles + footer) is visible — header/footer
         // pinned, body scrolls (min-h-0 flex-1 overflow-y-auto). Was max-h (too short).
-        "lg:relative lg:inset-auto lg:z-auto lg:w-[440px] lg:shrink-0 lg:rounded-xl lg:border lg:border-border lg:shadow-sm",
+        "lg:relative lg:inset-auto lg:z-auto lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:rounded-xl lg:border lg:border-border lg:shadow-sm",
         "lg:sticky lg:top-3 lg:h-[calc(100vh-96px)]",
       )}
     >

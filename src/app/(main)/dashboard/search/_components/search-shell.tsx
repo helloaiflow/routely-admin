@@ -339,7 +339,7 @@ export function SearchShell() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-background lg:relative lg:inset-auto lg:z-auto lg:w-[420px] lg:shrink-0 lg:min-h-0"
+            className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-background lg:relative lg:inset-auto lg:z-auto lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:min-h-0"
             style={{
               boxShadow: "-1px 0 0 0 rgba(0,0,0,0.06), -4px 0 16px -4px rgba(0,0,0,0.04)",
             }}

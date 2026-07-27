@@ -7444,8 +7444,8 @@ export default function StopsPage() {
         className={cn(
           "flex h-full flex-col overflow-hidden border-border/50 border-r bg-card shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)]",
           mobileTab !== "list"
-            ? "hidden sm:flex sm:w-[20%] sm:min-w-[260px] sm:shrink-0"
-            : "flex w-full sm:w-[20%] sm:min-w-[260px] sm:shrink-0",
+            ? "hidden lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0"
+            : "flex w-full lg:w-(--spacing-panel-list-w) lg:shrink-0",
         )}
       >
         {/* Zone A — entry panel (redesigned per enterprise spec).
@@ -7971,7 +7971,7 @@ export default function StopsPage() {
       <div
         className={cn(
           "flex h-full flex-col overflow-hidden border-border/50 border-r bg-card",
-          mobileTab !== "detail" ? "hidden sm:flex sm:w-[25%] sm:shrink-0" : "flex w-full sm:w-[25%] sm:shrink-0",
+          mobileTab !== "detail" ? "hidden lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0" : "flex w-full lg:w-(--spacing-panel-detail-w) lg:shrink-0",
         )}
       >
         <AnimatePresence mode="wait">
@@ -8227,7 +8227,7 @@ export default function StopsPage() {
       <div
         className={cn(
           "overflow-hidden bg-muted/20",
-          mobileTab !== "map" ? "hidden sm:block sm:flex-1" : "block w-full sm:flex-1",
+          mobileTab !== "map" ? "hidden lg:block lg:flex-1" : "block w-full lg:flex-1",
         )}
       >
         {selectedIds.size >= 2 ? (

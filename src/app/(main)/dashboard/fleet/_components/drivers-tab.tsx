@@ -625,7 +625,7 @@ export function DriversTab() {
 
   // ── Inline center form (shared by desktop center + mobile overlay) ──
   const centerForm = (
-    <div className="flex min-h-full flex-col bg-card sm:min-h-0">
+    <div className="flex min-h-full flex-col bg-card lg:min-h-0">
       {/* Header — accent bar + identity block + command row (Stops detail pattern)
           + isometric courier garnish behind the right edge (text stays on top) */}
       <div className="relative sticky top-0 z-10 shrink-0 overflow-hidden border-border/50 border-b bg-card">
@@ -679,8 +679,8 @@ export function DriversTab() {
             )}
             <div className="mx-1 h-4 w-px bg-border/60" />
             <button type="button" onClick={closeForm} aria-label="Close" className={HEADER_BTN}>
-              <ArrowLeft className="size-3.5 sm:hidden" aria-hidden="true" />
-              <X className="hidden size-3.5 sm:block" aria-hidden="true" />
+              <ArrowLeft className="size-3.5 lg:hidden" aria-hidden="true" />
+              <X className="hidden size-3.5 lg:block" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -861,7 +861,7 @@ export function DriversTab() {
     >
       {/* ═══ LEFT COLUMN — the list (v2 split: 17% / min 240px; map gets the rest) ═══ */}
       <div className={cn(
-        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] sm:flex sm:w-[17%] sm:min-w-[240px] sm:shrink-0 sm:pb-0",
+        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0 lg:pb-0",
         mobileTab === "list" ? "flex" : "hidden",
       )}>
         {/* Toolbar */}
@@ -951,7 +951,7 @@ export function DriversTab() {
 
       {/* ═══ CENTER COLUMN — inline editable form (v2 split: 21% / min 300px) ═══ */}
       <div className={cn(
-        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 sm:flex sm:w-[21%] sm:min-w-[300px] sm:shrink-0 sm:pb-0",
+        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:pb-0",
         mobileTab === "detail" ? "flex" : "hidden",
       )}>
         {showForm ? (
@@ -978,7 +978,7 @@ export function DriversTab() {
 
       {/* ═══ MAP COLUMN — persistent (flex-1, now ~62% of the screen) ═══ */}
       <div className={cn(
-        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 sm:block sm:flex-1 sm:pb-0",
+        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 lg:block lg:flex-1 lg:pb-0",
         mobileTab === "map" ? "block" : "hidden",
       )}>
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />

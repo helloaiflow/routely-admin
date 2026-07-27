@@ -137,7 +137,7 @@ export function MobileTabBar({
   tabs: { key: "list" | "detail" | "map"; label: string; icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }> }[];
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm sm:hidden [padding-bottom:env(safe-area-inset-bottom)]">
+    <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm lg:hidden [padding-bottom:env(safe-area-inset-bottom)]">
       {tabs.map(({ key, label, icon: Icon }) => {
         const disabled = key !== "list" && !hasSelection;
         return (

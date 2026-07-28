@@ -115,6 +115,8 @@ export function pickupParts(loc: PickupLocation): {
 }
 
 export type NotificationPrefs = {
+  label_email: boolean;
+  daily_digest: boolean;
   delivery_confirmed: boolean;
   pickup_notification: boolean;
   delivery_failed: boolean;

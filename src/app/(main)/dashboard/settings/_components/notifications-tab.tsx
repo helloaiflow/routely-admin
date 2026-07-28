@@ -23,6 +23,8 @@ const GROUPS: Array<{
     desc: "Real-time updates about your packages",
     icon: Bell,
     items: [
+      { key: "label_email", label: "Label purchase emails", desc: "One confirmation email per label checkout (batches multiple labels)" },
+      { key: "daily_digest", label: "Daily digest", desc: "6 PM ET summary of the day's labels and totals" },
       { key: "delivery_confirmed", label: "Delivery confirmed", desc: "When a package is successfully delivered" },
       { key: "pickup_notification", label: "Pickup notification", desc: "When your package is picked up by a driver" },
       { key: "delivery_failed", label: "Delivery failed", desc: "When a delivery attempt fails" },

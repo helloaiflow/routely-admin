@@ -11,6 +11,8 @@ import { requirePagePermission } from "@/lib/tenant";
  * ───────────────────────────────────────────────────────────────────────────*/
 
 const KEYS = [
+  "label_email",
+  "daily_digest",
   "delivery_confirmed",
   "pickup_notification",
   "delivery_failed",
@@ -24,6 +26,8 @@ type PrefKey = (typeof KEYS)[number];
 type Prefs = Record<PrefKey, boolean>;
 
 const DEFAULTS: Prefs = {
+  label_email: true,   // one batched email per label checkout
+  daily_digest: false, // 6 PM ET summary (n8n-triggered)
   delivery_confirmed: true,
   pickup_notification: true,
   delivery_failed: true,

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
+import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 // ── POST /api/webhooks/clerk ──────────────────────────────────────────────────
@@ -185,6 +186,7 @@ export async function POST(req: NextRequest) {
       active:              true,
       address:             {},
       pickup_locations:    [],
+      notification_prefs:  { label_email: true, daily_digest: false },
       created_at:          nowIso,
       updated_at:          nowIso,
     };
@@ -217,6 +219,34 @@ export async function POST(req: NextRequest) {
       page_permissions: { orders: true, billing: true, reports: true, settings: true },
       created_at:    nowIso,
       updated_at:    nowIso,
+    });
+
+    // ── Stripe customer (lazy init; test/live follows the env key). Non-fatal:
+    // a Stripe outage must never block signup — the id can be attached later.
+    let stripeCustomerId: string | null = null;
+    try {
+      const customer = await getStripe().customers.create({
+        email,
+        name: contactName || email,
+        metadata: { tenant_id: String(tenant_id), source: "clerk_signup" },
+      });
+      stripeCustomerId = customer.id;
+      await supabase
+        .from("tenants")
+        .update({ stripe_customer_id: stripeCustomerId, doc: { ...tenantDoc, stripe_customer_id: stripeCustomerId } })
+        .eq("tenant_id", tenant_id);
+    } catch (e) {
+      console.error("[clerk-webhook] stripe customer creation failed (non-fatal)", tenant_id, e);
+    }
+
+    // ── Outbox event for n8n/consumers (tenant lifecycle is now event-driven).
+    await supabase.from("events").insert({
+      tenant_id,
+      aggregate_type: "tenant",
+      aggregate_id: String(tenant_id),
+      type: "tenant.created",
+      payload: { email, clerk_user_id: data.id, stripe_customer_id: stripeCustomerId, plan_type: "free_trial" },
+      actor: "clerk-webhook",
     });
 
     // users row (member-system Phase 2+): every Clerk user gets a users doc.

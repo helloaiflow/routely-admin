@@ -42,6 +42,11 @@ const barConfig = {
 } satisfies ChartConfig;
 type BarMetric = keyof typeof barConfig;
 
+type UsageView = {
+  packages_delivered: number;
+  upcoming_invoice: { amount_due: number; currency: string; period_end: number } | null;
+};
+
 export function BillingTab({
   billing,
   billingLoading,
@@ -60,6 +65,15 @@ export function BillingTab({
   const [paymentType, setPaymentType] = useState(billing?.paymentType ?? "card");
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+
+  // Metered usage (revenue engine) — read-only display.
+  const [usage, setUsage] = useState<UsageView | null>(null);
+  useEffect(() => {
+    fetch("/api/client/billing/usage")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setUsage(d))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (billing) {
@@ -122,6 +136,26 @@ export function BillingTab({
 
   return (
     <div className="space-y-4">
+      {/* ── Metered usage (read-only, revenue engine) ── */}
+      {usage && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border/60 bg-card px-4 py-2.5">
+          <span className="type-label text-muted-foreground">Usage this period</span>
+          <span className="text-13 tabular-nums">
+            <b>{usage.packages_delivered}</b> packages delivered
+          </span>
+          <span className="text-13 text-muted-foreground/60">·</span>
+          <span className="text-13 text-muted-foreground">miles — pending routes engine</span>
+          {usage.upcoming_invoice && (
+            <>
+              <span className="text-13 text-muted-foreground/60">·</span>
+              <span className="text-13 tabular-nums">
+                upcoming invoice <b>${(usage.upcoming_invoice.amount_due / 100).toFixed(2)}</b>
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── KPI cards — 2-up on mobile, 4-up on desktop ── */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {kpiCards.map((c) => (

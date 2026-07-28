@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Box,
+  Building2,
   CheckCircle2,
   ChevronDown,
   CreditCard,
@@ -432,6 +433,15 @@ export default function BuyLabelPage() {
   const [step, setStep] = useState<Step>("details");
   const [error, setError] = useState("");
 
+  // ADMIN god-view scope: `admin_tenant` cookie is "all" in cross-tenant view.
+  // Buy a Label is tenant-scoped — when "all", we render a switch-scope prompt
+  // and skip all bootstrap fetches (see the guard before the main return).
+  const [allTenantsScope, setAllTenantsScope] = useState(false);
+  useEffect(() => {
+    const m = document.cookie.match(/(?:^|;\s*)admin_tenant=([^;]*)/);
+    setAllTenantsScope((m?.[1] ?? "") === "all");
+  }, []);
+
   // Sender — prefilled from the tenant's default pickup location, editable.
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
   const [pickupId, setPickupId] = useState("");
@@ -492,6 +502,9 @@ export default function BuyLabelPage() {
 
   /* ── Tenant bootstrap: pickup locations + postpay eligibility ── */
   useEffect(() => {
+    // No bootstrap in All-tenants scope — there's no tenant to load for.
+    const m = document.cookie.match(/(?:^|;\s*)admin_tenant=([^;]*)/);
+    if ((m?.[1] ?? "") === "all") return;
     (async () => {
       try {
         const r = await fetch("/api/client/tenant");
@@ -706,6 +719,15 @@ export default function BuyLabelPage() {
         body: JSON.stringify({ order_id: oid, payment_intent_id: paymentIntentId }),
       });
       const d = await r.json();
+      // One tenant confirmation email per checkout (anti-spam: batches all
+      // labels bought in this checkout; prefs-gated server-side). Fire-and-forget.
+      if (r.ok) {
+        void fetch("/api/client/labels/notify-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_ids: [oid] }),
+        }).catch(() => {});
+      }
       if (!r.ok) throw new Error(d.error ?? "Label purchase failed");
       setResult({
         tracking_number: d.tracking_number,
@@ -767,6 +789,27 @@ export default function BuyLabelPage() {
   }
 
   const postpayUsable = postpay.enabled && selectedRate != null && postpay.available >= selectedRate.client_price;
+
+  // ── ADMIN god-view guard ─────────────────────────────────────────────────
+  // "All tenants" is the admin's cross-tenant FILTER scope, not a real client.
+  // Buying a label needs a concrete tenant (pickups, billing, postpay are all
+  // tenant-scoped), so instead of loading a broken flow we ask the operator to
+  // switch scope first. The selector lives in the header (top right).
+  if (allTenantsScope) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Building2 className="size-6" aria-hidden="true" />
+        </div>
+        <p className="type-body-sm font-bold text-foreground">You&apos;re viewing All tenants</p>
+        <p className="type-caption mt-1.5 max-w-[300px] leading-relaxed">
+          Buy a Label creates a real order for one client, so it needs a specific
+          tenant scope. Switch tenants using the selector in the top-right corner,
+          then come back here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-4 sm:px-4 sm:pt-3">

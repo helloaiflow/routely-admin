@@ -13,7 +13,6 @@ import {
   Receipt,
   Route as RouteIcon,
   Settings2,
-  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
@@ -43,9 +42,20 @@ const barConfig = {
 type BarMetric = keyof typeof barConfig;
 
 type UsageGroup = { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number };
-type UsageView = { by_type: Record<string, UsageGroup>; total_cents: number; flagged_needs_miles: number };
+type OutcomeGroup = { lines: number; amount_cents: number };
+type UsageView = {
+  by_type: Record<string, UsageGroup>;
+  by_outcome: Record<string, OutcomeGroup>;
+  total_cents: number;
+  flagged_needs_miles: number;
+};
 type Rates = {
-  billing_rates: { package: number; per_mile: number; on_demand_per_mile: number; on_demand_split: { routely: number; driver: number } };
+  billing_rates: {
+    package: number;
+    per_mile: number;
+    on_demand_per_mile: number;
+    on_demand_split: { routely: number; driver: number };
+  };
   default_billing_type: "package" | "miles" | "on_demand";
   billing_rules: { if: Record<string, string>; then: string }[];
 };
@@ -131,10 +141,31 @@ export function BillingTab({
   }, [data?.series]);
 
   const kpiCards = [
-    { key: "package", label: "Package Expenses", value: m?.package_expense, icon: Package, hint: "Shipping labels this month", danger: false },
-    { key: "miles", label: "Miles Expense", value: m?.miles_expense, icon: RouteIcon, hint: `${m?.miles ?? 0} mi · ${m?.packages ?? 0} deliveries`, danger: false },
+    {
+      key: "package",
+      label: "Package Expenses",
+      value: m?.package_expense,
+      icon: Package,
+      hint: "Shipping labels this month",
+      danger: false,
+    },
+    {
+      key: "miles",
+      label: "Miles Expense",
+      value: m?.miles_expense,
+      icon: RouteIcon,
+      hint: `${m?.miles ?? 0} mi · ${m?.packages ?? 0} deliveries`,
+      danger: false,
+    },
     { key: "total", label: "Total This Month", value: m?.total, icon: Wallet, hint: m?.label ?? "", danger: false },
-    { key: "outstanding", label: "Outstanding", value: m?.outstanding, icon: Receipt, hint: (m?.outstanding ?? 0) > 0 ? "Balance due" : "All settled", danger: (m?.outstanding ?? 0) > 0 },
+    {
+      key: "outstanding",
+      label: "Outstanding",
+      value: m?.outstanding,
+      icon: Receipt,
+      hint: (m?.outstanding ?? 0) > 0 ? "Balance due" : "All settled",
+      danger: (m?.outstanding ?? 0) > 0,
+    },
   ];
 
   return (
@@ -144,25 +175,63 @@ export function BillingTab({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border/60 bg-card px-4 py-2.5">
           <span className="type-label text-muted-foreground">Uninvoiced this period</span>
           {usage.by_type.package && (
-            <span className="text-13 tabular-nums"><b>{usage.by_type.package.lines}</b> packages · ${(usage.by_type.package.amount_cents / 100).toFixed(2)}</span>
+            <span className="text-13 tabular-nums">
+              <b>{usage.by_type.package.lines}</b> packages · ${(usage.by_type.package.amount_cents / 100).toFixed(2)}
+            </span>
           )}
           {usage.by_type.miles && (
-            <span className="text-13 tabular-nums"><b>{usage.by_type.miles.units.toFixed(1)}</b> mi · ${(usage.by_type.miles.amount_cents / 100).toFixed(2)}</span>
+            <span className="text-13 tabular-nums">
+              <b>{usage.by_type.miles.units.toFixed(1)}</b> mi · ${(usage.by_type.miles.amount_cents / 100).toFixed(2)}
+            </span>
           )}
           {usage.by_type.on_demand && (
             <span className="text-13 tabular-nums">
-              <b>{usage.by_type.on_demand.units.toFixed(1)}</b> mi on-demand · ${(usage.by_type.on_demand.amount_cents / 100).toFixed(2)}
-              <span className="text-muted-foreground"> (Routely ${(usage.by_type.on_demand.routely_cents / 100).toFixed(2)} / driver ${(usage.by_type.on_demand.driver_cents / 100).toFixed(2)})</span>
+              <b>{usage.by_type.on_demand.units.toFixed(1)}</b> mi on-demand · $
+              {(usage.by_type.on_demand.amount_cents / 100).toFixed(2)}
+              <span className="text-muted-foreground">
+                {" "}
+                (Routely ${(usage.by_type.on_demand.routely_cents / 100).toFixed(2)} / driver $
+                {(usage.by_type.on_demand.driver_cents / 100).toFixed(2)})
+              </span>
             </span>
           )}
-          <span className="text-13 tabular-nums">next invoice <b>${(usage.total_cents / 100).toFixed(2)}</b></span>
+          <span className="text-13 tabular-nums">
+            next invoice <b>${(usage.total_cents / 100).toFixed(2)}</b>
+          </span>
           {usage.flagged_needs_miles > 0 && (
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-10 font-semibold text-warning">
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 font-semibold text-10 text-warning">
               {usage.flagged_needs_miles} stop{usage.flagged_needs_miles > 1 ? "s" : ""} need miles
             </span>
           )}
         </div>
       )}
+
+      {/* Billing v2.1: outcome breakdown — bills per ATTEMPT, not per
+        successful delivery, so a tenant's charges include failed/returned
+        attempts too. Only shown once something other than a clean delivery
+        exists — a tenant with 100% delivered sees nothing extra here. */}
+      {usage &&
+        (() => {
+          const entries = Object.entries(usage.by_outcome ?? {});
+          const total = entries.reduce((s, [, o]) => s + o.lines, 0);
+          const nonDelivered = entries.filter(([o]) => o !== "delivered");
+          if (!total || !nonDelivered.length) return null;
+          const OUTCOME_LABEL: Record<string, string> = {
+            failed: "failed attempts",
+            returned: "returned to hub",
+            canceled_in_route: "canceled in route",
+          };
+          return (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-11 text-muted-foreground">
+              {nonDelivered.map(([outcome, o]) => (
+                <span key={outcome}>
+                  <b className="text-foreground">{o.lines}</b> of {total} charges were{" "}
+                  {OUTCOME_LABEL[outcome] ?? outcome} (${(o.amount_cents / 100).toFixed(2)})
+                </span>
+              ))}
+            </div>
+          );
+        })()}
 
       <BillingRatesEditor />
 
@@ -192,7 +261,7 @@ export function BillingTab({
               {loading ? (
                 <Skeleton className="h-7 w-20" />
               ) : (
-                <p className="font-semibold text-xl tracking-tight tabular-nums sm:text-2xl">{money(c.value)}</p>
+                <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">{money(c.value)}</p>
               )}
               <p className="truncate text-muted-foreground text-xs">{c.hint}</p>
             </CardContent>
@@ -203,7 +272,7 @@ export function BillingTab({
       {/* ── Chart (labels-style bar) + payment card column ── */}
       <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-col gap-3 border-b !pb-0 sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
+          <CardHeader className="!pb-0 flex flex-col gap-3 border-b sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
             <div className="flex-1 pb-3 sm:pb-4">
               <CardTitle className="text-13">Spend — last 30 days</CardTitle>
               <p className="text-muted-foreground text-sm">Shipping-label purchases over time.</p>
@@ -232,8 +301,18 @@ export function BillingTab({
               <ChartContainer config={barConfig} className="aspect-auto h-[240px] w-full">
                 <BarChart data={chartData} margin={{ left: 4, right: 4, top: 8 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={28} className="text-xs" />
-                  <ChartTooltip cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }} content={<ChartTooltipContent className="w-36" />} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={28}
+                    className="text-xs"
+                  />
+                  <ChartTooltip
+                    cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
+                    content={<ChartTooltipContent className="w-36" />}
+                  />
                   <Bar dataKey={metric} fill={`var(--color-${metric})`} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
@@ -250,14 +329,32 @@ export function BillingTab({
             {billingLoading ? (
               <Skeleton className="aspect-[1.586] w-full rounded-2xl" />
             ) : (
-              <CreditCardVisual brand={billing?.paymentMethod?.brand} last4={billing?.paymentMethod?.last4} expMonth={billing?.paymentMethod?.expMonth} expYear={billing?.paymentMethod?.expYear} />
+              <CreditCardVisual
+                brand={billing?.paymentMethod?.brand}
+                last4={billing?.paymentMethod?.last4}
+                expMonth={billing?.paymentMethod?.expMonth}
+                expYear={billing?.paymentMethod?.expYear}
+              />
             )}
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 flex-1" onClick={openBillingPortal} disabled={saving === "portal"}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 flex-1"
+                onClick={openBillingPortal}
+                disabled={saving === "portal"}
+              >
                 {saving === "portal" && <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />}
                 {billing?.paymentMethod ? "Change card" : "Add card"}
               </Button>
-              <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={openBillingPortal} disabled={saving === "portal"} aria-label="Manage billing in Stripe">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-muted-foreground"
+                onClick={openBillingPortal}
+                disabled={saving === "portal"}
+                aria-label="Manage billing in Stripe"
+              >
                 <Settings2 className="size-3.5" aria-hidden="true" />
                 <ExternalLink className="size-3" aria-hidden="true" />
               </Button>
@@ -281,11 +378,16 @@ export function BillingTab({
                       onClick={() => savePref("paymentType", t.id)}
                       className={cn(
                         "relative flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-all",
-                        selected ? "border-primary bg-primary/[0.04] shadow-sm" : "hover:border-muted-foreground/25 hover:bg-muted/40",
+                        selected
+                          ? "border-primary bg-primary/[0.04] shadow-sm"
+                          : "hover:border-muted-foreground/25 hover:bg-muted/40",
                         t.disabled && "cursor-not-allowed opacity-40",
                       )}
                     >
-                      <t.icon className={cn("size-4", selected ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
+                      <t.icon
+                        className={cn("size-4", selected ? "text-primary" : "text-muted-foreground")}
+                        aria-hidden="true"
+                      />
                       <span className="font-medium text-xs">{t.label}</span>
                       {t.disabled && (
                         <Badge variant="outline" className="absolute -top-2 right-1 h-4 text-10">
@@ -321,7 +423,7 @@ export function BillingTab({
               </div>
             ) : (
               <div className="divide-y divide-border/50">
-                {data!.charges.slice(0, 5).map((c) => (
+                {data?.charges.slice(0, 5).map((c) => (
                   <div key={c.id} className="flex items-center gap-3 py-2.5">
                     <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                       <Package className="size-4" aria-hidden="true" />
@@ -330,7 +432,10 @@ export function BillingTab({
                       <p className="truncate font-medium text-sm">{c.title}</p>
                       <p className="truncate text-muted-foreground text-xs">{c.subtitle}</p>
                     </div>
-                    <Badge variant="outline" className={cn("hidden shrink-0 capitalize sm:inline-flex", chargeStatusCls(c.status))}>
+                    <Badge
+                      variant="outline"
+                      className={cn("hidden shrink-0 capitalize sm:inline-flex", chargeStatusCls(c.status))}
+                    >
                       {c.status.replace("_", " ")}
                     </Badge>
                     <div className="shrink-0 text-right">
@@ -375,7 +480,9 @@ export function BillingTab({
                   onClick={() => savePref("paymentTerm", t.id)}
                   className={cn(
                     "group relative flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
-                    selected ? "border-primary bg-primary/[0.04] shadow-sm" : "hover:border-muted-foreground/25 hover:bg-muted/40",
+                    selected
+                      ? "border-primary bg-primary/[0.04] shadow-sm"
+                      : "hover:border-muted-foreground/25 hover:bg-muted/40",
                     !eligible && "cursor-not-allowed opacity-40",
                   )}
                 >
@@ -391,7 +498,9 @@ export function BillingTab({
                     <span className="block font-medium text-sm leading-tight">{t.label}</span>
                     <span className="mt-0.5 block text-muted-foreground text-xs leading-relaxed">{t.desc}</span>
                   </span>
-                  {isSaving && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />}
+                  {isSaving && (
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+                  )}
                   {isSaved && <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />}
                   {!eligible && (
                     <Badge variant="outline" className="h-5 shrink-0 text-10">
@@ -423,15 +532,24 @@ function CreditCardVisual({
   const hasCard = Boolean(last4);
   return (
     <div className="relative aspect-[1.586] w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/70 p-4 text-white shadow-lg ring-1 ring-primary/20">
-      <div aria-hidden="true" className="pointer-events-none absolute -top-8 -right-6 size-28 rounded-full bg-white/15 blur-2xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-10 -left-6 size-28 rounded-full bg-white/10 blur-2xl" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-8 -right-6 size-28 rounded-full bg-white/15 blur-2xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-10 -left-6 size-28 rounded-full bg-white/10 blur-2xl"
+      />
       <div className="relative flex h-full flex-col justify-between">
         <div className="flex items-start justify-between">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/img/routelyLogo.svg" alt="Routely" className="h-5 w-auto sm:h-6" />
-          <div className="h-6 w-8 rounded-md bg-gradient-to-br from-white/70 to-white/30 ring-1 ring-white/40" aria-hidden="true" />
+          <div
+            className="h-6 w-8 rounded-md bg-gradient-to-br from-white/70 to-white/30 ring-1 ring-white/40"
+            aria-hidden="true"
+          />
         </div>
-        <div className="font-mono text-13 tracking-[0.2em] tabular-nums sm:text-13">
+        <div className="font-mono text-13 tabular-nums tracking-[0.2em] sm:text-13">
           {hasCard ? `•••• •••• •••• ${last4}` : "•••• •••• •••• ••••"}
         </div>
         <div className="flex items-end justify-between text-xs">
@@ -440,9 +558,7 @@ function CreditCardVisual({
             <p className="truncate font-medium">{hasCard ? "On file" : "No card yet"}</p>
           </div>
           <div className="text-right">
-            <p className="text-10 text-white/60 uppercase tracking-wider">
-              {hasCard && expMonth ? "Expires" : ""}
-            </p>
+            <p className="text-10 text-white/60 uppercase tracking-wider">{hasCard && expMonth ? "Expires" : ""}</p>
             <p className="font-medium capitalize">
               {hasCard ? `${brand ?? "Card"}${expMonth ? ` · ${expMonth}/${String(expYear).slice(-2)}` : ""}` : "—"}
             </p>
@@ -453,24 +569,33 @@ function CreditCardVisual({
   );
 }
 
-
 /* ── Billing v2 — per-tenant rates/rules editor (North Star: API-writable) ── */
 function BillingRatesEditor() {
   const [rates, setRates] = useState<Rates | null>(null);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    fetch("/api/client/billing/rates").then((r) => (r.ok ? r.json() : null)).then((d) => d?.billing_rates && setRates(d as Rates)).catch(() => {});
+    fetch("/api/client/billing/rates")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.billing_rates && setRates(d as Rates))
+      .catch(() => {});
   }, []);
   if (!rates) return null;
 
   const save = async (patch: Partial<Rates>) => {
     setStatus("Saving…");
     const res = await fetch("/api/client/billing/rates", {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
     }).catch(() => null);
-    if (res?.ok) { setStatus("Saved"); setTimeout(() => setStatus(""), 2000); }
-    else { const j = res ? await res.json().catch(() => ({})) : {}; setStatus(j.error || "Save failed"); }
+    if (res?.ok) {
+      setStatus("Saved");
+      setTimeout(() => setStatus(""), 2000);
+    } else {
+      const j = res ? await res.json().catch(() => ({})) : {};
+      setStatus(j.error || "Save failed");
+    }
   };
   const money = (k: "package" | "per_mile" | "on_demand_per_mile", label: string) => (
     <label className="flex items-center justify-between gap-2 text-11 text-muted-foreground/70">
@@ -478,13 +603,16 @@ function BillingRatesEditor() {
       <span className="flex items-center gap-1 text-13 text-foreground">
         $
         <input
-          type="number" min={0} step={0.01}
+          type="number"
+          min={0}
+          step={0.01}
           defaultValue={(rates.billing_rates[k] / 100).toFixed(2)}
           onBlur={(e) => {
             const cents = Math.round(Number(e.target.value) * 100);
             if (!Number.isNaN(cents) && cents >= 0) {
               const next = { ...rates, billing_rates: { ...rates.billing_rates, [k]: cents } };
-              setRates(next); void save({ billing_rates: next.billing_rates });
+              setRates(next);
+              void save({ billing_rates: next.billing_rates });
             }
           }}
           className="h-(--spacing-control-h-sm) w-[80px] rounded-md border border-border/60 bg-transparent px-2 text-right font-mono text-13 tabular-nums outline-none focus:border-primary/50"
@@ -496,8 +624,22 @@ function BillingRatesEditor() {
   return (
     <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
       <div className="flex items-center justify-between">
-        <p className="text-13 font-semibold">Billing rates <span className="text-10 font-normal text-muted-foreground">(negotiated · applies to NEW deliveries only — past ledger lines are frozen)</span></p>
-        {status && <span className={cn("text-11", status === "Saved" ? "text-success" : status === "Saving…" ? "text-muted-foreground" : "text-destructive")}>{status}</span>}
+        <p className="font-semibold text-13">
+          Billing rates{" "}
+          <span className="font-normal text-10 text-muted-foreground">
+            (negotiated · applies to NEW deliveries only — past ledger lines are frozen)
+          </span>
+        </p>
+        {status && (
+          <span
+            className={cn(
+              "text-11",
+              status === "Saved" ? "text-success" : status === "Saving…" ? "text-muted-foreground" : "text-destructive",
+            )}
+          >
+            {status}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-2 lg:grid-cols-4">
         {money("package", "Per package")}
@@ -506,13 +648,20 @@ function BillingRatesEditor() {
         <label className="flex items-center justify-between gap-2 text-11 text-muted-foreground/70">
           Routely split %
           <input
-            type="number" min={0} max={100} step={1}
+            type="number"
+            min={0}
+            max={100}
+            step={1}
             defaultValue={rates.billing_rates.on_demand_split.routely}
             onBlur={(e) => {
               const r = Math.round(Number(e.target.value));
               if (!Number.isNaN(r) && r >= 0 && r <= 100) {
-                const next = { ...rates, billing_rates: { ...rates.billing_rates, on_demand_split: { routely: r, driver: 100 - r } } };
-                setRates(next); void save({ billing_rates: next.billing_rates });
+                const next = {
+                  ...rates,
+                  billing_rates: { ...rates.billing_rates, on_demand_split: { routely: r, driver: 100 - r } },
+                };
+                setRates(next);
+                void save({ billing_rates: next.billing_rates });
               }
             }}
             className="h-(--spacing-control-h-sm) w-[64px] rounded-md border border-border/60 bg-transparent px-2 text-right font-mono text-13 tabular-nums outline-none focus:border-primary/50"
@@ -523,10 +672,21 @@ function BillingRatesEditor() {
         <span className="text-11 text-muted-foreground/70">Default type</span>
         <div className="flex overflow-hidden rounded-lg border border-border/60">
           {(["package", "miles", "on_demand"] as const).map((v) => (
-            <button key={v} type="button"
-              onClick={() => { const next = { ...rates, default_billing_type: v }; setRates(next); void save({ default_billing_type: v }); }}
-              className={cn("px-2.5 py-1 text-10 font-semibold transition-colors",
-                rates.default_billing_type === v ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted")}>
+            <button
+              key={v}
+              type="button"
+              onClick={() => {
+                const next = { ...rates, default_billing_type: v };
+                setRates(next);
+                void save({ default_billing_type: v });
+              }}
+              className={cn(
+                "px-2.5 py-1 font-semibold text-10 transition-colors",
+                rates.default_billing_type === v
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-muted",
+              )}
+            >
               {v === "on_demand" ? "On-Demand" : v[0].toUpperCase() + v.slice(1)}
             </button>
           ))}
@@ -535,38 +695,70 @@ function BillingRatesEditor() {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-11 text-muted-foreground/70">Rules (first match wins)</span>
-          <button type="button"
-            onClick={() => { const next = { ...rates, billing_rules: [...rates.billing_rules, { if: { service_type: "on_demand" }, then: "on_demand" }] }; setRates(next); void save({ billing_rules: next.billing_rules }); }}
-            className="text-11 text-primary hover:underline">+ Add rule</button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = {
+                ...rates,
+                billing_rules: [...rates.billing_rules, { if: { service_type: "on_demand" }, then: "on_demand" }],
+              };
+              setRates(next);
+              void save({ billing_rules: next.billing_rules });
+            }}
+            className="text-11 text-primary hover:underline"
+          >
+            + Add rule
+          </button>
         </div>
-        {rates.billing_rules.length === 0 && <p className="text-11 text-muted-foreground/50">No rules — default type applies.</p>}
+        {rates.billing_rules.length === 0 && (
+          <p className="text-11 text-muted-foreground/50">No rules — default type applies.</p>
+        )}
         {rates.billing_rules.map((rule, i) => {
           const [condKey, condVal] = Object.entries(rule.if)[0] ?? ["stop_type", ""];
-          const upd = (next: Rates["billing_rules"]) => { const n = { ...rates, billing_rules: next }; setRates(n); void save({ billing_rules: next }); };
+          const upd = (next: Rates["billing_rules"]) => {
+            const n = { ...rates, billing_rules: next };
+            setRates(n);
+            void save({ billing_rules: next });
+          };
           return (
             <div key={i} className="flex flex-wrap items-center gap-1.5 text-11">
               <span className="text-muted-foreground/60">if</span>
-              <select value={condKey}
-                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, if: { [e.target.value]: condVal } } : r))}
-                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11">
+              <select
+                value={condKey}
+                onChange={(e) =>
+                  upd(rates.billing_rules.map((r, j) => (j === i ? { ...r, if: { [e.target.value]: condVal } } : r)))
+                }
+                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11"
+              >
                 <option value="stop_type">stop_type</option>
                 <option value="service_type">service_type</option>
                 <option value="package_type">package_type</option>
               </select>
               <span>=</span>
-              <input value={condVal}
-                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, if: { [condKey]: e.target.value } } : r))}
-                className="h-6 w-[110px] rounded-md border border-border/60 bg-transparent px-1.5 font-mono text-11" />
+              <input
+                value={condVal}
+                onChange={(e) =>
+                  upd(rates.billing_rules.map((r, j) => (j === i ? { ...r, if: { [condKey]: e.target.value } } : r)))
+                }
+                className="h-6 w-[110px] rounded-md border border-border/60 bg-transparent px-1.5 font-mono text-11"
+              />
               <span className="text-muted-foreground/60">→</span>
-              <select value={rule.then}
-                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, then: e.target.value } : r))}
-                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11">
+              <select
+                value={rule.then}
+                onChange={(e) => upd(rates.billing_rules.map((r, j) => (j === i ? { ...r, then: e.target.value } : r)))}
+                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11"
+              >
                 <option value="package">package</option>
                 <option value="miles">miles</option>
                 <option value="on_demand">on_demand</option>
               </select>
-              <button type="button" onClick={() => upd(rates.billing_rules.filter((_, j) => j !== i))}
-                className="text-muted-foreground/50 hover:text-destructive">✕</button>
+              <button
+                type="button"
+                onClick={() => upd(rates.billing_rules.filter((_, j) => j !== i))}
+                className="text-muted-foreground/50 hover:text-destructive"
+              >
+                ✕
+              </button>
             </div>
           );
         })}

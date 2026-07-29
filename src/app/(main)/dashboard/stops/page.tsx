@@ -1,7 +1,5 @@
 "use client";
 
-import { BRAND_PRIMARY } from "@/lib/brand";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import dynamic from "next/dynamic";
@@ -76,9 +74,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRoutelyRealtime } from "@/hooks/use-routely-realtime";
+import { BRAND_PRIMARY } from "@/lib/brand";
 
 /* Hardened list-fetch: a HARD 15s timeout means a hung API request can never
  * leave the loading skeleton up forever (the "frozen, no data" freeze), and
@@ -89,13 +87,15 @@ async function fetchJsonSafe(url: string, timeoutMs = 15_000): Promise<Record<st
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
   return r.json();
 }
+
+import { FieldRow } from "@/components/form-rows";
 import { fetchFailedScansCount, resolveFailedScan } from "@/lib/ocr/failed-scans-client";
 import { cn } from "@/lib/utils";
-import { FieldRow } from "@/components/form-rows";
 
 /* Mini-map placeholder tone — matches Google Maps LIGHT tile gray. Intentionally
  * theme-independent: the real map tiles do not follow the app theme. */
 const MAP_TILE_BG = "#e8eaed";
+
 import { formatDisplayCase } from "@/lib/format-display";
 
 import type { OCRSubmitData } from "./_components/ocr-scan-modal";
@@ -558,7 +558,13 @@ function StopBillingControl({ stopId }: { stopId: string | null }) {
         <div className="flex items-center gap-2">
           {!btype && <span className="text-10 text-muted-foreground/50">auto</span>}
           <div className="flex overflow-hidden rounded-lg border border-border/60">
-            {([["package", "Package"], ["miles", "Miles"], ["on_demand", "On-Demand"]] as const).map(([v, label]) => (
+            {(
+              [
+                ["package", "Package"],
+                ["miles", "Miles"],
+                ["on_demand", "On-Demand"],
+              ] as const
+            ).map(([v, label]) => (
               <button
                 key={v}
                 type="button"
@@ -568,7 +574,7 @@ function StopBillingControl({ stopId }: { stopId: string | null }) {
                   save({ billing_type: next });
                 }}
                 className={cn(
-                  "px-2.5 py-1 text-10 font-semibold transition-colors",
+                  "px-2.5 py-1 font-semibold text-10 transition-colors",
                   btype === v
                     ? "bg-primary text-primary-foreground"
                     : "bg-transparent text-muted-foreground hover:bg-muted",
@@ -598,11 +604,72 @@ function StopBillingControl({ stopId }: { stopId: string | null }) {
             }}
             placeholder="auto"
             inputMode="decimal"
-            className="h-(--spacing-control-h-sm) w-[90px] rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right font-mono text-13 font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0"
+            className="h-(--spacing-control-h-sm) w-[90px] rounded-none border-0 border-transparent border-b bg-transparent px-0.5 text-right font-medium font-mono text-13 text-foreground tabular-nums outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0"
           />
         </FieldRow>
       )}
     </>
+  );
+}
+
+type BillingLine = {
+  id: number;
+  attempt_seq: number;
+  outcome: "delivered" | "failed" | "returned" | "canceled_in_route";
+  resolved_type: string;
+  units: number | null;
+  amount_cents: number | null;
+  flag: string | null;
+  invoiced_at: string | null;
+};
+
+const OUTCOME_DOT: Record<string, string> = {
+  delivered: "bg-success",
+  failed: "bg-destructive",
+  returned: "bg-warning",
+  canceled_in_route: "bg-muted-foreground",
+};
+
+/* Billing v2.1 — read-only list of every billed ATTEMPT for this stop (2
+ * trips = 2 lines). Self-fetching; renders nothing until it knows whether
+ * there's anything to show (no empty-state clutter on stops with 0 lines,
+ * e.g. anything not yet delivered/failed). */
+function StopBillingLines({ stopId }: { stopId: string | null }) {
+  const [lines, setLines] = useState<BillingLine[] | null>(null);
+
+  useEffect(() => {
+    setLines(null);
+    if (!stopId) return;
+    fetch(`/api/client/stops/${encodeURIComponent(stopId)}/billing-lines`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setLines(d?.lines ?? []))
+      .catch(() => setLines([]));
+  }, [stopId]);
+
+  if (!lines || lines.length === 0) return null;
+
+  return (
+    <FieldRow label="Billing lines">
+      <div className="flex w-full flex-col gap-1">
+        {lines.map((l) => (
+          <div key={l.id} className="flex items-center gap-2 text-11">
+            <span className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")} />
+            <span className="w-14 shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
+            <span className="w-24 shrink-0 text-foreground capitalize">{l.outcome.replace(/_/g, " ")}</span>
+            <span className="w-20 shrink-0 text-muted-foreground">{toTitle(l.resolved_type)}</span>
+            <span className="w-16 shrink-0 text-right text-muted-foreground tabular-nums">
+              {l.units != null ? `${l.units}mi` : l.flag ? "flagged" : "—"}
+            </span>
+            <span className="w-14 shrink-0 text-right font-mono text-foreground tabular-nums">
+              {l.amount_cents != null ? `$${(l.amount_cents / 100).toFixed(2)}` : "—"}
+            </span>
+            <span className={cn("text-10", l.invoiced_at ? "text-muted-foreground" : "text-primary")}>
+              {l.invoiced_at ? "Invoiced" : "Pending"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </FieldRow>
   );
 }
 
@@ -984,7 +1051,7 @@ function NewStopInput({
                     >
                       <span className={cn("size-2 shrink-0 rounded-full", ac.dot)} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-xs text-foreground">{s.address}</p>
+                        <p className="truncate font-semibold text-foreground text-xs">{s.address}</p>
                         <p className="truncate text-11 text-muted-foreground">
                           {[s.city, s.state].filter(Boolean).join(", ")} · {toTitle(s.recipient_name) || "No name yet"}
                         </p>
@@ -1229,7 +1296,7 @@ function PickupSelector({
             <MapPin className="size-3 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-xs text-foreground">
+            <p className="truncate font-semibold text-foreground text-xs">
               {toTitle(selected?.name ?? "Select pickup")}
             </p>
             {selected?.address && (
@@ -1272,7 +1339,7 @@ function PickupSelector({
                     )}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-xs text-foreground">{toTitle(l.name)}</p>
+                    <p className="font-semibold text-foreground text-xs">{toTitle(l.name)}</p>
                     {l.address && <p className="truncate text-11 text-muted-foreground">{toTitle(l.address)}</p>}
                     {l.is_default && <span className="font-semibold text-10 text-primary">Default</span>}
                   </div>
@@ -1589,7 +1656,10 @@ function RouteLayer({
                   lineHeight: 1,
                   transition: "transform 0.15s",
                   transform: activeMarker === "pickup" ? "scale(1.2)" : "scale(1)",
-                  boxShadow: activeMarker === "pickup" ? "0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent)" : "none",
+                  boxShadow:
+                    activeMarker === "pickup"
+                      ? "0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent)"
+                      : "none",
                 }}
               >
                 A
@@ -1626,7 +1696,9 @@ function RouteLayer({
                 B
               </div>
               <div style={{ width: 2, height: 8, background: "var(--destructive)", opacity: 0.7 }} />
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--destructive)", opacity: 0.5 }} />
+              <div
+                style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--destructive)", opacity: 0.5 }}
+              />
             </div>
           </div>
         </AdvancedMarker>
@@ -1857,7 +1929,9 @@ function GoogleMap({
                         padding: "2px 8px",
                       }}
                     >
-                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
+                      <span
+                        style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}
+                      >
                         PICKUP
                       </span>
                     </div>
@@ -1953,7 +2027,9 @@ function GoogleMap({
                           flexShrink: 0,
                         }}
                       />
-                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--primary)" }}>Pickup point A</span>
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--primary)" }}>
+                        Pickup point A
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2024,7 +2100,9 @@ function GoogleMap({
                         padding: "2px 8px",
                       }}
                     >
-                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
+                      <span
+                        style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "white", letterSpacing: "0.05em" }}
+                      >
                         DELIVERY
                       </span>
                     </div>
@@ -2111,8 +2189,18 @@ function GoogleMap({
                         gap: 6,
                       }}
                     >
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--destructive)", flexShrink: 0 }} />
-                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--destructive)" }}>Delivery point B</span>
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "var(--destructive)",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "var(--destructive)" }}>
+                        Delivery point B
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2157,7 +2245,9 @@ function GoogleMap({
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                     <Truck style={{ width: 13, height: 13, color: "rgba(255,255,255,0.7)", flexShrink: 0 }} />
-                    <span style={{ fontSize: "var(--text-13)", fontWeight: 900, color: "white", lineHeight: 1 }}>{result.time}</span>
+                    <span style={{ fontSize: "var(--text-13)", fontWeight: 900, color: "white", lineHeight: 1 }}>
+                      {result.time}
+                    </span>
                     {isRush && (
                       <span
                         style={{
@@ -2219,7 +2309,15 @@ function GoogleMap({
           >
             <Zap className="size-3" aria-hidden="true" />
             <div>
-              <p style={{ fontSize: "var(--text-10)", fontWeight: 700, color: "rgb(251,146,60)", lineHeight: 1.2, margin: 0 }}>
+              <p
+                style={{
+                  fontSize: "var(--text-10)",
+                  fontWeight: 700,
+                  color: "rgb(251,146,60)",
+                  lineHeight: 1.2,
+                  margin: 0,
+                }}
+              >
                 Rush hour
               </p>
               <p style={{ fontSize: "var(--text-9)", color: "rgba(251,146,60,0.65)", lineHeight: 1.2, margin: 0 }}>
@@ -2574,14 +2672,14 @@ function FormSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-border/10 last:border-0">
+    <div className="border-border/10 border-b last:border-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-3 py-2.5 pr-3 text-left transition-colors hover:text-foreground"
       >
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold tracking-[-0.01em] text-foreground/80">{title}</span>
+          <span className="font-semibold text-foreground/80 text-xs tracking-[-0.01em]">{title}</span>
           {!open && summary && (
             <span className="ml-1 max-w-[120px] truncate text-11 text-muted-foreground/50">{summary}</span>
           )}
@@ -2636,7 +2734,7 @@ function ReadRow({
   if (!editable) {
     if (!value) return null;
     return (
-      <div className="flex items-start justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0">
+      <div className="flex items-start justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0">
         <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
           {label}
           {required && (
@@ -2647,7 +2745,7 @@ function ReadRow({
         </span>
         <span
           className={cn(
-            "min-w-0 truncate text-right text-11 font-medium leading-snug text-foreground",
+            "min-w-0 truncate text-right font-medium text-11 text-foreground leading-snug",
             mono && "font-mono text-11 text-primary",
           )}
         >
@@ -2693,7 +2791,7 @@ function ReadRow({
 
   return (
     <div
-      className="group flex cursor-text items-start justify-between gap-4 border-b border-border/[0.07] py-2 last:border-0"
+      className="group flex cursor-text items-start justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0"
       onClick={() => setEditing(true)}
     >
       <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
@@ -2730,7 +2828,7 @@ function ReadRow({
           spellCheck={false}
           autoComplete="off"
           inputMode={inputMode ?? "text"}
-          className="flex-1 rounded-none border-0 bg-transparent text-right font-medium text-xs text-foreground outline-none focus:ring-0"
+          className="flex-1 rounded-none border-0 bg-transparent text-right font-medium text-foreground text-xs outline-none focus:ring-0"
         />
       ) : (
         <span
@@ -2795,7 +2893,7 @@ function _RateCard({
     return (
       <div className="flex items-center justify-between rounded-xl border-2 border-border/40 bg-muted/20 px-3.5 py-2.5 opacity-50">
         <div>
-          <p className="font-semibold text-xs text-foreground">{carrier}</p>
+          <p className="font-semibold text-foreground text-xs">{carrier}</p>
           <p className="text-11 text-muted-foreground">Not available</p>
         </div>
         <span className="text-11 text-muted-foreground">N/A</span>
@@ -2812,7 +2910,7 @@ function _RateCard({
       )}
     >
       <div>
-        <p className="font-semibold text-xs text-foreground">{carrier}</p>
+        <p className="font-semibold text-foreground text-xs">{carrier}</p>
         <p className="text-11 text-muted-foreground">
           {service ?? "Standard"}
           {days != null ? ` · ${days} days` : ""}
@@ -2963,7 +3061,7 @@ function _DraftStopPanel({
           </div>
         </motion.div>
         <div>
-          <p className="font-black text-lg text-foreground">Stop Created!</p>
+          <p className="font-black text-foreground text-lg">Stop Created!</p>
           <p className="mt-1 text-13 text-muted-foreground">{street}</p>
           <p className="mt-3 font-bold font-mono text-13 text-primary">{trackingNum}</p>
         </div>
@@ -3006,7 +3104,7 @@ function _DraftStopPanel({
         <div className="relative px-4 pt-3 pb-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm text-foreground leading-tight tracking-tight">{toTitle(street)}</p>
+              <p className="font-bold text-foreground text-sm leading-tight tracking-tight">{toTitle(street)}</p>
               <p className="mt-0.5 font-medium text-11 text-muted-foreground">{toTitle(city)}</p>
             </div>
             <Package className="mt-0.5 size-5 shrink-0 text-violet-400/30" aria-hidden="true" />
@@ -3096,7 +3194,7 @@ function _DraftStopPanel({
                   autoSave({ package_type: v });
                 }}
               >
-                <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-xs text-foreground focus:ring-0">
+                <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent align="end">
@@ -3153,7 +3251,7 @@ function _DraftStopPanel({
                       const num = parseFloat(e.target.value);
                       if (!Number.isNaN(num)) setCodAmt(num.toFixed(2));
                     }}
-                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                   />
                 </div>
               </FieldRow>
@@ -3461,7 +3559,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
 
   return (
     <div className="bg-card px-3 py-3">
-      <ol className="relative ml-2 border-l border-border/50">
+      <ol className="relative ml-2 border-border/50 border-l">
         {entries.map((e, i) => {
           const Icon = TIMELINE_ICONS[e.event] ?? FileText;
           const hasDetail = (e.field_changes?.length ?? 0) > 0;
@@ -3471,7 +3569,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
             <li key={`${e.event}-${e.timestamp ?? i}`} className="relative pb-4 pl-5 last:pb-1">
               <span
                 className={cn(
-                  "absolute -left-[9px] top-0.5 flex size-[18px] items-center justify-center rounded-full ring-2 ring-card",
+                  "absolute top-0.5 -left-[9px] flex size-[18px] items-center justify-center rounded-full ring-2 ring-card",
                   e.event === "delivered"
                     ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300"
                     : e.event === "failed"
@@ -3482,7 +3580,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
                 <Icon className="size-2.5" aria-hidden="true" />
               </span>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-medium text-foreground/85">{e.label}</span>
+                <span className="font-medium text-foreground/85 text-xs">{e.label}</span>
                 {ts && (
                   <span className="shrink-0 text-10 text-muted-foreground/50">
                     {ts.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
@@ -3497,7 +3595,7 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : i)}
-                    className="mt-1 flex items-center gap-1 text-10 font-medium text-primary/80 hover:text-primary"
+                    className="mt-1 flex items-center gap-1 font-medium text-10 text-primary/80 hover:text-primary"
                   >
                     <ChevronDown
                       className={cn("size-3 transition-transform", isOpen && "rotate-180")}
@@ -3784,7 +3882,7 @@ function StopDetailPanel({
       })
       .catch(() => setGateCodesFetched(true))
       .finally(() => setGateCodesLoading(false));
-  }, [gateCodesFetched, stopId]);
+  }, [gateCodesFetched, stopId, isDraft, draftData?.draft_id]);
 
   const handleSaveGateCode = async () => {
     const code = gateCodeInput.trim();
@@ -4552,7 +4650,7 @@ function StopDetailPanel({
             <a
               href="#"
               onClick={(e) => e.preventDefault()}
-              className="font-mono text-10 text-primary dark:text-white/80 hover:underline"
+              className="font-mono text-10 text-primary hover:underline dark:text-white/80"
             >
               {!isDraft && tid ? tid : "Tracking Pending"}
             </a>
@@ -4616,7 +4714,7 @@ function StopDetailPanel({
             return fullName ? (
               <>
                 <p className="font-bold text-base text-foreground leading-tight tracking-tight">{fullName}</p>
-                <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground/70 leading-tight">
+                <p className="mt-0.5 truncate font-medium text-muted-foreground/70 text-xs leading-tight">
                   {streetVal || "—"}
                 </p>
                 {cityVal && <p className="truncate text-11 text-muted-foreground/55">{cityVal}</p>}
@@ -4624,7 +4722,7 @@ function StopDetailPanel({
             ) : (
               <>
                 <p className="font-bold text-base text-foreground leading-tight tracking-tight">{streetVal || "—"}</p>
-                {cityVal && <p className="mt-0.5 truncate text-xs text-muted-foreground/70">{cityVal}</p>}
+                {cityVal && <p className="mt-0.5 truncate text-muted-foreground/70 text-xs">{cityVal}</p>}
               </>
             );
           })()}
@@ -4636,7 +4734,7 @@ function StopDetailPanel({
             {/* Status — primary, colored ring badge */}
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-10 font-semibold ring-1",
+                "rounded-full px-2 py-0.5 font-semibold text-10 ring-1",
                 isDraft
                   ? "bg-violet-50 text-violet-600 ring-violet-200/60 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30"
                   : DELIVERED.includes(status)
@@ -4652,7 +4750,7 @@ function StopDetailPanel({
             </span>
             {/* Stop type */}
             {stopType && (
-              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
                 {toTitle(stopType)}
               </span>
             )}
@@ -4662,41 +4760,41 @@ function StopDetailPanel({
                 pkg || (isDraft ? (draftData?.package_type ?? "rx") : (full?.package.type ?? summary.package_type));
               const meta = PKG_TYPES.find((p) => p.id === ptId);
               return meta ? (
-                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
                   {meta.l}
                 </span>
               ) : null;
             })()}
             {/* Special flags */}
             {(serviceType === "same_day" || serviceType === "express") && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-10 font-medium text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-10 text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
                 {serviceType === "same_day" ? "Same Day" : "Express"}
               </span>
             )}
             {(full?.package.requires_signature || sig) && (
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-10 font-medium text-blue-700 ring-1 ring-blue-200/60 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30">
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-10 text-blue-700 ring-1 ring-blue-200/60 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30">
                 Sig. Req.
               </span>
             )}
             {(full?.service.collect_payment || cod) && (
-              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-10 font-medium text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-10 text-teal-700 ring-1 ring-teal-200/60 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30">
                 {parseFloat(codAmt || "0") > 0 ? fmtCurrency(codAmt) : "COD"}
               </span>
             )}
             {(full?.package.cold_chain || coldChain) && (
-              <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-10 font-medium text-cyan-700 ring-1 ring-cyan-200/60 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/30">
+              <span className="rounded-full bg-cyan-50 px-2 py-0.5 font-medium text-10 text-cyan-700 ring-1 ring-cyan-200/60 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/30">
                 Cold Chain
               </span>
             )}
             {(gate || full?.address.gate_code) && (
-              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-10 font-medium text-muted-foreground ring-1 ring-border">
+              <span className="rounded-full bg-muted px-2 py-0.5 font-medium font-mono text-10 text-muted-foreground ring-1 ring-border">
                 {gate || full?.address.gate_code}
               </span>
             )}
             {/* Drop-off preference */}
             {(dropPref || full?.address.drop_preference) &&
               dropLabel(dropPref || full?.address.drop_preference || "") && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-10 font-medium text-muted-foreground ring-1 ring-border">
+                <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
                   {dropLabel(dropPref || full?.address.drop_preference || "")}
                 </span>
               )}
@@ -4759,7 +4857,7 @@ function StopDetailPanel({
       {/* ── Body ─────────────────────────────────────────────── */}
       <div className="custom-scroll min-h-0 flex-1 overflow-y-auto bg-card">
         {/* ── Tab bar ── */}
-        <div className="sticky top-0 z-10 flex shrink-0 border-b border-border/50 bg-card">
+        <div className="sticky top-0 z-10 flex shrink-0 border-border/50 border-b bg-card">
           {(["details", "notes", "gate-codes", "history"] as const).map((tab) => (
             <button
               key={tab}
@@ -4767,7 +4865,7 @@ function StopDetailPanel({
               onClick={() => setPanelTab(tab)}
               className={cn(
                 // h-8 (was h-9) makes the panel feel less chunky per spec
-                "h-8 border-b-2 px-3 text-11 font-medium transition-colors",
+                "h-8 border-b-2 px-3 font-medium text-11 transition-colors",
                 panelTab === tab
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground/60 hover:text-foreground",
@@ -4779,7 +4877,7 @@ function StopDetailPanel({
                 <span className="flex items-center gap-1.5">
                   Notes
                   {internalNotes.length > 0 && (
-                    <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-10 font-semibold text-primary dark:bg-primary/25 dark:text-white/90">
+                    <span className="rounded-full bg-primary/15 px-1.5 py-0.5 font-semibold text-10 text-primary dark:bg-primary/25 dark:text-white/90">
                       {internalNotes.length}
                     </span>
                   )}
@@ -4825,8 +4923,8 @@ function StopDetailPanel({
                 internal_notes list the Notes tab uses (same endpoint/shape,
                 author from session). Save via confirm modal on blur-with-text;
                 no extra button (avoids confusion with the draft approve CTA). */}
-              <div className="border-b border-border/60 bg-card px-3 py-2.5">
-                <label className="mb-1.5 flex items-center gap-1.5 text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <div className="border-border/60 border-b bg-card px-3 py-2.5">
+                <label className="mb-1.5 flex items-center gap-1.5 font-semibold text-10 text-muted-foreground/50 uppercase tracking-widest">
                   <MessageSquare className="size-3 text-muted-foreground/50" aria-hidden="true" />
                   Quick Notes
                 </label>
@@ -4839,7 +4937,7 @@ function StopDetailPanel({
                   }}
                   placeholder="Add a quick note about this stop…"
                   rows={2}
-                  className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground leading-relaxed shadow-sm outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary focus:ring-2 focus:ring-primary/10 dark:bg-background"
+                  className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-foreground text-xs leading-relaxed shadow-sm outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary focus:ring-2 focus:ring-primary/10 dark:bg-background"
                 />
               </div>
 
@@ -4949,7 +5047,7 @@ function StopDetailPanel({
                       scheduleAutoSave({ stop_type: v });
                     }}
                   >
-                    <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-xs text-foreground focus:ring-0">
+                    <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -4970,7 +5068,7 @@ function StopDetailPanel({
                       scheduleAutoSave({ package: { type: v } });
                     }}
                   >
-                    <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-xs text-foreground focus:ring-0">
+                    <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -5016,7 +5114,7 @@ function StopDetailPanel({
                       }
                     }}
                   >
-                    <SelectTrigger className="h-7 w-[140px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-xs text-foreground focus:ring-0">
+                    <SelectTrigger className="h-7 w-[140px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -5062,7 +5160,7 @@ function StopDetailPanel({
                             scheduleAutoSave({ service: { date: v || null } });
                           }
                         }}
-                        className="cursor-pointer border-0 bg-transparent font-medium text-xs text-foreground outline-none focus:ring-0"
+                        className="cursor-pointer border-0 bg-transparent font-medium text-foreground text-xs outline-none focus:ring-0"
                       />
                     );
                   })()}
@@ -5076,10 +5174,11 @@ function StopDetailPanel({
                       {routeZone}
                     </span>
                   ) : (
-                    <span className="font-medium text-xs text-muted-foreground">—</span>
+                    <span className="font-medium text-muted-foreground text-xs">—</span>
                   )}
                 </FieldRow>
                 <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
+                <StopBillingLines stopId={full?.stop_id ?? summary.stop_id ?? null} />
                 {/* Payment / COD — moved here from the standalone Payment section.
                   Same state + autosave bindings: writes service.collect_payment /
                   service.cod_amount (the PATCH proxy maps them under body.service). */}
@@ -5145,14 +5244,12 @@ function StopDetailPanel({
                                       if (!Number.isNaN(num)) setCodAmt(num.toFixed(2));
                                     }}
                                     placeholder="0.00"
-                                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                                   />
                                 </div>
                               </FieldRow>
                               {validationErrors.cod && (
-                                <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">
-                                  {validationErrors.cod}
-                                </p>
+                                <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.cod}</p>
                               )}
                             </motion.div>
                           )}
@@ -5200,7 +5297,7 @@ function StopDetailPanel({
                     <div className="flex items-start gap-2 rounded-lg border border-border/30 bg-muted/20 px-3 py-2">
                       <MapPin className="mt-0.5 size-3 shrink-0 text-primary/60" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-xs text-foreground">{localPickup?.name || "—"}</p>
+                        <p className="truncate font-semibold text-foreground text-xs">{localPickup?.name || "—"}</p>
                         {localPickup?.address && (
                           <p className="truncate text-11 text-muted-foreground">{localPickup.address}</p>
                         )}
@@ -5397,7 +5494,7 @@ function StopDetailPanel({
                       scheduleAutoSave({ address: { drop_preference: v } });
                     }}
                   >
-                    <SelectTrigger className="h-7 w-[140px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-xs text-foreground focus:ring-0">
+                    <SelectTrigger className="h-7 w-[140px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
                       <SelectValue placeholder="Select…" />
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -5490,7 +5587,7 @@ function StopDetailPanel({
                                   setWeightOz(e.target.value);
                                   scheduleAutoSave({ package: { weight_oz: Number(e.target.value) || 8 } });
                                 }}
-                                className="h-7 w-16 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                                className="h-7 w-16 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                               />
                               <span className="text-muted-foreground text-xs">oz</span>
                             </div>
@@ -5503,7 +5600,7 @@ function StopDetailPanel({
                                   setLengthIn(e.target.value);
                                   scheduleAutoSave({ package: { length_in: Number(e.target.value) || 10 } });
                                 }}
-                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                               />
                               <span className="text-muted-foreground text-xs">×</span>
                               <input
@@ -5512,7 +5609,7 @@ function StopDetailPanel({
                                   setWidthIn(e.target.value);
                                   scheduleAutoSave({ package: { width_in: Number(e.target.value) || 7 } });
                                 }}
-                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                               />
                               <span className="text-muted-foreground text-xs">×</span>
                               <input
@@ -5521,7 +5618,7 @@ function StopDetailPanel({
                                   setHeightIn(e.target.value);
                                   scheduleAutoSave({ package: { height_in: Number(e.target.value) || 2 } });
                                 }}
-                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-xs text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                                className="h-7 w-12 rounded-none border-0 border-transparent border-b bg-transparent text-right font-medium text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
                               />
                               <span className="text-muted-foreground text-xs">in</span>
                             </div>
@@ -5565,7 +5662,7 @@ function StopDetailPanel({
         {panelTab === "notes" && (
           <div className="flex flex-col bg-card">
             {/* Compose */}
-            <div className="border-b border-border/50 px-3 py-2.5">
+            <div className="border-border/50 border-b px-3 py-2.5">
               <textarea
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
@@ -5575,7 +5672,7 @@ function StopDetailPanel({
                 placeholder="Add a note, instruction, or update…"
                 rows={2}
                 maxLength={500}
-                className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-foreground text-xs leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10"
               />
               <div className="mt-1.5 flex items-center justify-between">
                 <span className="text-10 text-muted-foreground/40">{noteText.length}/500 · Cmd+Enter to send</span>
@@ -5605,7 +5702,7 @@ function StopDetailPanel({
             ) : (
               <div className="relative px-3 py-2">
                 {/* Vertical connector */}
-                <div className="absolute bottom-2 left-[14px] top-5 w-px bg-primary/60" />
+                <div className="absolute top-5 bottom-2 left-[14px] w-px bg-primary/60" />
                 <div className="space-y-0">
                   {[...internalNotes].reverse().map((note, noteIdx) => {
                     const isRoutely = note.role === "dispatch" || note.role === "system";
@@ -5625,7 +5722,7 @@ function StopDetailPanel({
                           )}
                           <div
                             className={cn(
-                              "relative z-10 flex size-5 items-center justify-center rounded-full text-10 font-bold",
+                              "relative z-10 flex size-5 items-center justify-center rounded-full font-bold text-10",
                               isRoutely ? "bg-primary text-white" : "bg-primary text-white",
                             )}
                           >
@@ -5635,13 +5732,13 @@ function StopDetailPanel({
                         <div className="min-w-0 flex-1">
                           {/* Meta: name · company · time */}
                           <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                            <span className="truncate text-11 font-semibold capitalize text-foreground/80">
+                            <span className="truncate font-semibold text-11 text-foreground/80 capitalize">
                               {note.author.toLowerCase()}
                             </span>
                             {isRoutely && note.role !== "system" && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="shrink-0 text-10 font-medium text-primary/60">Routely</span>
+                                <span className="shrink-0 font-medium text-10 text-primary/60">Routely</span>
                               </>
                             )}
                             {note.role === "system" && (
@@ -5653,17 +5750,17 @@ function StopDetailPanel({
                             {!isRoutely && tenantCompanyName && (
                               <>
                                 <span className="shrink-0 text-muted-foreground/25">·</span>
-                                <span className="shrink-0 text-10 font-medium capitalize text-amber-600/65">
+                                <span className="shrink-0 font-medium text-10 text-amber-600/65 capitalize">
                                   {tenantCompanyName.toLowerCase()}
                                 </span>
                               </>
                             )}
-                            <span className="ml-auto shrink-0 tabular-nums text-10 text-muted-foreground/35">
+                            <span className="ml-auto shrink-0 text-10 text-muted-foreground/35 tabular-nums">
                               {fmtNoteTime(note.created_at)}
                             </span>
                           </div>
                           {/* Content */}
-                          <p className="text-11 leading-snug text-foreground/75">{note.text}</p>
+                          <p className="text-11 text-foreground/75 leading-snug">{note.text}</p>
                         </div>
                       </div>
                     );
@@ -5681,8 +5778,8 @@ function StopDetailPanel({
         {panelTab === "gate-codes" && (
           <div className="flex flex-col bg-card">
             {/* Compose */}
-            <div className="border-b border-border/50 px-3 py-2.5">
-              <div className="flex gap-2 items-center">
+            <div className="border-border/50 border-b px-3 py-2.5">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={gateCodeInput}
@@ -5692,12 +5789,12 @@ function StopDetailPanel({
                   }}
                   placeholder="*1234 or Call Maria at gate…"
                   maxLength={50}
-                  className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-foreground text-xs outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
                 <Button
                   type="button"
                   size="sm"
-                  className="h-8 gap-1.5 px-3 text-11 bg-primary text-white hover:bg-primary/90"
+                  className="h-8 gap-1.5 bg-primary px-3 text-11 text-white hover:bg-primary/90"
                   disabled={!gateCodeInput.trim() || savingGateCode}
                   onClick={handleSaveGateCode}
                 >
@@ -5715,10 +5812,10 @@ function StopDetailPanel({
             </div>
             {/* Address header */}
             {gateCodesStreet && (
-              <div className="border-b border-border/50 bg-muted/20 px-3 py-1.5">
-                <p className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/55">
+              <div className="border-border/50 border-b bg-muted/20 px-3 py-1.5">
+                <p className="font-semibold text-10 text-muted-foreground/55 uppercase tracking-widest">
                   Building:{" "}
-                  <span className="font-mono normal-case tracking-normal text-foreground/70">{gateCodesStreet}</span>
+                  <span className="font-mono text-foreground/70 normal-case tracking-normal">{gateCodesStreet}</span>
                 </p>
               </div>
             )}
@@ -5735,7 +5832,7 @@ function StopDetailPanel({
             ) : (
               <div className="relative px-3 py-2">
                 {/* Vertical connector */}
-                <div className="absolute bottom-2 left-[14px] top-5 w-px bg-primary/60" />
+                <div className="absolute top-5 bottom-2 left-[14px] w-px bg-primary/60" />
                 <div className="space-y-0">
                   {gateCodesData.map((gc, gcIdx) => {
                     const code = String(gc.gate_code ?? gc.code ?? gc.access_code ?? "");
@@ -5757,7 +5854,7 @@ function StopDetailPanel({
                         <div className="min-w-0 flex-1">
                           {/* Meta: added_by · building · time */}
                           <div className="mb-0.5 flex min-w-0 items-center gap-1">
-                            <span className="truncate text-11 font-semibold capitalize text-foreground/80">
+                            <span className="truncate font-semibold text-11 text-foreground/80 capitalize">
                               {addedBy}
                             </span>
                             {gateCodesStreet && (
@@ -5768,13 +5865,13 @@ function StopDetailPanel({
                                 </span>
                               </>
                             )}
-                            <span className="ml-auto shrink-0 tabular-nums text-10 text-muted-foreground/35">
+                            <span className="ml-auto shrink-0 text-10 text-muted-foreground/35 tabular-nums">
                               {createdAt ? fmtNoteTime(createdAt) : ""}
                             </span>
                           </div>
                           {/* Code */}
-                          <p className="font-mono text-13 font-semibold tracking-wider text-foreground">{code}</p>
-                          {notes && <p className="text-11 leading-snug text-muted-foreground/70">{notes}</p>}
+                          <p className="font-mono font-semibold text-13 text-foreground tracking-wider">{code}</p>
+                          {notes && <p className="text-11 text-muted-foreground/70 leading-snug">{notes}</p>}
                         </div>
                       </div>
                     );
@@ -5791,7 +5888,7 @@ function StopDetailPanel({
       {/* Dark mode: subtle top border + 1px inset highlight separates footer from dark body */}
       <div
         className={cn(
-          "shrink-0 space-y-2 border-t border-border/60 bg-card px-4",
+          "shrink-0 space-y-2 border-border/60 border-t bg-card px-4",
           isDraft
             ? "py-2.5 pb-[calc(72px+env(safe-area-inset-bottom,0px))] sm:pb-2.5"
             : "pt-1 pb-[calc(72px+env(safe-area-inset-bottom,0px))] sm:pb-1",
@@ -5870,15 +5967,13 @@ function StopDetailPanel({
             {submitDone ? (
               <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 dark:bg-emerald-500/15 dark:ring-1 dark:ring-emerald-500/30">
                 <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="font-semibold text-xs text-emerald-700 dark:text-emerald-300">
-                  Stop submitted!
-                </span>
+                <span className="font-semibold text-emerald-700 text-xs dark:text-emerald-300">Stop submitted!</span>
               </div>
             ) : (
               <Button
                 onClick={submitDraft}
                 disabled={submitting}
-                className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-xs text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
+                className="h-8 w-full gap-1.5 rounded-lg bg-primary font-semibold text-primary-foreground text-xs shadow-sm ring-1 ring-primary/20 hover:brightness-110 dark:ring-primary/40"
               >
                 {submitting ? (
                   <>
@@ -5976,7 +6071,7 @@ function StopDetailPanel({
           <DialogHeader>
             <DialogTitle className="text-sm">Save this note?</DialogTitle>
           </DialogHeader>
-          <p className="max-h-32 overflow-y-auto whitespace-pre-line rounded-lg bg-muted/30 px-3 py-2 text-xs text-foreground/80">
+          <p className="max-h-32 overflow-y-auto whitespace-pre-line rounded-lg bg-muted/30 px-3 py-2 text-foreground/80 text-xs">
             {quickNote}
           </p>
           <DialogFooter className="gap-2">
@@ -6251,9 +6346,7 @@ function BulkEditDialog({
                               </span>
                             )}
                           </span>
-                          {l.address && (
-                            <span className="truncate text-11 text-muted-foreground">{l.address}</span>
-                          )}
+                          {l.address && <span className="truncate text-11 text-muted-foreground">{l.address}</span>}
                         </div>
                       </SelectItem>
                     ))}
@@ -6351,9 +6444,7 @@ function BulkEditDialog({
                   <p className="flex items-center gap-1.5 font-medium text-xs">
                     <PenLine className="size-3.5 text-muted-foreground/70" aria-hidden="true" /> Signature Required
                   </p>
-                  <p className="text-11 text-muted-foreground">
-                    Require driver to capture signature on delivery.
-                  </p>
+                  <p className="text-11 text-muted-foreground">Require driver to capture signature on delivery.</p>
                 </div>
                 <Switch checked={sig} onCheckedChange={setSig} />
               </div>
@@ -6498,7 +6589,9 @@ export default function StopsPage() {
         // Recovered list is auxiliary — its failure must never block drafts.
         fetchJsonSafe("/api/client/stops?filter=recovered&limit=200").catch(() => ({ stops: [] })),
       ]);
-      const recovered: TodayStop[] = (((recoveredJson as { stops?: unknown[] }).stops ?? []) as Record<string, unknown>[]).map(
+      const recovered: TodayStop[] = (
+        ((recoveredJson as { stops?: unknown[] }).stops ?? []) as Record<string, unknown>[]
+      ).map(
         (s: Record<string, unknown>) =>
           ({
             id: String(s.stop_id ?? s.id),
@@ -7546,16 +7639,14 @@ export default function StopsPage() {
             instead of a raw white; all inputs use border-input + bg-background;
             all text uses muted/foreground tokens — no raw white surfaces and no
             slate utilities. Reads correctly in both themes. */}
-        <div className="shrink-0 border-b border-border/50 bg-card">
+        <div className="shrink-0 border-border/50 border-b bg-card">
           {/* PICKUP */}
-          <div className="px-3 pb-2 pt-2.5">
+          <div className="px-3 pt-2.5 pb-2">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
-                Pickup
-              </span>
+              <span className="font-semibold text-10 text-muted-foreground/50 uppercase tracking-widest">Pickup</span>
               <div className="flex items-center gap-1">
                 <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                <span className="text-10 font-medium text-emerald-600">Active</span>
+                <span className="font-medium text-10 text-emerald-600">Active</span>
               </div>
             </div>
             <PickupSelector locations={locations} selected={pickup} onSelect={setPickup} />
@@ -7564,16 +7655,14 @@ export default function StopsPage() {
 
           {/* NEW STOP */}
           <div className="space-y-2 px-3 pt-2.5 pb-3">
-            <span className="text-10 font-semibold uppercase tracking-widest text-muted-foreground/50">
-              New Stop
-            </span>
+            <span className="font-semibold text-10 text-muted-foreground/50 uppercase tracking-widest">New Stop</span>
 
             {/* OCR / Scan tiles */}
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() => setOcrOpen(true)}
-                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-11 font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
+                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 font-medium text-11 text-muted-foreground/70 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary dark:border-border/40 dark:bg-muted/20"
               >
                 <Camera className="size-3.5" aria-hidden="true" />
                 OCR Label
@@ -7581,7 +7670,7 @@ export default function StopsPage() {
               <button
                 type="button"
                 onClick={() => setScanOpen(true)}
-                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 text-11 font-medium text-muted-foreground/70 transition-colors hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:border-border/40 dark:bg-muted/20"
+                className="flex h-8 items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 font-medium text-11 text-muted-foreground/70 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary dark:border-border/40 dark:bg-muted/20"
               >
                 <ScanLine className="size-3.5" aria-hidden="true" />
                 Scan Code
@@ -7644,7 +7733,7 @@ export default function StopsPage() {
                   transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
                   className="overflow-hidden"
                 >
-                  <div className="space-y-1.5 border-l-2 border-primary/20 pl-2 pt-1">
+                  <div className="space-y-1.5 border-primary/20 border-l-2 pt-1 pl-2">
                     <div className="flex h-8 items-center gap-2 rounded-lg border border-input bg-card px-2.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
                       <User className="size-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />
                       <input
@@ -7697,13 +7786,13 @@ export default function StopsPage() {
 
         {/* Zone B — list */}
         <div className="custom-scroll min-h-0 flex-1 overflow-y-auto bg-card">
-          <div className="sticky top-0 z-10 border-b border-border/50 bg-card">
+          <div className="sticky top-0 z-10 border-border/50 border-b bg-card">
             {/* ── Stops toolbar: search · OCR · Scan · date · refresh ── */}
             <div className="flex items-center gap-1 px-2 py-1.5">
               {/* Search input — flex-1 fills available space */}
               <div
                 className={cn(
-                  "flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border bg-background px-2.5 transition-colors h-8",
+                  "flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border bg-background px-2.5 transition-colors",
                   listSearch ? "border-primary/50 ring-1 ring-primary/15" : "border-border/50 hover:border-border/80",
                 )}
               >
@@ -7714,14 +7803,14 @@ export default function StopsPage() {
                   placeholder="Search stops…"
                   spellCheck={false}
                   autoComplete="off"
-                  className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/35"
+                  className="min-w-0 flex-1 bg-transparent text-foreground text-xs outline-none placeholder:text-muted-foreground/35"
                 />
                 {listSearch && (
                   <button
                     type="button"
                     onClick={() => setListSearch("")}
                     aria-label="Clear search"
-                    className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                    className="shrink-0 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
                   >
                     <X className="size-3" aria-hidden="true" />
                   </button>
@@ -7797,7 +7886,7 @@ export default function StopsPage() {
                           loadDrafts();
                         }}
                         aria-label="Refresh stops"
-                        className="flex size-8 shrink-0 items-center justify-center rounded-lg transition-all text-muted-foreground/60 hover:bg-accent hover:text-foreground active:scale-95"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/60 transition-all hover:bg-accent hover:text-foreground active:scale-95"
                       >
                         <RotateCcw className="size-3.5" aria-hidden="true" />
                       </button>
@@ -7810,11 +7899,11 @@ export default function StopsPage() {
               </TooltipProvider>
             </div>
             {/* Tabs row */}
-            <div className="flex items-center border-b border-border/50 bg-card">
+            <div className="flex items-center border-border/50 border-b bg-card">
               <Checkbox
                 checked={allFilteredSelected}
                 onCheckedChange={toggleSelectAll}
-                className="ml-2.5 mr-2 size-3.5 shrink-0"
+                className="mr-2 ml-2.5 size-3.5 shrink-0"
                 aria-label="Select all"
               />
               {(
@@ -7830,7 +7919,7 @@ export default function StopsPage() {
                     type="button"
                     onClick={() => setStatusTab(t.value as typeof statusTab)}
                     className={cn(
-                      "h-9 border-b-2 px-3 text-11 font-medium transition-colors",
+                      "h-9 border-b-2 px-3 font-medium text-11 transition-colors",
                       statusTab === t.value
                         ? "border-primary text-foreground"
                         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -7865,22 +7954,20 @@ export default function StopsPage() {
               </div>
               {statusTab === "submitted" ? (
                 <>
-                  <p className="font-semibold text-xs text-muted-foreground">All caught up</p>
+                  <p className="font-semibold text-muted-foreground text-xs">All caught up</p>
                   <p className="mt-0.5 text-11 text-muted-foreground/70">
                     All submitted stops have been assigned to a driver
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="font-semibold text-xs text-muted-foreground">No stops</p>
-                  <p className="mt-0.5 text-11 text-muted-foreground/70">
-                    No stops today — type an address to add one
-                  </p>
+                  <p className="font-semibold text-muted-foreground text-xs">No stops</p>
+                  <p className="mt-0.5 text-11 text-muted-foreground/70">No stops today — type an address to add one</p>
                 </>
               )}
             </div>
           ) : (
-            filteredStops.map((s, i) => {
+            filteredStops.map((s, _i) => {
               const isSel = selected?.id === s.id || activeDraft?.draft_id === s.id || selectedIds.has(s.id);
               // Per-row 2px left border carries the status color (per spec) —
               // replaces the inline boxShadow inset trick. Reads as a vertical
@@ -7940,7 +8027,7 @@ export default function StopsPage() {
                     // Dense 2-line recipe (Linear-style): left status border +
                     // name/meta on line 1, everything secondary merged with "·"
                     // on line 2. No numbered circle — the footer carries counts.
-                    "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
+                    "flex w-full cursor-pointer items-center gap-2 border-border/50 border-b border-l-2 px-2.5 py-1.5 text-left transition-colors",
                     leftBorder,
                     isSel ? "bg-blue-50 dark:bg-primary/20" : "bg-card hover:bg-muted/30",
                   )}
@@ -7954,12 +8041,12 @@ export default function StopsPage() {
                   <div className="min-w-0 flex-1">
                     {/* Line 1 — name + status (6px dot + colored 10px label) */}
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-12 font-semibold text-foreground leading-snug">
+                      <p className="min-w-0 truncate font-semibold text-12 text-foreground leading-snug">
                         {toTitle(s.recipient_name) || "—"}
                       </p>
                       <span
                         className={cn(
-                          "flex shrink-0 items-center gap-1 text-10 font-medium",
+                          "flex shrink-0 items-center gap-1 font-medium text-10",
                           s.submit_error
                             ? "text-rose-500"
                             : s.status === "draft"
@@ -7996,7 +8083,7 @@ export default function StopsPage() {
                           >
                             {addr || "—"}
                             {tracking && (
-                              <span className="font-mono text-10 tabular-nums text-primary/80"> · {tracking}</span>
+                              <span className="font-mono text-10 text-primary/80 tabular-nums"> · {tracking}</span>
                             )}
                           </p>
                         );
@@ -8016,12 +8103,12 @@ export default function StopsPage() {
             Count snapped from font-black/22 → font-bold/16; all meta lives on
             one 10.5px scale; thin vertical separators replace the old
             border-r/border-l block dividers. */}
-        <div className="shrink-0 border-t border-border/50 bg-card">
+        <div className="shrink-0 border-border/50 border-t bg-card">
           <div className="px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <span className="flex items-baseline gap-1.5">
-                  <span className="text-base font-bold text-foreground tabular-nums leading-none">
+                  <span className="font-bold text-base text-foreground tabular-nums leading-none">
                     {filteredStops.length}
                   </span>
                   <span className="text-11 text-muted-foreground/65">
@@ -8052,7 +8139,7 @@ export default function StopsPage() {
                   </>
                 )}
               </div>
-              <span className="text-11 font-medium text-muted-foreground/45 uppercase tracking-widest">
+              <span className="font-medium text-11 text-muted-foreground/45 uppercase tracking-widest">
                 {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             </div>
@@ -8064,7 +8151,9 @@ export default function StopsPage() {
       <div
         className={cn(
           "flex h-full flex-col overflow-hidden border-border/50 border-r bg-card",
-          mobileTab !== "detail" ? "hidden lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0" : "flex w-full lg:w-(--spacing-panel-detail-w) lg:shrink-0",
+          mobileTab !== "detail"
+            ? "hidden lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0"
+            : "flex w-full lg:w-(--spacing-panel-detail-w) lg:shrink-0",
         )}
       >
         <AnimatePresence mode="wait">
@@ -8082,7 +8171,7 @@ export default function StopsPage() {
               <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
                 <Checkbox checked className="pointer-events-none size-5" />
               </div>
-              <p className="font-bold text-sm text-foreground">{selectedIds.size} stops selected</p>
+              <p className="font-bold text-foreground text-sm">{selectedIds.size} stops selected</p>
               <p className="mt-1.5 max-w-[210px] text-muted-foreground text-xs leading-relaxed">
                 Use the bulk action bar below to edit or delete selected drafts.
               </p>
@@ -8201,9 +8290,7 @@ export default function StopsPage() {
                     setActiveDraft((prev) =>
                       prev && prev.draft_id === draftIdAtCall ? { ...prev, route_zone: zoneName } : prev,
                     );
-                    setDrafts((prev) =>
-                      prev.map((d) => (d.id === draftIdAtCall ? { ...d, zone: zoneName } : d)),
-                    );
+                    setDrafts((prev) => prev.map((d) => (d.id === draftIdAtCall ? { ...d, zone: zoneName } : d)));
                   };
                   if (zip5.length !== 5) {
                     applyZone(null);
@@ -8307,7 +8394,7 @@ export default function StopsPage() {
               <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
                 <Package className="size-7 text-muted-foreground/30" />
               </div>
-              <p className="font-bold text-sm text-foreground">No stop selected</p>
+              <p className="font-bold text-foreground text-sm">No stop selected</p>
               <p className="mt-1.5 max-w-[180px] text-muted-foreground text-xs leading-relaxed">
                 Click a stop from the list to view and edit details
               </p>
@@ -8330,7 +8417,7 @@ export default function StopsPage() {
             <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
               <MapIcon className="size-7 text-muted-foreground/40" />
             </div>
-            <p className="font-bold text-sm text-foreground">Multiple stops selected</p>
+            <p className="font-bold text-foreground text-sm">Multiple stops selected</p>
             <p className="mt-1.5 max-w-[240px] text-muted-foreground text-xs leading-relaxed">
               Map preview is hidden while bulk editing. Clear selection or pick one stop to view route details.
             </p>
@@ -8430,7 +8517,7 @@ export default function StopsPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedIds(new Set())}
-                    className="flex items-center gap-1.5 rounded-md px-1.5 py-1 font-semibold text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="flex items-center gap-1.5 rounded-md px-1.5 py-1 font-semibold text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
                     aria-label="Clear selection"
                   >
                     <X className="size-3.5" />

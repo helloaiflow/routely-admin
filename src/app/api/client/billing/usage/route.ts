@@ -16,21 +16,40 @@ export async function GET() {
 
   const { data: lines } = await supabase
     .from("billing_ledger")
-    .select("resolved_type, units, amount_cents, routely_cents, driver_cents, flag")
+    .select("resolved_type, outcome, units, amount_cents, routely_cents, driver_cents, flag")
     .eq("tenant_id", tenantId)
     .is("invoiced_at", null);
 
-  const byType: Record<string, { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number }> = {};
+  const byType: Record<
+    string,
+    { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number }
+  > = {};
+  // Billing v2.1: outcome breakdown so the tenant conversation is easy —
+  // "38 of your 142 charges were failed attempts".
+  const byOutcome: Record<string, { lines: number; amount_cents: number }> = {};
   let flagged = 0;
   for (const l of lines ?? []) {
-    if (l.flag) { flagged++; continue; }
-    const g = (byType[l.resolved_type] ??= { lines: 0, units: 0, amount_cents: 0, routely_cents: 0, driver_cents: 0 });
+    if (l.flag) {
+      flagged++;
+      continue;
+    }
+    byType[l.resolved_type] ??= { lines: 0, units: 0, amount_cents: 0, routely_cents: 0, driver_cents: 0 };
+    const g = byType[l.resolved_type];
     g.lines++;
     g.units += Number(l.units ?? 0);
     g.amount_cents += l.amount_cents ?? 0;
     g.routely_cents += l.routely_cents ?? 0;
     g.driver_cents += l.driver_cents ?? 0;
+    byOutcome[l.outcome] ??= { lines: 0, amount_cents: 0 };
+    const o = byOutcome[l.outcome];
+    o.lines++;
+    o.amount_cents += l.amount_cents ?? 0;
   }
   const total = Object.values(byType).reduce((s, g) => s + g.amount_cents, 0);
-  return NextResponse.json({ by_type: byType, total_cents: total, flagged_needs_miles: flagged });
+  return NextResponse.json({
+    by_type: byType,
+    by_outcome: byOutcome,
+    total_cents: total,
+    flagged_needs_miles: flagged,
+  });
 }

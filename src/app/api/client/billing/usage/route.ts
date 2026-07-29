@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
-/* GET /api/client/billing/usage — read-only metered-usage view (revenue engine).
- * packages: delivered stops this calendar month (our own count — source of the
- * meter events); upcoming: Stripe's upcoming-invoice preview for the tenant's
- * metered subscription when one exists. Lazy Stripe init; Stripe failures
- * degrade to packages-only (never a 500). */
+/* GET /api/client/billing/usage — Billing v2: reads OUR ledger (the audit
+ * spine), not Stripe meters. Uninvoiced period totals grouped by type +
+ * Routely/driver split for on-demand + flagged needs_miles count. The values
+ * ARE the upcoming-invoice preview (run-invoices bills exactly these lines). */
 
 export async function GET() {
   const ctx = await requirePagePermission("billing");
@@ -16,32 +14,23 @@ export async function GET() {
   const tenantId = Number(ctx.tenantId);
   const supabase = getSupabaseAdmin();
 
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
-
-  const { count } = await supabase
-    .from("stops")
-    .select("id", { count: "exact", head: true })
+  const { data: lines } = await supabase
+    .from("billing_ledger")
+    .select("resolved_type, units, amount_cents, routely_cents, driver_cents, flag")
     .eq("tenant_id", tenantId)
-    .in("status", ["delivered", "succeeded", "success"])
-    .gte("updated_at", monthStart.toISOString());
+    .is("invoiced_at", null);
 
-  let upcoming: { amount_due: number; currency: string; period_end: number } | null = null;
-  try {
-    const { data: t } = await supabase.from("tenants").select("stripe_customer_id").eq("tenant_id", tenantId).maybeSingle();
-    if (t?.stripe_customer_id) {
-      const inv = await getStripe().invoices.createPreview({ customer: t.stripe_customer_id });
-      upcoming = { amount_due: inv.amount_due, currency: inv.currency, period_end: inv.period_end };
-    }
-  } catch {
-    // no subscription / preview unavailable — packages-only is still useful
+  const byType: Record<string, { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number }> = {};
+  let flagged = 0;
+  for (const l of lines ?? []) {
+    if (l.flag) { flagged++; continue; }
+    const g = (byType[l.resolved_type] ??= { lines: 0, units: 0, amount_cents: 0, routely_cents: 0, driver_cents: 0 });
+    g.lines++;
+    g.units += Number(l.units ?? 0);
+    g.amount_cents += l.amount_cents ?? 0;
+    g.routely_cents += l.routely_cents ?? 0;
+    g.driver_cents += l.driver_cents ?? 0;
   }
-
-  return NextResponse.json({
-    period_start: monthStart.toISOString(),
-    packages_delivered: count ?? 0,
-    miles_driven: null, // forward-compat: no routes engine yet
-    upcoming_invoice: upcoming,
-  });
+  const total = Object.values(byType).reduce((s, g) => s + g.amount_cents, 0);
+  return NextResponse.json({ by_type: byType, total_cents: total, flagged_needs_miles: flagged });
 }

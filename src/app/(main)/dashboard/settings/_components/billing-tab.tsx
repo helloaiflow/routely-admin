@@ -42,9 +42,12 @@ const barConfig = {
 } satisfies ChartConfig;
 type BarMetric = keyof typeof barConfig;
 
-type UsageView = {
-  packages_delivered: number;
-  upcoming_invoice: { amount_due: number; currency: string; period_end: number } | null;
+type UsageGroup = { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number };
+type UsageView = { by_type: Record<string, UsageGroup>; total_cents: number; flagged_needs_miles: number };
+type Rates = {
+  billing_rates: { package: number; per_mile: number; on_demand_per_mile: number; on_demand_split: { routely: number; driver: number } };
+  default_billing_type: "package" | "miles" | "on_demand";
+  billing_rules: { if: Record<string, string>; then: string }[];
 };
 
 export function BillingTab({
@@ -136,25 +139,32 @@ export function BillingTab({
 
   return (
     <div className="space-y-4">
-      {/* ── Metered usage (read-only, revenue engine) ── */}
+      {/* ── Billing v2 — uninvoiced ledger (read-only; = next invoice preview) ── */}
       {usage && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border/60 bg-card px-4 py-2.5">
-          <span className="type-label text-muted-foreground">Usage this period</span>
-          <span className="text-13 tabular-nums">
-            <b>{usage.packages_delivered}</b> packages delivered
-          </span>
-          <span className="text-13 text-muted-foreground/60">·</span>
-          <span className="text-13 text-muted-foreground">miles — pending routes engine</span>
-          {usage.upcoming_invoice && (
-            <>
-              <span className="text-13 text-muted-foreground/60">·</span>
-              <span className="text-13 tabular-nums">
-                upcoming invoice <b>${(usage.upcoming_invoice.amount_due / 100).toFixed(2)}</b>
-              </span>
-            </>
+          <span className="type-label text-muted-foreground">Uninvoiced this period</span>
+          {usage.by_type.package && (
+            <span className="text-13 tabular-nums"><b>{usage.by_type.package.lines}</b> packages · ${(usage.by_type.package.amount_cents / 100).toFixed(2)}</span>
+          )}
+          {usage.by_type.miles && (
+            <span className="text-13 tabular-nums"><b>{usage.by_type.miles.units.toFixed(1)}</b> mi · ${(usage.by_type.miles.amount_cents / 100).toFixed(2)}</span>
+          )}
+          {usage.by_type.on_demand && (
+            <span className="text-13 tabular-nums">
+              <b>{usage.by_type.on_demand.units.toFixed(1)}</b> mi on-demand · ${(usage.by_type.on_demand.amount_cents / 100).toFixed(2)}
+              <span className="text-muted-foreground"> (Routely ${(usage.by_type.on_demand.routely_cents / 100).toFixed(2)} / driver ${(usage.by_type.on_demand.driver_cents / 100).toFixed(2)})</span>
+            </span>
+          )}
+          <span className="text-13 tabular-nums">next invoice <b>${(usage.total_cents / 100).toFixed(2)}</b></span>
+          {usage.flagged_needs_miles > 0 && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-10 font-semibold text-warning">
+              {usage.flagged_needs_miles} stop{usage.flagged_needs_miles > 1 ? "s" : ""} need miles
+            </span>
           )}
         </div>
       )}
+
+      <BillingRatesEditor />
 
       {/* ── KPI cards — 2-up on mobile, 4-up on desktop ── */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -438,6 +448,128 @@ function CreditCardVisual({
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── Billing v2 — per-tenant rates/rules editor (North Star: API-writable) ── */
+function BillingRatesEditor() {
+  const [rates, setRates] = useState<Rates | null>(null);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    fetch("/api/client/billing/rates").then((r) => (r.ok ? r.json() : null)).then((d) => d?.billing_rates && setRates(d as Rates)).catch(() => {});
+  }, []);
+  if (!rates) return null;
+
+  const save = async (patch: Partial<Rates>) => {
+    setStatus("Saving…");
+    const res = await fetch("/api/client/billing/rates", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+    }).catch(() => null);
+    if (res?.ok) { setStatus("Saved"); setTimeout(() => setStatus(""), 2000); }
+    else { const j = res ? await res.json().catch(() => ({})) : {}; setStatus(j.error || "Save failed"); }
+  };
+  const money = (k: "package" | "per_mile" | "on_demand_per_mile", label: string) => (
+    <label className="flex items-center justify-between gap-2 text-11 text-muted-foreground/70">
+      {label}
+      <span className="flex items-center gap-1 text-13 text-foreground">
+        $
+        <input
+          type="number" min={0} step={0.01}
+          defaultValue={(rates.billing_rates[k] / 100).toFixed(2)}
+          onBlur={(e) => {
+            const cents = Math.round(Number(e.target.value) * 100);
+            if (!Number.isNaN(cents) && cents >= 0) {
+              const next = { ...rates, billing_rates: { ...rates.billing_rates, [k]: cents } };
+              setRates(next); void save({ billing_rates: next.billing_rates });
+            }
+          }}
+          className="h-(--spacing-control-h-sm) w-[80px] rounded-md border border-border/60 bg-transparent px-2 text-right font-mono text-13 tabular-nums outline-none focus:border-primary/50"
+        />
+      </span>
+    </label>
+  );
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-13 font-semibold">Billing rates <span className="text-10 font-normal text-muted-foreground">(negotiated · applies to NEW deliveries only — past ledger lines are frozen)</span></p>
+        {status && <span className={cn("text-11", status === "Saved" ? "text-success" : status === "Saving…" ? "text-muted-foreground" : "text-destructive")}>{status}</span>}
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2 lg:grid-cols-4">
+        {money("package", "Per package")}
+        {money("per_mile", "Per mile")}
+        {money("on_demand_per_mile", "On-demand / mile")}
+        <label className="flex items-center justify-between gap-2 text-11 text-muted-foreground/70">
+          Routely split %
+          <input
+            type="number" min={0} max={100} step={1}
+            defaultValue={rates.billing_rates.on_demand_split.routely}
+            onBlur={(e) => {
+              const r = Math.round(Number(e.target.value));
+              if (!Number.isNaN(r) && r >= 0 && r <= 100) {
+                const next = { ...rates, billing_rates: { ...rates.billing_rates, on_demand_split: { routely: r, driver: 100 - r } } };
+                setRates(next); void save({ billing_rates: next.billing_rates });
+              }
+            }}
+            className="h-(--spacing-control-h-sm) w-[64px] rounded-md border border-border/60 bg-transparent px-2 text-right font-mono text-13 tabular-nums outline-none focus:border-primary/50"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-11 text-muted-foreground/70">Default type</span>
+        <div className="flex overflow-hidden rounded-lg border border-border/60">
+          {(["package", "miles", "on_demand"] as const).map((v) => (
+            <button key={v} type="button"
+              onClick={() => { const next = { ...rates, default_billing_type: v }; setRates(next); void save({ default_billing_type: v }); }}
+              className={cn("px-2.5 py-1 text-10 font-semibold transition-colors",
+                rates.default_billing_type === v ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted")}>
+              {v === "on_demand" ? "On-Demand" : v[0].toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-11 text-muted-foreground/70">Rules (first match wins)</span>
+          <button type="button"
+            onClick={() => { const next = { ...rates, billing_rules: [...rates.billing_rules, { if: { service_type: "on_demand" }, then: "on_demand" }] }; setRates(next); void save({ billing_rules: next.billing_rules }); }}
+            className="text-11 text-primary hover:underline">+ Add rule</button>
+        </div>
+        {rates.billing_rules.length === 0 && <p className="text-11 text-muted-foreground/50">No rules — default type applies.</p>}
+        {rates.billing_rules.map((rule, i) => {
+          const [condKey, condVal] = Object.entries(rule.if)[0] ?? ["stop_type", ""];
+          const upd = (next: Rates["billing_rules"]) => { const n = { ...rates, billing_rules: next }; setRates(n); void save({ billing_rules: next }); };
+          return (
+            <div key={i} className="flex flex-wrap items-center gap-1.5 text-11">
+              <span className="text-muted-foreground/60">if</span>
+              <select value={condKey}
+                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, if: { [e.target.value]: condVal } } : r))}
+                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11">
+                <option value="stop_type">stop_type</option>
+                <option value="service_type">service_type</option>
+                <option value="package_type">package_type</option>
+              </select>
+              <span>=</span>
+              <input value={condVal}
+                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, if: { [condKey]: e.target.value } } : r))}
+                className="h-6 w-[110px] rounded-md border border-border/60 bg-transparent px-1.5 font-mono text-11" />
+              <span className="text-muted-foreground/60">→</span>
+              <select value={rule.then}
+                onChange={(e) => upd(rates.billing_rules.map((r, j) => j === i ? { ...r, then: e.target.value } : r))}
+                className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11">
+                <option value="package">package</option>
+                <option value="miles">miles</option>
+                <option value="on_demand">on_demand</option>
+              </select>
+              <button type="button" onClick={() => upd(rates.billing_rules.filter((_, j) => j !== i))}
+                className="text-muted-foreground/50 hover:text-destructive">✕</button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

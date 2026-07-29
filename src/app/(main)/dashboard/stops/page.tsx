@@ -514,6 +514,98 @@ function fmtStopDate(iso: string) {
     return "—";
   }
 }
+
+/* ── Billing v2: per-stop override (segmented, Optimize-type pattern) ─────────
+   Fetches billing_type/billed_miles from /stops/{id}/billing; PATCH on change
+   (debounced for the stepper). Clear = click the active segment → auto (the
+   delivery-time cascade resolves rule/default). Delivered stops keep showing
+   the values but the ledger line is already frozen. */
+function StopBillingControl({ stopId }: { stopId: string | null }) {
+  const [btype, setBtype] = useState<string | null>(null);
+  const [miles, setMiles] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+  const milesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLoaded(false);
+    if (!stopId) return;
+    fetch(`/api/client/stops/${encodeURIComponent(stopId)}/billing`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setBtype(d.billing_type ?? null);
+          setMiles(d.billed_miles != null ? String(d.billed_miles) : "");
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [stopId]);
+
+  if (!stopId || !loaded) return null;
+
+  const save = (patch: Record<string, unknown>) => {
+    void fetch(`/api/client/stops/${encodeURIComponent(stopId)}/billing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
+  };
+  const showMiles = btype === "miles" || btype === "on_demand";
+
+  return (
+    <>
+      <FieldRow label="Billing type">
+        <div className="flex items-center gap-2">
+          {!btype && <span className="text-10 text-muted-foreground/50">auto</span>}
+          <div className="flex overflow-hidden rounded-lg border border-border/60">
+            {([["package", "Package"], ["miles", "Miles"], ["on_demand", "On-Demand"]] as const).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  const next = btype === v ? null : v;
+                  setBtype(next);
+                  save({ billing_type: next });
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-10 font-semibold transition-colors",
+                  btype === v
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FieldRow>
+      {showMiles && (
+        <FieldRow label="Billed miles">
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={miles}
+            onChange={(e) => {
+              setMiles(e.target.value);
+              if (milesTimer.current) clearTimeout(milesTimer.current);
+              const v = e.target.value.trim();
+              milesTimer.current = setTimeout(() => {
+                const n = v === "" ? null : Number(v);
+                if (n === null || (!Number.isNaN(n) && n >= 0)) save({ billed_miles: n });
+              }, 800);
+            }}
+            placeholder="auto"
+            inputMode="decimal"
+            className="h-(--spacing-control-h-sm) w-[90px] rounded-none border-0 border-b border-transparent bg-transparent px-0.5 text-right font-mono text-13 font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-0"
+          />
+        </FieldRow>
+      )}
+    </>
+  );
+}
+
 const toTitle = (s: string) => formatDisplayCase(s);
 
 /* ── Address Autocomplete ─────────────────────────────────────────────────── */
@@ -4987,6 +5079,7 @@ function StopDetailPanel({
                     <span className="font-medium text-xs text-muted-foreground">—</span>
                   )}
                 </FieldRow>
+                <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
                 {/* Payment / COD — moved here from the standalone Payment section.
                   Same state + autosave bindings: writes service.collect_payment /
                   service.cod_amount (the PATCH proxy maps them under body.service). */}

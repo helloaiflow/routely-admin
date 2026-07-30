@@ -90,6 +90,7 @@
     }
   },
   "javascript": {
+    "globals": ["google"],
     "formatter": {
       "jsxQuoteStyle": "double",
       "quoteProperties": "asNeeded",

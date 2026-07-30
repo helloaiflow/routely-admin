@@ -85,7 +85,9 @@ export function BillingTab({
     fetch("/api/client/billing/usage")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setUsage(d))
-      .catch(() => {});
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
   }, []);
 
   useEffect(() => {
@@ -100,7 +102,9 @@ export function BillingTab({
     fetch("/api/client/billing/charges")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => !cancelled && !d.error && setData(d as BillingCharges))
-      .catch(() => {})
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -115,7 +119,9 @@ export function BillingTab({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [key]: value }),
-    }).catch(() => {});
+    }).catch(() => {
+      /* best-effort — fire-and-forget, failure does not block the UI */
+    });
     setSaving(null);
     setSaved(`${key}-${value}`);
     setTimeout(() => setSaved(null), 1800);
@@ -123,7 +129,10 @@ export function BillingTab({
 
   async function openBillingPortal() {
     setSaving("portal");
-    if (!billing?.stripeCustomerId) await fetch("/api/stripe/create-customer", { method: "POST" }).catch(() => {});
+    if (!billing?.stripeCustomerId)
+      await fetch("/api/stripe/create-customer", { method: "POST" }).catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
     const res = await fetch("/api/stripe/billing-portal", { method: "POST" }).catch(() => null);
     const j = res ? await res.json().catch(() => ({})) : {};
     setSaving(null);
@@ -578,7 +587,9 @@ function BillingRatesEditor() {
     fetch("/api/client/billing/rates")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.billing_rates && setRates(d as Rates))
-      .catch(() => {});
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
   }, []);
   if (!rates) return null;
 
@@ -700,6 +711,7 @@ function BillingRatesEditor() {
             onClick={() => {
               const next = {
                 ...rates,
+                // biome-ignore lint/suspicious/noThenProperty: `then` is the billing_rules wire-format key (app/services/billing.py::resolve_type), not a thenable.
                 billing_rules: [...rates.billing_rules, { if: { service_type: "on_demand" }, then: "on_demand" }],
               };
               setRates(next);
@@ -745,6 +757,7 @@ function BillingRatesEditor() {
               <span className="text-muted-foreground/60">→</span>
               <select
                 value={rule.then}
+                // biome-ignore lint/suspicious/noThenProperty: same wire-format key as above.
                 onChange={(e) => upd(rates.billing_rules.map((r, j) => (j === i ? { ...r, then: e.target.value } : r)))}
                 className="h-6 rounded-md border border-border/60 bg-transparent px-1 text-11"
               >

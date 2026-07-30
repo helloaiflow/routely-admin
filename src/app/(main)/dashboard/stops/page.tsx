@@ -8,7 +8,7 @@ import {
   AdvancedMarker,
   AdvancedMarkerAnchorPoint,
   APIProvider,
-  Map,
+  Map as GMap,
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
@@ -582,7 +582,9 @@ function StopBillingControl({ stopId }: { stopId: string | null }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
-    }).catch(() => {});
+    }).catch(() => {
+      /* best-effort — fire-and-forget, failure does not block the UI */
+    });
   };
   const showMiles = btype === "miles" || btype === "on_demand";
 
@@ -918,7 +920,7 @@ function NewStopInput({
   onChange,
   onClear,
   todayStops,
-  onSelectExisting,
+  onSelectExisting: _onSelectExisting,
 }: {
   value: AddressResult | null;
   onChange: (a: AddressResult) => void;
@@ -1143,117 +1145,6 @@ function NewStopInput({
                 ))}
               </>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-/* ── Address Filter with autocomplete (search mode) ─────────────────────── */
-function _AddrFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [preds, setPreds] = useState<Prediction[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-  const deb = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleOut(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setPreds([]);
-      }
-    }
-    document.addEventListener("mousedown", handleOut);
-    return () => document.removeEventListener("mousedown", handleOut);
-  }, []);
-
-  function handleChange(v: string) {
-    onChange(v);
-    clearTimeout(deb.current);
-    if (v.length < 2) {
-      setPreds([]);
-      setOpen(false);
-      return;
-    }
-    deb.current = setTimeout(async () => {
-      setBusy(true);
-      try {
-        const r = await fetch(`/api/client/places?input=${encodeURIComponent(v)}`);
-        const d = await r.json();
-        setPreds(d.predictions ?? []);
-        setOpen((d.predictions ?? []).length > 0);
-      } catch {
-        setPreds([]);
-      } finally {
-        setBusy(false);
-      }
-    }, 280);
-  }
-
-  return (
-    <div className="relative w-full" ref={containerRef}>
-      <div
-        className={cn(
-          "flex h-9 items-center gap-2 rounded-lg border bg-background px-2.5 transition-colors",
-          open ? "border-primary shadow-sm ring-2 ring-primary/15" : "border-border/60 hover:border-border",
-        )}
-      >
-        <Search className="size-3.5 shrink-0 text-muted-foreground/50" />
-        <input
-          value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          placeholder="Filter stops…"
-          spellCheck={false}
-          autoComplete="off"
-          className="flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/50"
-        />
-        {busy ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground/40" />
-        ) : value ? (
-          <button
-            type="button"
-            aria-label="Clear filter"
-            onClick={() => {
-              onChange("");
-              setPreds([]);
-              setOpen(false);
-            }}
-            className="text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-          >
-            <X className="size-3.5" aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-      <AnimatePresence>
-        {open && preds.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.1 }}
-            className="absolute top-[calc(100%+4px)] right-0 left-0 z-50 overflow-hidden rounded-xl border border-border bg-popover shadow-xl"
-          >
-            {preds.slice(0, 5).map((p) => (
-              <button
-                key={p.place_id}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onChange(p.main_text);
-                  setOpen(false);
-                  setPreds([]);
-                }}
-                className="flex w-full items-start gap-3 border-border/60 border-b px-3.5 py-2.5 text-left transition-colors last:border-0 hover:bg-accent"
-              >
-                <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-13 text-foreground">{p.main_text}</p>
-                  <p className="truncate text-11 text-muted-foreground">{p.secondary_text}</p>
-                </div>
-              </button>
-            ))}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1899,7 +1790,7 @@ function GoogleMap({
 
       {/* Map */}
       <APIProvider apiKey={GMAP_KEY}>
-        <Map
+        <GMap
           defaultCenter={{ lat: 26.3, lng: -80.15 }}
           defaultZoom={8}
           mapId={ROUTE_MAP_ID}
@@ -1950,24 +1841,28 @@ function GoogleMap({
                 >
                   {/* Street View */}
                   <div style={{ position: "relative", height: 110, background: MAP_TILE_BG, overflow: "hidden" }}>
-                    <img
-                      src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.pickupCoord.lat},${result.pickupCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
-                      alt="Street view"
+                    <button
+                      type="button"
                       onClick={() =>
                         setLightbox(
                           `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${result.pickupCoord?.lat},${result.pickupCoord?.lng}&fov=90&pitch=5&key=${GMAP_KEY}`,
                         )
                       }
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        cursor: "zoom-in",
-                        transition: "opacity 0.15s",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-                    />
+                      style={{ all: "unset", display: "block", width: "100%", height: "100%", cursor: "zoom-in" }}
+                    >
+                      <img
+                        src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.pickupCoord.lat},${result.pickupCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
+                        alt="Street view"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transition: "opacity 0.15s",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                      />
+                    </button>
                     <div
                       style={{
                         position: "absolute",
@@ -2121,24 +2016,28 @@ function GoogleMap({
                 >
                   {/* Street View */}
                   <div style={{ position: "relative", height: 110, background: MAP_TILE_BG, overflow: "hidden" }}>
-                    <img
-                      src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.deliveryCoord.lat},${result.deliveryCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
-                      alt="Street view"
+                    <button
+                      type="button"
                       onClick={() =>
                         setLightbox(
                           `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${result.deliveryCoord?.lat},${result.deliveryCoord?.lng}&fov=90&pitch=5&key=${GMAP_KEY}`,
                         )
                       }
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        cursor: "zoom-in",
-                        transition: "opacity 0.15s",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-                    />
+                      style={{ all: "unset", display: "block", width: "100%", height: "100%", cursor: "zoom-in" }}
+                    >
+                      <img
+                        src={`https://maps.googleapis.com/maps/api/streetview?size=480x220&location=${result.deliveryCoord.lat},${result.deliveryCoord.lng}&fov=90&pitch=5&key=${GMAP_KEY}`}
+                        alt="Street view"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transition: "opacity 0.15s",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                      />
+                    </button>
                     <div
                       style={{
                         position: "absolute",
@@ -2337,7 +2236,7 @@ function GoogleMap({
               </div>
             </AdvancedMarker>
           )}
-        </Map>
+        </GMap>
       </APIProvider>
 
       {/* Rush hour — dismissible dark-glass toast, top-right */}
@@ -2840,9 +2739,18 @@ function ReadRow({
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: can't use a real <button> — it conditionally wraps a native <input> when editing, and <input> inside <button> is invalid.
     <div
+      role="button"
+      tabIndex={0}
       className="group flex cursor-text items-start justify-between gap-4 border-border/[0.07] border-b py-2 last:border-0"
       onClick={() => setEditing(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setEditing(true);
+        }
+      }}
     >
       <span className="shrink-0 text-11 text-muted-foreground/65 leading-snug">
         {label}
@@ -2882,7 +2790,6 @@ function ReadRow({
         />
       ) : (
         <span
-          onFocus={() => setEditing(true)}
           className={cn(
             "flex-1 truncate text-right font-medium text-xs transition-colors focus:outline-none",
             local ? "text-foreground" : "text-muted-foreground/60 italic",
@@ -2950,10 +2857,11 @@ function _RateCard({
       </div>
     );
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
       className={cn(
-        "flex cursor-pointer items-center justify-between rounded-xl border-2 px-3.5 py-2.5 transition-colors",
+        "flex w-full cursor-pointer items-center justify-between rounded-xl border-2 px-3.5 py-2.5 text-left transition-colors",
         selected
           ? "border-primary bg-primary/5 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
           : "border-border/40 bg-card hover:border-primary/40 hover:shadow-sm",
@@ -2974,397 +2882,12 @@ function _RateCard({
           <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-11 text-primary">Select</span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
 const INPUT_CLS =
   "h-7 w-full border-0 border-b border-transparent bg-transparent px-0.5 text-xs font-medium text-foreground transition-colors outline-none placeholder:text-muted-foreground/60 focus:border-primary/40 focus:ring-0 focus-visible:ring-0 rounded-none text-right";
-const _INLINE_INPUT_CLS =
-  "w-full border-0 bg-transparent text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/30 focus:outline-none focus:ring-0 focus-visible:ring-1 focus-visible:ring-primary/25 transition-colors hover:text-foreground/90 rounded-none py-0";
-
-/* ── Draft Stop Panel ────────────────────────────────────────────────────── */
-function _DraftStopPanel({
-  draft,
-  pickup,
-  pricing,
-  onClose,
-  onSubmitted,
-}: {
-  draft: DraftStop;
-  pickup: PickupLocation | null;
-  pricing: Pricing;
-  onClose: () => void;
-  onSubmitted: (trackingNumber: string) => void;
-}) {
-  const [name, setName] = useState(draft.recipient_name || "");
-  const [phone, setPhone] = useState(draft.recipient_phone || "");
-  const [pkg, setPkg] = useState(draft.package_type || "rx");
-  const [notes, setNotes] = useState(draft.notes || "");
-  const [rxNum, setRxNum] = useState("");
-  const [gate, setGate] = useState("");
-  const [sig, setSig] = useState(false);
-  const [cod, setCod] = useState(false);
-  const [codAmt, setCodAmt] = useState("0");
-  const [sameDay, setSameDay] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [trackingNum, setTrackingNum] = useState("");
-  const [error, setError] = useState("");
-  const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
-
-  function validateDraftForm(): boolean {
-    const errs: Record<string, string> = {};
-    if (!name.trim()) errs.name = "Full name is required";
-    else if (name.trim().length < 2) errs.name = "Name must be at least 2 characters";
-    if (!phone) errs.phone = "Phone number is required";
-    else if (phone.replace(/\D/g, "").length < 10) errs.phone = "Enter a valid 10-digit phone number";
-    setDraftErrors(errs);
-    return Object.keys(errs).length === 0;
-  }
-
-  // Auto-save draft on name/phone change
-  const autoSave = useCallback(
-    async (patch: Record<string, unknown>) => {
-      await fetch("/api/client/draft-stops", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft_id: draft.draft_id, ...patch }),
-      }).catch(() => {});
-    },
-    [draft.draft_id],
-  );
-
-  async function submitOrder() {
-    if (!validateDraftForm()) return;
-    setError("");
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/client/orders/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tracking_id: draft.tracking_id || undefined, // reuse draft's RTL-{unix} ID
-          recipient_name: name.trim(),
-          recipient_phone: phoneToE164(phone) ?? undefined,
-          delivery_address: draft.delivery_address,
-          delivery_city: draft.delivery_city,
-          delivery_state: draft.delivery_state,
-          delivery_zip: draft.delivery_zip,
-          pickup_address: pickup?.address || draft.pickup_address,
-          package_type: pkg,
-          rx_number: rxNum.trim() || undefined,
-          gate_code: gate.trim() || undefined,
-          notes: notes.trim() || undefined,
-          requires_signature: sig,
-          collect_cod: cod,
-          collect_amount: cod ? codAmt : "0",
-          delivery_type: sameDay ? "same_day" : "next_day",
-          is_same_day: sameDay,
-          payment_status: "paid",
-          total_price: pricing.price_per_stop,
-          total_amount: pricing.price_per_stop,
-          stops: 1,
-        }),
-      });
-      let data: Record<string, unknown> = {};
-      try {
-        data = await res.json();
-      } catch {
-        /* empty body */
-      }
-      if (!res.ok || data.ok === false) {
-        console.error("Submit failed:", res.status, data);
-        setError(String(data.error || `Server error ${res.status}`));
-        return;
-      }
-      // Mark draft as approved
-      await fetch("/api/client/draft-stops", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft_id: draft.draft_id, status: "approved", tracking_id: data.tracking_number }),
-      }).catch(() => {});
-      const tn = String(data.tracking_number ?? "");
-      setTrackingNum(tn);
-      setSubmitted(true);
-      onSubmitted(tn);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const street = draft.delivery_address;
-  const city = [draft.delivery_city, draft.delivery_state, draft.delivery_zip].filter(Boolean).join(", ");
-
-  if (submitted)
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-background px-8 text-center">
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 200 }}
-        >
-          <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/15">
-            <CheckCircle2 className="size-10 text-emerald-600" />
-          </div>
-        </motion.div>
-        <div>
-          <p className="font-black text-foreground text-lg">Stop Created!</p>
-          <p className="mt-1 text-13 text-muted-foreground">{street}</p>
-          <p className="mt-3 font-bold font-mono text-13 text-primary">{trackingNum}</p>
-        </div>
-        <Button onClick={onClose} className="mt-2 h-9 rounded-xl px-8 font-bold text-sm">
-          Done
-        </Button>
-      </div>
-    );
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* Header */}
-      <div
-        className="relative shrink-0 overflow-hidden border-violet-300/70 border-b"
-        style={{ background: "hsl(var(--background))" }}
-      >
-        <div className="h-[5px] w-full bg-gradient-to-r from-violet-600 via-violet-500 to-violet-400" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/25 to-transparent" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-400/15 to-transparent" />
-        <div
-          className="pointer-events-none absolute inset-x-0 top-[5px] h-[60px]"
-          style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%)" }}
-        />
-        {/* Tools strip */}
-        <div className="relative flex items-center justify-between border-border/[0.06] border-b px-4 pt-1.5 pb-1">
-          <div className="flex items-center gap-1.5">
-            <span className="size-1.5 shrink-0 rounded-full bg-violet-500" />
-            <span className="font-semibold text-11 text-muted-foreground/50 italic">Draft</span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close panel"
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <X className="size-3" aria-hidden="true" />
-          </button>
-        </div>
-        {/* KPI card body */}
-        <div className="relative px-4 pt-3 pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="font-bold text-foreground text-sm leading-tight tracking-tight">{toTitle(street)}</p>
-              <p className="mt-0.5 font-medium text-11 text-muted-foreground">{toTitle(city)}</p>
-            </div>
-            <Package className="mt-0.5 size-5 shrink-0 text-violet-400/30" aria-hidden="true" />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 font-semibold text-10 text-violet-700 dark:text-violet-400">
-              <span className="size-1 shrink-0 rounded-full bg-violet-500" />
-              Draft
-            </span>
-            <span className="inline-flex items-center gap-0.5 rounded-md bg-muted/60 px-1.5 py-0.5 font-mono font-semibold text-10 text-muted-foreground/55">
-              <Hash className="size-2.5" aria-hidden="true" />
-              Tracking Pending
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="custom-scroll min-h-0 flex-1 overflow-y-auto bg-background">
-        <div className="space-y-0">
-          {/* Recipient */}
-          <FormSection title="Recipient" icon="👤" defaultOpen>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 overflow-hidden rounded-lg border border-border/60 bg-background px-2.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
-                <User className="size-3.5 shrink-0 text-muted-foreground" />
-                <input
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setDraftErrors((er) => {
-                      const n = { ...er };
-                      delete n.name;
-                      return n;
-                    });
-                    autoSave({ recipient_name: e.target.value.trim().toUpperCase() });
-                  }}
-                  placeholder="Recipient name *"
-                  className="h-9 flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
-                />
-              </div>
-              {draftErrors.name && <p className="px-1 font-medium text-11 text-rose-500">{draftErrors.name}</p>}
-              <div className="flex items-center gap-2 overflow-hidden rounded-lg border border-border/60 bg-background px-2.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
-                <Phone className="size-3.5 shrink-0 text-muted-foreground" />
-                <input
-                  value={phone}
-                  onKeyDown={(e) => {
-                    const ctrl = [
-                      "Backspace",
-                      "Delete",
-                      "ArrowLeft",
-                      "ArrowRight",
-                      "Tab",
-                      "Enter",
-                      "Escape",
-                      "Home",
-                      "End",
-                    ];
-                    if (!ctrl.includes(e.key) && !/^\d$/.test(e.key) && !e.metaKey && !e.ctrlKey) e.preventDefault();
-                  }}
-                  onChange={(e) => {
-                    const d = e.target.value.replace(/\D/g, "").slice(0, 10);
-                    const fmt = fmtPhone(d);
-                    setPhone(fmt);
-                    setDraftErrors((er) => {
-                      const n = { ...er };
-                      delete n.phone;
-                      return n;
-                    });
-                    if (d.length === 10) autoSave({ recipient_phone: `+1${d}` });
-                  }}
-                  placeholder="(555) 123-4567"
-                  inputMode="tel"
-                  className="h-9 flex-1 bg-transparent text-13 text-foreground outline-none placeholder:text-muted-foreground/40"
-                />
-              </div>
-              {draftErrors.phone && <p className="px-1 font-medium text-11 text-rose-500">{draftErrors.phone}</p>}
-            </div>
-          </FormSection>
-
-          {/* Package */}
-          <FormSection title="Package" icon="📦" defaultOpen>
-            <FieldRow label="Pkg Type">
-              <Select
-                value={pkg}
-                onValueChange={(v) => {
-                  setPkg(v);
-                  autoSave({ package_type: v });
-                }}
-              >
-                <SelectTrigger className="h-7 w-[130px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-foreground text-xs focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {PKG_TYPES.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                      <span className="flex items-center gap-1.5">
-                        <p.icon className="size-3.5 text-muted-foreground/70" aria-hidden="true" /> {p.l}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <div className="mt-2 space-y-1">
-              <FieldRow label="Internal Client ID">
-                <input
-                  value={rxNum}
-                  onChange={(e) => setRxNum(e.target.value)}
-                  placeholder="Optional"
-                  className={INPUT_CLS}
-                />
-              </FieldRow>
-              <FieldRow label="Gate Code">
-                <input
-                  value={gate}
-                  onChange={(e) => setGate(e.target.value)}
-                  placeholder="Optional"
-                  className={INPUT_CLS}
-                />
-              </FieldRow>
-              <FieldRow label="Sig. Required">
-                <Toggle value={sig} onChange={setSig} />
-              </FieldRow>
-            </div>
-          </FormSection>
-
-          {/* Service */}
-          <FormSection title="Service" icon="🚚" defaultOpen={false}>
-            <FieldRow label="Same Day">
-              <Toggle value={sameDay} onChange={setSameDay} />
-            </FieldRow>
-            <FieldRow label="Collect on Delivery">
-              <Toggle color="teal" value={cod} onChange={setCod} />
-            </FieldRow>
-            {cod && (
-              <FieldRow label="COD Amount">
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-13 text-muted-foreground">$</span>
-                  <input
-                    value={codAmt}
-                    inputMode="decimal"
-                    onChange={(e) => setCodAmt(e.target.value.replace(/[^0-9.]/g, ""))}
-                    onBlur={(e) => {
-                      const num = parseFloat(e.target.value);
-                      if (!Number.isNaN(num)) setCodAmt(num.toFixed(2));
-                    }}
-                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
-                  />
-                </div>
-              </FieldRow>
-            )}
-          </FormSection>
-
-          {/* Notes */}
-          <div className="px-4 pt-2 pb-3">
-            <label className="mb-1.5 flex items-center gap-1.5 font-bold text-11 text-muted-foreground uppercase tracking-wider">
-              <FileText className="size-3" />
-              Driver Notes
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                autoSave({ notes: e.target.value || null });
-              }}
-              placeholder="Special instructions…"
-              rows={2}
-              className="w-full resize-none rounded-xl border border-border/60 bg-muted/20 px-3.5 py-2.5 text-foreground text-sm outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary focus:bg-background focus:ring-2 focus:ring-primary/15"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Footer — raised above mobile nav bar */}
-      <div
-        className="shrink-0 space-y-2 border-border/40 border-t bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
-        style={{ paddingBottom: "max(0.75rem, calc(env(safe-area-inset-bottom) + 4.5rem))" }}
-      >
-        {error && (
-          <p className="rounded-lg bg-destructive/10 px-3 py-1.5 font-semibold text-11 text-destructive">{error}</p>
-        )}
-        <Button
-          onClick={submitOrder}
-          disabled={submitting || !name.trim()}
-          className="h-12 w-full gap-2 rounded-xl font-bold text-sm shadow-md"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Submitting…
-            </>
-          ) : (
-            <>
-              <Plus className="size-4" />
-              Submit Order
-            </>
-          )}
-        </Button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full rounded-xl border border-border/40 py-2.5 font-medium text-13 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.98]"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ── Stop Detail Panel ────────────────────────────────────────────────────── */
 /* ── Status Tracker ─────────────────────────────────────────────────────── */
 const STATUS_STAGES = [
@@ -4053,7 +3576,9 @@ function StopDetailPanel({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ draft_id: draftData?.draft_id, ...patch }),
-          }).catch(() => {});
+          }).catch(() => {
+            /* best-effort — fire-and-forget, failure does not block the UI */
+          });
         }, 800);
         return;
       }
@@ -4373,7 +3898,9 @@ function StopDetailPanel({
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ draft_id: draftData.draft_id, status: "approved", tracking_id: failedStopId }),
-            }).catch(() => {});
+            }).catch(() => {
+              /* best-effort — fire-and-forget, failure does not block the UI */
+            });
           }
           toast.error("Spoke didn’t accept this stop — saved as a draft. Find it in Drafts to retry.");
           onNoLongerUnassigned?.();
@@ -4458,7 +3985,9 @@ function StopDetailPanel({
               code: submitPickup?.code ?? null,
             },
           }),
-        }).catch(() => {});
+        }).catch(() => {
+          /* best-effort — fire-and-forget, failure does not block the UI */
+        });
       }
       // Copy draft internal notes to the submitted stop
       if (newStopId && internalNotes.length > 0) {
@@ -4754,13 +4283,9 @@ function StopDetailPanel({
             to gap-1, size-3.5 already matches. */}
         <div className="relative flex items-center justify-between px-4 pt-2.5 pb-2">
           <div className="flex items-center gap-2">
-            <a
-              href="#"
-              onClick={(e) => e.preventDefault()}
-              className="font-mono text-10 text-primary hover:underline dark:text-white/80"
-            >
+            <span className="font-mono text-10 text-primary hover:underline dark:text-white/80">
               {!isDraft && tid ? tid : "Tracking Pending"}
-            </a>
+            </span>
             <AnimatePresence>
               {autoSaved && (
                 <motion.span
@@ -5107,11 +4632,15 @@ function StopDetailPanel({
                 author from session). Save via confirm modal on blur-with-text;
                 no extra button (avoids confusion with the draft approve CTA). */}
               <div className="border-border/60 border-b bg-card px-3 py-2.5">
-                <label className="mb-1.5 flex items-center gap-1.5 font-semibold text-10 text-muted-foreground/50 uppercase tracking-widest">
+                <label
+                  htmlFor="quick-note"
+                  className="mb-1.5 flex items-center gap-1.5 font-semibold text-10 text-muted-foreground/50 uppercase tracking-widest"
+                >
                   <MessageSquare className="size-3 text-muted-foreground/50" aria-hidden="true" />
                   Quick Notes
                 </label>
                 <textarea
+                  id="quick-note"
                   value={quickNote}
                   maxLength={500}
                   onChange={(e) => setQuickNote(e.target.value)}
@@ -5473,7 +5002,9 @@ function StopDetailPanel({
                           }),
                         })
                           .then(() => toast.success("Pickup updated"))
-                          .catch(() => {});
+                          .catch(() => {
+                            /* best-effort — fire-and-forget, failure does not block the UI */
+                          });
                       }}
                     />
                   ) : (
@@ -5592,7 +5123,9 @@ function StopDetailPanel({
                                     },
                               ),
                             },
-                          ).catch(() => {});
+                          ).catch(() => {
+                            /* best-effort — fire-and-forget, failure does not block the UI */
+                          });
                           setEditingDeliveryAddr(false);
                         }}
                         /* Intentionally NO onClear — X just clears the input
@@ -6508,13 +6041,15 @@ function BulkEditDialog({
           <div className="min-w-0 flex-1 overflow-hidden px-1 pt-1 text-xs">
             {prop === "pickup" && (
               <div className="min-w-0 space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New pickup location</label>
+                <label htmlFor="edit-pickup-location" className="block font-medium text-11 text-muted-foreground">
+                  New pickup location
+                </label>
                 {/* Compact Select — trigger truncates, dropdown items render
                     name + address on TWO lines so long combined strings can't
                     overflow horizontally. SelectContent uses the Radix portal
                     so it never gets clipped by the dialog. */}
                 <Select value={pickupId} onValueChange={setPickupId}>
-                  <SelectTrigger className="h-9 w-full max-w-full text-xs">
+                  <SelectTrigger id="edit-pickup-location" className="h-9 w-full max-w-full text-xs">
                     <SelectValue placeholder="Choose a pickup…" />
                   </SelectTrigger>
                   <SelectContent className="max-w-[min(420px,calc(100vw-2rem))]">
@@ -6539,9 +6074,11 @@ function BulkEditDialog({
             )}
             {prop === "service_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New service type</label>
+                <label htmlFor="edit-service-type" className="block font-medium text-11 text-muted-foreground">
+                  New service type
+                </label>
                 <Select value={serviceType} onValueChange={setServiceType}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger id="edit-service-type" className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -6571,9 +6108,11 @@ function BulkEditDialog({
             )}
             {prop === "package_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New package type</label>
+                <label htmlFor="edit-package-type" className="block font-medium text-11 text-muted-foreground">
+                  New package type
+                </label>
                 <Select value={pkgType} onValueChange={(v) => setPkgType(v as PackageType)}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger id="edit-package-type" className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -6590,9 +6129,11 @@ function BulkEditDialog({
             )}
             {prop === "stop_type" && (
               <div className="space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New stop type</label>
+                <label htmlFor="edit-stop-type" className="block font-medium text-11 text-muted-foreground">
+                  New stop type
+                </label>
                 <Select value={stopType} onValueChange={(v) => setStopType(v as "delivery" | "pickup")}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger id="edit-stop-type" className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -6634,8 +6175,11 @@ function BulkEditDialog({
             )}
             {prop === "delivery_date" && (
               <div className="space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New delivery date</label>
+                <label htmlFor="edit-delivery-date" className="block font-medium text-11 text-muted-foreground">
+                  New delivery date
+                </label>
                 <input
+                  id="edit-delivery-date"
                   type="date"
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
@@ -6645,9 +6189,11 @@ function BulkEditDialog({
             )}
             {prop === "drop_off" && (
               <div className="space-y-2">
-                <label className="block font-medium text-11 text-muted-foreground">New drop-off preference</label>
+                <label htmlFor="edit-drop-off" className="block font-medium text-11 text-muted-foreground">
+                  New drop-off preference
+                </label>
                 <Select value={dropOff} onValueChange={setDropOff}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger id="edit-drop-off" className="h-9 text-xs">
                     <SelectValue placeholder="Choose…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -6756,7 +6302,9 @@ export default function StopsPage() {
         setLocations(locs);
         setPickup(locs.find((l) => l.is_default) ?? locs[0] ?? null);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
   }, []);
 
   // Load today's stops AND today's drafts, merge them
@@ -6834,8 +6382,11 @@ export default function StopsPage() {
   // not historical clutter. "all" returns everything; otherwise a literal
   // YYYY-MM-DD string filters drafts/stops created on that date.
   type DateFilter = "today" | "yesterday" | "tomorrow" | "all" | string;
-  const localDateStr = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const localDateStr = useCallback(
+    (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+    [],
+  );
   const dateFilterToYMD = (f: DateFilter): string | null => {
     if (f === "all") return null;
     if (f === "today") return localDateStr(new Date());
@@ -7333,8 +6884,12 @@ export default function StopsPage() {
     setSelected((prev) => (prev && deletedSet.has(prev.id) ? null : prev));
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      draftIds.forEach((id) => next.delete(id));
-      submittedIds.forEach((id) => next.delete(id));
+      draftIds.forEach((id) => {
+        next.delete(id);
+      });
+      submittedIds.forEach((id) => {
+        next.delete(id);
+      });
       return next;
     });
     loadDrafts();
@@ -7516,7 +7071,9 @@ export default function StopsPage() {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ draft_id: id, status: "approved", tracking_id: failedStopId }),
-              }).catch(() => {});
+              }).catch(() => {
+                /* best-effort — fire-and-forget, failure does not block the UI */
+              });
             }
             spokeFailed++;
             return;
@@ -7572,7 +7129,9 @@ export default function StopsPage() {
               code: submitPickup?.code ?? null,
             },
           }),
-        }).catch(() => {});
+        }).catch(() => {
+          /* best-effort — fire-and-forget, failure does not block the UI */
+        });
         // Notes + gate code — mirror submitDraft(): post the draft's internal
         // notes to the new stop (the approve-PATCH server copy can't see them —
         // its projection excludes internal_notes), and persist the gate code to
@@ -7595,7 +7154,9 @@ export default function StopsPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code: gateCode }),
-          }).catch(() => {});
+          }).catch(() => {
+            /* best-effort — fire-and-forget, failure does not block the UI */
+          });
         }
         // Approve draft + carry tracking id (server saves photos / sends email / usage).
         // The stop is already created, so retry the transition once rather than
@@ -8201,6 +7762,7 @@ export default function StopsPage() {
                         ? "border-l-rose-400"
                         : "border-l-amber-400";
               return (
+                // biome-ignore lint/a11y/useSemanticElements: can't use a real <button> — this row contains a nested interactive <Checkbox>, and interactive-in-interactive is invalid/inaccessible.
                 <div
                   key={s.id}
                   role="button"
@@ -8523,7 +8085,9 @@ export default function StopsPage() {
                       .then((json) => {
                         applyZone(json?.zone_name ?? null);
                       })
-                      .catch(() => {});
+                      .catch(() => {
+                        /* best-effort — fire-and-forget, failure does not block the UI */
+                      });
                   }
                 }}
                 onBasicInfoChange={(patch) => {

@@ -250,6 +250,8 @@ interface TodayStop {
   submit_error?: { reason?: string } | null;
   // Pending cancel-request badge (2026-07-30) — client requested, awaiting dispatch.
   cancel_requested?: { status?: "pending" | "approved" | "denied" } | null;
+  // Terminal-state disposition (2026-07-31 collapse) — the WHY behind delivered|failed.
+  disposition?: string | null;
 }
 interface Rate {
   amount?: number | null;
@@ -267,6 +269,9 @@ interface FullStop {
   stop_id: string;
   stop_type: string;
   status: string;
+  // Terminal-state disposition (2026-07-31 collapse) — the WHY behind delivered|failed.
+  disposition?: string | null;
+  disposition_note?: string | null;
   order_ref: string | null;
   // Read-only delivery zone from the record (shapeStopForDetail → `route_zone`).
   route_zone?: string | null;
@@ -391,15 +396,6 @@ function statusAccent(s: string) {
       dotHex: "#8b5cf6",
       badge: "bg-violet-500 text-white border-violet-500",
     };
-  if (s === "returned" || s === "canceled")
-    return {
-      bar: "bg-muted-foreground",
-      glow: "from-muted-foreground/20",
-      border: "border-border",
-      dot: "bg-muted-foreground",
-      dotHex: "var(--muted-foreground)",
-      badge: "bg-muted-foreground text-background border-muted-foreground",
-    };
   return {
     bar: "bg-amber-500",
     glow: "from-amber-500/20",
@@ -423,10 +419,46 @@ function statusLabel(s: string) {
     completed: "Completed",
     return_to_sender: "Return to Sender",
     submit_failed: "Submit Failed",
-    returned: "Returned to Hub",
-    canceled: "Canceled",
   };
   return m[s] ?? s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// 2026-07-31 collapse: a submitted stop has exactly TWO terminal statuses
+// (delivered|failed) — the WHY lives in `disposition` (backend single
+// source of truth: routely-api app/routers/stops.py::DISPOSITIONS_BY_STATUS).
+// Keep this map in sync with that enum.
+const DISPOSITION_LABEL: Record<string, string> = {
+  delivered_ok: "Delivered",
+  left_with_neighbor: "Left with neighbor",
+  left_at_door: "Left at door",
+  signed_by_third_party: "Signed by third party",
+  no_one_home: "No one home",
+  bad_address: "Bad address",
+  refused_by_recipient: "Refused by recipient",
+  business_closed: "Business closed",
+  returned_to_hub: "Returned to hub",
+  canceled_by_client: "Canceled by client",
+  canceled_by_dispatch: "Canceled by dispatch",
+  weather_or_access: "Weather / access issue",
+  other: "Other",
+};
+const DISPOSITIONS_BY_STATUS: Record<string, string[]> = {
+  delivered: ["delivered_ok", "left_with_neighbor", "left_at_door", "signed_by_third_party"],
+  failed: [
+    "no_one_home",
+    "bad_address",
+    "refused_by_recipient",
+    "business_closed",
+    "returned_to_hub",
+    "canceled_by_client",
+    "canceled_by_dispatch",
+    "weather_or_access",
+    "other",
+  ],
+};
+function dispositionLabel(d?: string | null): string {
+  if (!d) return "";
+  return DISPOSITION_LABEL[d] ?? d.replace(/_/g, " ");
 }
 // Strips everything except digits, caps at 10, formats as (XXX) XXX-XXXX
 function fmtPhone(raw: string): string {
@@ -651,7 +683,8 @@ function StopBillingControl({ stopId }: { stopId: string | null }) {
 type BillingLine = {
   id: number;
   attempt_seq: number;
-  outcome: "delivered" | "failed" | "returned" | "canceled_in_route";
+  outcome: "delivered" | "failed";
+  disposition: string | null;
   resolved_type: string;
   units: number | null;
   amount_cents: number | null;
@@ -659,18 +692,26 @@ type BillingLine = {
   invoiced_at: string | null;
 };
 
+// 2026-07-31 collapse: outcome is just delivered|failed now — the dot still
+// reads outcome (coarse), the label reads disposition (the granular why).
 const OUTCOME_DOT: Record<string, string> = {
   delivered: "bg-success",
   failed: "bg-destructive",
-  returned: "bg-warning",
-  canceled_in_route: "bg-muted-foreground",
 };
 
 /* Billing v2.1 — read-only list of every billed ATTEMPT for this stop (2
  * trips = 2 lines). Self-fetching; renders nothing until it knows whether
  * there's anything to show (no empty-state clutter on stops with 0 lines,
  * e.g. anything not yet delivered/failed). */
-function StopBillingLines({ stopId, status }: { stopId: string | null; status?: string }) {
+function StopBillingLines({
+  stopId,
+  status,
+  disposition,
+}: {
+  stopId: string | null;
+  status?: string;
+  disposition?: string | null;
+}) {
   const [lines, setLines] = useState<BillingLine[] | null>(null);
 
   useEffect(() => {
@@ -685,8 +726,11 @@ function StopBillingLines({ stopId, status }: { stopId: string | null; status?: 
   if (!lines || lines.length === 0) return null;
   const failedCount = lines.filter((l) => l.outcome === "failed").length;
   // Auto-return fires at 3 — the counter is a heads-up for dispatch before
-  // that happens, not shown once it's already resolved (returned/delivered).
-  const showAttemptCounter = failedCount > 0 && status !== "returned" && status !== "delivered";
+  // that happens, not shown once the stop has already reached its final
+  // resting state (returned_to_hub/delivered). 2026-07-31 collapse: status
+  // alone can no longer tell "still retriable" from "terminal" (both are
+  // 'failed') — disposition does.
+  const showAttemptCounter = failedCount > 0 && disposition !== "returned_to_hub" && status !== "delivered";
 
   return (
     <FieldRow label="Billing lines">
@@ -707,7 +751,9 @@ function StopBillingLines({ stopId, status }: { stopId: string | null; status?: 
           <div key={l.id} className="flex items-center gap-2 text-11">
             <span className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")} />
             <span className="w-14 shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
-            <span className="w-24 shrink-0 text-foreground capitalize">{l.outcome.replace(/_/g, " ")}</span>
+            <span className="w-28 shrink-0 truncate text-foreground" title={dispositionLabel(l.disposition)}>
+              {l.disposition ? dispositionLabel(l.disposition) : l.outcome === "delivered" ? "Delivered" : "Failed"}
+            </span>
             <span className="w-20 shrink-0 text-muted-foreground">{toTitle(l.resolved_type)}</span>
             <span className="w-16 shrink-0 text-right text-muted-foreground tabular-nums">
               {l.units != null ? `${l.units}mi` : l.flag ? "flagged" : "—"}
@@ -774,7 +820,7 @@ function PairedPickupChoice({
             checked={pairedAction === "cancel"}
             onChange={() => setPairedAction("cancel")}
           />
-          Cancel it too{pu.was_dispatched ? " — bills as canceled in-route" : " (not yet dispatched — no charge)"}
+          Cancel it too{pu.was_dispatched ? " — bills as a canceled attempt" : " (not yet dispatched — no charge)"}
         </label>
         <label className="flex items-center gap-1.5">
           <input
@@ -786,6 +832,96 @@ function PairedPickupChoice({
           Keep it active
         </label>
       </div>
+    </div>
+  );
+}
+
+/* Disposition picker (2026-07-31 collapse) — set/correct the structured WHY
+ * behind a terminal delivered|failed stop. Compact select + optional note,
+ * matching the existing FieldRow rhythm. Only offers values valid for the
+ * CURRENT status (server also validates — 400 on a mismatched pair). */
+function DispositionPicker({
+  stopId,
+  status,
+  disposition,
+  note,
+  onSaved,
+}: {
+  stopId: string | null;
+  status: string;
+  disposition?: string | null;
+  note?: string | null;
+  onSaved: (disposition: string) => void;
+}) {
+  const options = DISPOSITIONS_BY_STATUS[status] ?? [];
+  const [value, setValue] = useState(disposition ?? options[0] ?? "");
+  const [noteValue, setNoteValue] = useState(note ?? "");
+  const [saving, setSaving] = useState(false);
+
+  // Reset local edits only on a genuine stop-identity change — disposition/note
+  // are intentionally excluded so a parent re-render mid-edit doesn't clobber
+  // what the dispatcher is typing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
+  useEffect(() => {
+    setValue(disposition ?? options[0] ?? "");
+    setNoteValue(note ?? "");
+  }, [stopId, status]);
+
+  async function save() {
+    if (!stopId || !value) return;
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/disposition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disposition: value, note: noteValue || undefined }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.error(d?.error ?? "Couldn't save disposition");
+        return;
+      }
+      toast.success(`Disposition set — ${dispositionLabel(value)}`);
+      onSaved(value);
+    } catch {
+      toast.error("Network error — disposition not saved");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const dirty = value !== (disposition ?? "") || noteValue !== (note ?? "");
+
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <select
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-full rounded-md border border-border bg-card px-2 py-1 text-11 text-foreground outline-none focus:ring-1 focus:ring-primary/40"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {dispositionLabel(o)}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={noteValue}
+        onChange={(e) => setNoteValue(e.target.value)}
+        placeholder="Note (optional)"
+        className="w-full rounded-md border border-border bg-card px-2 py-1 text-11 text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/40"
+      />
+      {dirty && (
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="w-fit rounded-md bg-primary px-2.5 py-1 font-medium text-10 text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save disposition"}
+        </button>
+      )}
     </div>
   );
 }
@@ -3102,6 +3238,7 @@ type TimelineEntry = {
   note: string | null;
   tenant_role?: string;
   field_changes?: Array<{ field: string; old_value: unknown; new_value: unknown }>;
+  metadata?: { disposition?: string; [key: string]: unknown } | null;
 };
 
 const TIMELINE_ICONS: Record<string, React.ElementType> = {
@@ -3226,6 +3363,11 @@ function StopHistoryTimeline({ stopId, isDraft }: { stopId: string; isDraft: boo
               </div>
               <p className="mt-0.5 text-11 text-muted-foreground/70">{timelineActorDisplay(e)}</p>
               {e.note && <p className="mt-0.5 whitespace-pre-line text-11 text-muted-foreground/50">{e.note}</p>}
+              {e.metadata?.disposition && (
+                <span className="mt-1 inline-flex w-fit items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
+                  {dispositionLabel(e.metadata.disposition)}
+                </span>
+              )}
               {hasDetail && (
                 <>
                   <button
@@ -4178,6 +4320,7 @@ function StopDetailPanel({
   }
 
   const status = isDraft ? "draft" : (full?.status ?? summary.status);
+  const disposition = isDraft ? null : (full?.disposition ?? summary.disposition ?? null);
 
   // D20 (address lock): a submitted-but-unassigned stop's delivery address is
   // immutable — Circuit can't update an unassigned stop's location, so the only
@@ -4283,7 +4426,7 @@ function StopDetailPanel({
         const pu = d.paired_pickup;
         toast.success(
           [
-            d.was_dispatched ? "Canceled — billed as in-route" : "Canceled",
+            d.was_dispatched ? "Canceled — billed as a failed attempt" : "Canceled",
             pu?.action_taken === "canceled" ? `paired pickup ${pu.stop_id} canceled too` : null,
           ]
             .filter(Boolean)
@@ -4486,6 +4629,13 @@ function StopDetailPanel({
             >
               {statusLabel(status)}
             </span>
+            {/* Disposition — the WHY behind a terminal delivered|failed status
+                (2026-07-31 collapse). Quiet chip, always next to the status pill. */}
+            {disposition && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
+                {dispositionLabel(disposition)}
+              </span>
+            )}
             {/* Stop type */}
             {stopType && (
               <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-10 text-muted-foreground ring-1 ring-border">
@@ -4592,8 +4742,8 @@ function StopDetailPanel({
         )}
 
         {/* Cancel-request strip — client requested cancellation, awaiting
-            dispatch decision. Approve bills canceled_in_route only if the
-            stop was already dispatched; deny keeps it active. */}
+            dispatch decision. Approve terminates as failed + canceled_by_client
+            (billed only if the stop was already dispatched); deny keeps it active. */}
         {full?.cancel_requested?.status === "pending" && (
           <div className="mx-3 mb-3 rounded-lg border border-amber-200/60 bg-amber-50 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
             <div className="flex items-start justify-between gap-3">
@@ -4635,7 +4785,7 @@ function StopDetailPanel({
                       <AlertDialogDescription>
                         This cancels {tid}
                         {!isDraft && !["unassigned", "pending"].includes(status)
-                          ? " and bills it as canceled in-route"
+                          ? " and bills it as a canceled attempt"
                           : ""}
                         . This cannot be undone.
                       </AlertDialogDescription>
@@ -4654,9 +4804,9 @@ function StopDetailPanel({
           </div>
         )}
 
-        {/* Manual "Return to hub" — billable (outcome=returned). Hidden once
-            the stop is already terminal. */}
-        {!isDraft && !["delivered", "failed", "returned", "deleted", "canceled"].includes(status) && (
+        {/* Manual "Return to hub" — billable, terminates as failed +
+            disposition=returned_to_hub. Hidden once the stop is already terminal. */}
+        {!isDraft && !["delivered", "failed", "deleted"].includes(status) && (
           <div className="mx-3 mb-3 flex justify-end">
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -5018,7 +5168,11 @@ function StopDetailPanel({
                   )}
                 </FieldRow>
                 <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
-                <StopBillingLines stopId={full?.stop_id ?? summary.stop_id ?? null} status={status} />
+                <StopBillingLines
+                  stopId={full?.stop_id ?? summary.stop_id ?? null}
+                  status={status}
+                  disposition={disposition}
+                />
                 {/* Payment / COD — moved here from the standalone Payment section.
                   Same state + autosave bindings: writes service.collect_payment /
                   service.cod_amount (the PATCH proxy maps them under body.service). */}
@@ -5487,6 +5641,19 @@ function StopDetailPanel({
               <FormSection title="Order Info" icon="🔍" defaultOpen={false}>
                 <ReadRow label="Tracking #" value={tid} mono />
                 <ReadRow label="Status" value={statusLabel(status)} />
+                {(status === "delivered" || status === "failed") && !isDraft && (
+                  <FieldRow label="Disposition">
+                    <DispositionPicker
+                      stopId={full?.stop_id ?? summary.stop_id ?? null}
+                      status={status}
+                      disposition={disposition}
+                      note={full?.disposition_note ?? null}
+                      onSaved={(d) => {
+                        setFull((prev) => (prev ? { ...prev, disposition: d } : prev));
+                      }}
+                    />
+                  </FieldRow>
+                )}
                 <ReadRow label="Stop Type" value={toTitle(full?.stop_type ?? summary.stop_type)} />
                 <ReadRow label="Order Ref" value={full?.order_ref ?? undefined} mono />
                 <ReadRow label="Created At" value={`${fmtTime(full?.created_at ?? summary.created_at)}`} />
@@ -7976,6 +8143,13 @@ export default function StopsPage() {
                     {s.cancel_requested?.status === "pending" && (
                       <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-10 text-amber-700 dark:text-amber-400">
                         Cancel requested
+                      </span>
+                    )}
+                    {/* Disposition sublabel (2026-07-31 collapse) — the WHY
+                        behind a terminal delivered|failed row. */}
+                    {s.disposition && (
+                      <span className="mt-0.5 block w-fit truncate text-10 text-muted-foreground">
+                        {dispositionLabel(s.disposition)}
                       </span>
                     )}
                     {/* Line 2 — address · city ST zip · tracking, one muted line

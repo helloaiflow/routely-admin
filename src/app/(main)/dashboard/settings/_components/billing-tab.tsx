@@ -46,9 +46,30 @@ type OutcomeGroup = { lines: number; amount_cents: number };
 type UsageView = {
   by_type: Record<string, UsageGroup>;
   by_outcome: Record<string, OutcomeGroup>;
+  // 2026-07-31 collapse: outcome is just delivered|failed now — by_disposition
+  // is the granular breakdown ("38 failed: 20 no one home · 12 bad address...").
+  by_disposition: Record<string, Record<string, OutcomeGroup>>;
   total_cents: number;
   flagged_needs_miles: number;
 };
+// 2026-07-31 collapse — single source of truth: routely-api
+// app/routers/stops.py::DISPOSITIONS_BY_STATUS. Keep in sync.
+const DISPOSITION_LABEL: Record<string, string> = {
+  delivered_ok: "delivered",
+  left_with_neighbor: "left with neighbor",
+  left_at_door: "left at door",
+  signed_by_third_party: "signed by third party",
+  no_one_home: "no one home",
+  bad_address: "bad address",
+  refused_by_recipient: "refused by recipient",
+  business_closed: "business closed",
+  returned_to_hub: "returned",
+  canceled_by_client: "canceled by client",
+  canceled_by_dispatch: "canceled by dispatch",
+  weather_or_access: "weather/access issue",
+  other: "other",
+};
+
 type Rates = {
   billing_rates: {
     package: number;
@@ -215,9 +236,11 @@ export function BillingTab({
         </div>
       )}
 
-      {/* Billing v2.1: outcome breakdown — bills per ATTEMPT, not per
-        successful delivery, so a tenant's charges include failed/returned
-        attempts too. Only shown once something other than a clean delivery
+      {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per ATTEMPT,
+        not per successful delivery, so a tenant's charges include failed
+        attempts too — outcome is just delivered|failed now, disposition is
+        the granular WHY ("38 failed: 20 no one home · 12 bad address · 6
+        returned"). Only shown once something other than a clean delivery
         exists — a tenant with 100% delivered sees nothing extra here. */}
       {usage &&
         (() => {
@@ -225,19 +248,27 @@ export function BillingTab({
           const total = entries.reduce((s, [, o]) => s + o.lines, 0);
           const nonDelivered = entries.filter(([o]) => o !== "delivered");
           if (!total || !nonDelivered.length) return null;
-          const OUTCOME_LABEL: Record<string, string> = {
-            failed: "failed attempts",
-            returned: "returned to hub",
-            canceled_in_route: "canceled in route",
-          };
           return (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-11 text-muted-foreground">
-              {nonDelivered.map(([outcome, o]) => (
-                <span key={outcome}>
-                  <b className="text-foreground">{o.lines}</b> of {total} charges were{" "}
-                  {OUTCOME_LABEL[outcome] ?? outcome} (${(o.amount_cents / 100).toFixed(2)})
-                </span>
-              ))}
+            <div className="flex flex-col gap-1 px-1 text-11 text-muted-foreground">
+              {nonDelivered.map(([outcome, o]) => {
+                const dispositions = Object.entries(usage.by_disposition?.[outcome] ?? {}).sort(
+                  (a, b) => b[1].lines - a[1].lines,
+                );
+                return (
+                  <div key={outcome} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span>
+                      <b className="text-foreground">{o.lines}</b> of {total} charges were {outcome} attempts ( $
+                      {(o.amount_cents / 100).toFixed(2)}){dispositions.length > 0 && ":"}
+                    </span>
+                    {dispositions.map(([disposition, d], i) => (
+                      <span key={disposition}>
+                        {i > 0 && <span className="mx-1 text-muted-foreground/40">·</span>}
+                        {d.lines} {DISPOSITION_LABEL[disposition] ?? disposition.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

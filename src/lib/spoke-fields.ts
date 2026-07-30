@@ -269,6 +269,10 @@ export function shapeStopForDetail(d: Stop, driverMap?: Map<string, string>) {
     stop_id: d.stop_id ?? "",
     stop_type: d.stop_type ?? "delivery",
     status: d.status ?? "pending",
+    // 2026-07-31 collapse: the WHY behind a terminal delivered|failed status —
+    // see routely-api app/routers/stops.py::DISPOSITIONS_BY_STATUS.
+    disposition: d.disposition ?? null,
+    disposition_note: d.disposition_note ?? null,
     order_ref: d.order_ref ?? null,
     route_zone: d.route_zone ?? null,
     cancel_requested: d.cancel_requested ?? null,
@@ -326,6 +330,7 @@ export function shapeStopForList(d: Stop, driverMap?: Map<string, string>) {
     stop_type: d.stop_type ?? "delivery",
     source: d.source ?? "unknown",
     status: (d.status ?? "pending").toLowerCase(),
+    disposition: d.disposition ?? null,
     order_ref: d.order_ref ?? null,
     cancel_requested: d.cancel_requested ?? null,
     // Recipient

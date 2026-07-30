@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sto
   const { data, error } = await supabase
     .from("billing_ledger")
     .select(
-      "id, attempt_seq, outcome, resolved_type, resolved_via, units, amount_cents, routely_cents, driver_cents, flag, flag_reason, invoiced_at, invoice_id, attempted_at",
+      "id, attempt_seq, outcome, disposition, resolved_type, resolved_via, units, amount_cents, routely_cents, driver_cents, flag, flag_reason, invoiced_at, invoice_id, attempted_at",
     )
     .eq("stop_id", stop_id)
     .eq("tenant_id", Number(ctx.tenantId))

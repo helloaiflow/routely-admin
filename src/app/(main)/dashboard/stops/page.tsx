@@ -727,6 +727,69 @@ function StopBillingLines({ stopId, status }: { stopId: string | null; status?: 
 
 const toTitle = (s: string) => formatDisplayCase(s);
 
+/* Paired-pickup decision block (2026-07-30) — shared by the Return and
+ * Approve-cancellation dialogs. Renders nothing when there's no pair.
+ * Executed pickup: informational only, no choice offered (nothing to
+ * decide — the parcel exists). Not-yet-executed: a required, explicit
+ * radio choice (defaults to "cancel" — the recommended action — but never
+ * silently applied; the operator still confirms via the dialog's own
+ * action button). */
+function PairedPickupChoice({
+  paired,
+  pairedAction,
+  setPairedAction,
+}: {
+  paired: {
+    has_pair: boolean;
+    pickup: { stop_id: string; status: string; executed: boolean; was_dispatched: boolean } | null;
+  } | null;
+  pairedAction: "cancel" | "keep";
+  setPairedAction: (a: "cancel" | "keep") => void;
+}) {
+  if (!paired?.has_pair || !paired.pickup) return null;
+  const pu = paired.pickup;
+
+  if (pu.executed) {
+    return (
+      <div className="rounded-md border border-border/60 bg-muted/40 px-2.5 py-2 text-11">
+        <p className="font-medium text-foreground">Paired pickup already collected</p>
+        <p className="mt-0.5 text-muted-foreground">
+          {pu.stop_id} was already picked up — canceling it isn&apos;t possible. The parcel exists; returning this
+          delivery gives it a proper closing state.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-amber-200/60 bg-amber-50 px-2.5 py-2 text-11 dark:border-amber-500/30 dark:bg-amber-500/10">
+      <p className="font-medium text-amber-800 dark:text-amber-300">
+        Paired pickup {pu.stop_id} — {statusLabel(pu.status)}, not yet collected
+      </p>
+      <div className="mt-1.5 flex flex-col gap-1">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="radio"
+            name="paired-pickup-action"
+            checked={pairedAction === "cancel"}
+            onChange={() => setPairedAction("cancel")}
+          />
+          Cancel it too{pu.was_dispatched ? " — bills as canceled in-route" : " (not yet dispatched — no charge)"}
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="radio"
+            name="paired-pickup-action"
+            checked={pairedAction === "keep"}
+            onChange={() => setPairedAction("keep")}
+          />
+          Keep it active
+        </label>
+      </div>
+    </div>
+  );
+}
+
 /* ── Address Autocomplete ─────────────────────────────────────────────────── */
 function AddrSearch({
   onSelect,
@@ -4156,6 +4219,28 @@ function StopDetailPanel({
   // status + cancel_requested fields both change server-side.
   const [returning, setReturning] = useState(false);
   const [resolvingCancel, setResolvingCancel] = useState(false);
+
+  // Paired-pickup awareness (2026-07-30) — fetched once per stop so both the
+  // Return and Approve-cancel dialogs can show the sibling's state and
+  // require an explicit choice when it hasn't been collected yet. Default
+  // recommendation is "cancel" (sending a driver for a delivery that'll
+  // never happen is pure cost) — never silently applied, the operator still
+  // confirms via the dialog.
+  const [paired, setPaired] = useState<{
+    has_pair: boolean;
+    pickup: { stop_id: string; status: string; executed: boolean; was_dispatched: boolean } | null;
+  } | null>(null);
+  const [pairedAction, setPairedAction] = useState<"cancel" | "keep">("cancel");
+  useEffect(() => {
+    setPaired(null);
+    if (!stopId) return;
+    fetch(`/api/client/stops/${encodeURIComponent(stopId)}/paired`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPaired(d ?? { has_pair: false, pickup: null }))
+      .catch(() => setPaired({ has_pair: false, pickup: null }));
+  }, [stopId]);
+  const pairedNeedsDecision = Boolean(paired?.has_pair && paired.pickup && !paired.pickup.executed);
+
   const refetchFull = async () => {
     const fres = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}`);
     const fd = (await fres.json().catch(() => null)) as { stop?: FullStop } | null;
@@ -4164,12 +4249,21 @@ function StopDetailPanel({
   const handleReturnToHub = async () => {
     setReturning(true);
     try {
-      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/return`, { method: "POST" });
+      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paired_pickup_action: pairedNeedsDecision ? pairedAction : undefined }),
+      });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {
-        toast.success("Returned to hub");
+        const pu = d.paired_pickup;
+        toast.success(
+          pu?.action_taken === "canceled"
+            ? `Returned to hub — paired pickup ${pu.stop_id} canceled too`
+            : "Returned to hub",
+        );
         await refetchFull();
-      } else toast.error(d.error || "Couldn't return stop");
+      } else toast.error(d.detail || d.error || "Couldn't return stop");
     } catch {
       toast.error("Couldn't reach dispatch — try again");
     } finally {
@@ -4179,12 +4273,24 @@ function StopDetailPanel({
   const handleApproveCancel = async () => {
     setResolvingCancel(true);
     try {
-      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/cancel`, { method: "POST" });
+      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paired_pickup_action: pairedNeedsDecision ? pairedAction : undefined }),
+      });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {
-        toast.success(d.was_dispatched ? "Canceled — billed as in-route" : "Canceled");
+        const pu = d.paired_pickup;
+        toast.success(
+          [
+            d.was_dispatched ? "Canceled — billed as in-route" : "Canceled",
+            pu?.action_taken === "canceled" ? `paired pickup ${pu.stop_id} canceled too` : null,
+          ]
+            .filter(Boolean)
+            .join(" — "),
+        );
         await refetchFull();
-      } else toast.error(d.error || "Couldn't cancel stop");
+      } else toast.error(d.detail || d.error || "Couldn't cancel stop");
     } catch {
       toast.error("Couldn't reach dispatch — try again");
     } finally {
@@ -4512,16 +4618,37 @@ function StopDetailPanel({
                 >
                   Deny
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 gap-1.5 bg-amber-600 px-2.5 text-11 text-white hover:bg-amber-700"
-                  disabled={resolvingCancel}
-                  onClick={handleApproveCancel}
-                >
-                  {resolvingCancel ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : null}
-                  Approve cancellation
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 gap-1.5 bg-amber-600 px-2.5 text-11 text-white hover:bg-amber-700"
+                      disabled={resolvingCancel}
+                    >
+                      Approve cancellation
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Approve cancellation?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This cancels {tid}
+                        {!isDraft && !["unassigned", "pending"].includes(status)
+                          ? " and bills it as canceled in-route"
+                          : ""}
+                        . This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <PairedPickupChoice paired={paired} pairedAction={pairedAction} setPairedAction={setPairedAction} />
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep stop</AlertDialogCancel>
+                      <AlertDialogAction disabled={resolvingCancel} onClick={handleApproveCancel}>
+                        Approve cancellation
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </div>
@@ -4550,6 +4677,7 @@ function StopDetailPanel({
                     This bills the delivery as a returned attempt and ends dispatch for {tid}. This cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                <PairedPickupChoice paired={paired} pairedAction={pairedAction} setPairedAction={setPairedAction} />
                 <AlertDialogFooter>
                   <AlertDialogCancel>Keep stop</AlertDialogCancel>
                   <AlertDialogAction disabled={returning} onClick={handleReturnToHub}>

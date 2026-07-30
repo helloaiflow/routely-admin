@@ -31,16 +31,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ sto
   const tenantId = Number(ctx.tenantId);
   const body = await request.json().catch(() => ({}));
   const note = typeof body?.note === "string" ? body.note : undefined;
+  const paired_pickup_action = typeof body?.paired_pickup_action === "string" ? body.paired_pickup_action : undefined;
 
-  const upstream = await fetch(
-    `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}/return?tenant_id=${tenantId}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
-      body: JSON.stringify({ actor: actorFor(ctx), note }),
-      signal: AbortSignal.timeout(15000),
-    },
-  );
+  const upstream = await fetch(`${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}/return?tenant_id=${tenantId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+    body: JSON.stringify({ actor: actorFor(ctx), note, paired_pickup_action }),
+    signal: AbortSignal.timeout(15000),
+  });
   const data = await upstream.json().catch(() => ({}));
   if (!upstream.ok) return NextResponse.json(data, { status: upstream.status });
   return NextResponse.json(data);

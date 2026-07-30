@@ -271,6 +271,7 @@ export function shapeStopForDetail(d: Stop, driverMap?: Map<string, string>) {
     status: d.status ?? "pending",
     order_ref: d.order_ref ?? null,
     route_zone: d.route_zone ?? null,
+    cancel_requested: d.cancel_requested ?? null,
     total_price: Number(d.total_price ?? 0),
     created_at: d.created_at?.toISOString?.() ?? new Date().toISOString(),
     updated_at: d.updated_at?.toISOString?.() ?? null,
@@ -326,6 +327,7 @@ export function shapeStopForList(d: Stop, driverMap?: Map<string, string>) {
     source: d.source ?? "unknown",
     status: (d.status ?? "pending").toLowerCase(),
     order_ref: d.order_ref ?? null,
+    cancel_requested: d.cancel_requested ?? null,
     // Recipient
     recipient_name: recipient.name,
     recipient_phone: recipient.phone,

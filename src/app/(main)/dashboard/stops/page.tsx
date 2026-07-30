@@ -61,11 +61,13 @@ import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -246,6 +248,8 @@ interface TodayStop {
   // Recovered draft: a submit failed → status fell back to "draft" + this note.
   // Present only on recovered stops-drafts (real stop_id), drives the row badge.
   submit_error?: { reason?: string } | null;
+  // Pending cancel-request badge (2026-07-30) — client requested, awaiting dispatch.
+  cancel_requested?: { status?: "pending" | "approved" | "denied" } | null;
 }
 interface Rate {
   amount?: number | null;
@@ -298,6 +302,18 @@ interface FullStop {
   submit_error?: { at?: string; reason?: string; spoke_status?: number | null; attempt_count?: number } | null;
   /** Hybrid-OCR (Phase 1): canonical order-id array; rx_number mirrors it. */
   order_ids?: string[];
+  /** Cancel-request flow (2026-07-30): set by the client portal, resolved by
+   * dispatch via approve (POST .../cancel) or deny (POST .../cancel-request/deny). */
+  cancel_requested?: {
+    by?: string;
+    at?: string;
+    reason?: string;
+    note?: string | null;
+    status?: "pending" | "approved" | "denied";
+    resolved_by?: string;
+    resolved_at?: string;
+    resolution_note?: string | null;
+  } | null;
 }
 interface PickupLocation {
   id: string;
@@ -328,6 +344,13 @@ function todayYmdET(): string {
 /* ── Status helpers ───────────────────────────────────────────────────────── */
 const DELIVERED = ["delivered", "completed", "picked_up"];
 const TRANSIT = ["in_transit", "out_for_delivery", "dispatched", "assigned"];
+const CANCEL_REASON_LABEL: Record<string, string> = {
+  wrong_address: "Wrong address",
+  no_longer_needed: "No longer needed",
+  duplicate_order: "Duplicate order",
+  recipient_unavailable: "Recipient unavailable",
+  other: "Other",
+};
 const FAILED = ["failed", "attempted", "cancelled", "failed_not_home", "return_to_sender", "submit_failed"];
 
 function statusAccent(s: string) {
@@ -368,6 +391,15 @@ function statusAccent(s: string) {
       dotHex: "#8b5cf6",
       badge: "bg-violet-500 text-white border-violet-500",
     };
+  if (s === "returned" || s === "canceled")
+    return {
+      bar: "bg-muted-foreground",
+      glow: "from-muted-foreground/20",
+      border: "border-border",
+      dot: "bg-muted-foreground",
+      dotHex: "var(--muted-foreground)",
+      badge: "bg-muted-foreground text-background border-muted-foreground",
+    };
   return {
     bar: "bg-amber-500",
     glow: "from-amber-500/20",
@@ -391,6 +423,8 @@ function statusLabel(s: string) {
     completed: "Completed",
     return_to_sender: "Return to Sender",
     submit_failed: "Submit Failed",
+    returned: "Returned to Hub",
+    canceled: "Canceled",
   };
   return m[s] ?? s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -634,7 +668,7 @@ const OUTCOME_DOT: Record<string, string> = {
  * trips = 2 lines). Self-fetching; renders nothing until it knows whether
  * there's anything to show (no empty-state clutter on stops with 0 lines,
  * e.g. anything not yet delivered/failed). */
-function StopBillingLines({ stopId }: { stopId: string | null }) {
+function StopBillingLines({ stopId, status }: { stopId: string | null; status?: string }) {
   const [lines, setLines] = useState<BillingLine[] | null>(null);
 
   useEffect(() => {
@@ -647,10 +681,26 @@ function StopBillingLines({ stopId }: { stopId: string | null }) {
   }, [stopId]);
 
   if (!lines || lines.length === 0) return null;
+  const failedCount = lines.filter((l) => l.outcome === "failed").length;
+  // Auto-return fires at 3 — the counter is a heads-up for dispatch before
+  // that happens, not shown once it's already resolved (returned/delivered).
+  const showAttemptCounter = failedCount > 0 && status !== "returned" && status !== "delivered";
 
   return (
     <FieldRow label="Billing lines">
-      <div className="flex w-full flex-col gap-1">
+      <div className="flex w-full flex-col gap-1.5">
+        {showAttemptCounter && (
+          <span
+            className={cn(
+              "w-fit rounded-full px-2 py-0.5 font-semibold text-10",
+              failedCount >= 2
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            Attempt {failedCount} of 3 — {3 - failedCount} left before auto-return
+          </span>
+        )}
         {lines.map((l) => (
           <div key={l.id} className="flex items-center gap-2 text-11">
             <span className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")} />
@@ -4572,6 +4622,63 @@ function StopDetailPanel({
       setRetrying(false);
     }
   };
+
+  // Returned / cancel-request flow (2026-07-30). Refetch on success — the
+  // status + cancel_requested fields both change server-side.
+  const [returning, setReturning] = useState(false);
+  const [resolvingCancel, setResolvingCancel] = useState(false);
+  const refetchFull = async () => {
+    const fres = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}`);
+    const fd = (await fres.json().catch(() => null)) as { stop?: FullStop } | null;
+    if (fd?.stop) setFull(fd.stop);
+  };
+  const handleReturnToHub = async () => {
+    setReturning(true);
+    try {
+      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/return`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) {
+        toast.success("Returned to hub");
+        await refetchFull();
+      } else toast.error(d.error || "Couldn't return stop");
+    } catch {
+      toast.error("Couldn't reach dispatch — try again");
+    } finally {
+      setReturning(false);
+    }
+  };
+  const handleApproveCancel = async () => {
+    setResolvingCancel(true);
+    try {
+      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/cancel`, { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) {
+        toast.success(d.was_dispatched ? "Canceled — billed as in-route" : "Canceled");
+        await refetchFull();
+      } else toast.error(d.error || "Couldn't cancel stop");
+    } catch {
+      toast.error("Couldn't reach dispatch — try again");
+    } finally {
+      setResolvingCancel(false);
+    }
+  };
+  const handleDenyCancel = async () => {
+    setResolvingCancel(true);
+    try {
+      const res = await fetch(`/api/client/stops/${encodeURIComponent(stopId)}/cancel-request/deny`, {
+        method: "POST",
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) {
+        toast.success("Cancellation denied — stop stays active");
+        await refetchFull();
+      } else toast.error(d.error || "Couldn't deny request");
+    } catch {
+      toast.error("Couldn't reach dispatch — try again");
+    } finally {
+      setResolvingCancel(false);
+    }
+  };
   const ac = statusAccent(status);
   const tid = full?.stop_id ?? summary.stop_id;
   const street = full?.address.street ?? summary.address;
@@ -4850,6 +4957,82 @@ function StopDetailPanel({
                 Retry submission
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Cancel-request strip — client requested cancellation, awaiting
+            dispatch decision. Approve bills canceled_in_route only if the
+            stop was already dispatched; deny keeps it active. */}
+        {full?.cancel_requested?.status === "pending" && (
+          <div className="mx-3 mb-3 rounded-lg border border-amber-200/60 bg-amber-50 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-11 text-amber-700 dark:text-amber-300">
+                  Cancellation requested — awaiting dispatch
+                </p>
+                <p className="mt-0.5 truncate text-11 text-amber-600/80 dark:text-amber-300/70">
+                  {CANCEL_REASON_LABEL[full.cancel_requested.reason ?? ""] ?? full.cancel_requested.reason}
+                  {full.cancel_requested.note ? ` — ${full.cancel_requested.note}` : ""}
+                  {full.cancel_requested.by ? ` (by ${full.cancel_requested.by})` : ""}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 px-2.5 text-11"
+                  disabled={resolvingCancel}
+                  onClick={handleDenyCancel}
+                >
+                  Deny
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 gap-1.5 bg-amber-600 px-2.5 text-11 text-white hover:bg-amber-700"
+                  disabled={resolvingCancel}
+                  onClick={handleApproveCancel}
+                >
+                  {resolvingCancel ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : null}
+                  Approve cancellation
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Manual "Return to hub" — billable (outcome=returned). Hidden once
+            the stop is already terminal. */}
+        {!isDraft && !["delivered", "failed", "returned", "deleted", "canceled"].includes(status) && (
+          <div className="mx-3 mb-3 flex justify-end">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 border-border px-2.5 text-11 text-muted-foreground hover:bg-muted"
+                >
+                  <RotateCcw className="size-3" aria-hidden="true" />
+                  Return to hub
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Return this stop to the hub?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This bills the delivery as a returned attempt and ends dispatch for {tid}. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep stop</AlertDialogCancel>
+                  <AlertDialogAction disabled={returning} onClick={handleReturnToHub}>
+                    Return to hub
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
       </div>
@@ -5178,7 +5361,7 @@ function StopDetailPanel({
                   )}
                 </FieldRow>
                 <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
-                <StopBillingLines stopId={full?.stop_id ?? summary.stop_id ?? null} />
+                <StopBillingLines stopId={full?.stop_id ?? summary.stop_id ?? null} status={status} />
                 {/* Payment / COD — moved here from the standalone Payment section.
                   Same state + autosave bindings: writes service.collect_payment /
                   service.cod_amount (the PATCH proxy maps them under body.service). */}
@@ -6825,6 +7008,7 @@ export default function StopsPage() {
   }, [allItems, localDateStr]);
 
   const [listSearch, setListSearch] = useState("");
+  const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
 
   // Submitted tab = ONLY unassigned (server-filtered), with the same
   // client-side date narrowing every tab applies.
@@ -6852,8 +7036,16 @@ export default function StopsPage() {
           s.city?.toLowerCase().includes(q),
       );
     }
+    if (pendingCancelOnly) items = items.filter((s) => s.cancel_requested?.status === "pending");
     return items;
-  }, [filteredAllItems, filteredUnassigned, statusTab, listSearch]);
+  }, [filteredAllItems, filteredUnassigned, statusTab, listSearch, pendingCancelOnly]);
+
+  // Pending-cancellation count across BOTH tabs (drafts rarely have one, but
+  // a submitted/assigned stop can) — drives the toolbar toggle's badge.
+  const pendingCancelCount = useMemo(
+    () => [...filteredAllItems, ...filteredUnassigned].filter((s) => s.cancel_requested?.status === "pending").length,
+    [filteredAllItems, filteredUnassigned],
+  );
 
   // Tab counts respect the active date filter
   const tabCounts = useMemo(() => {
@@ -7817,9 +8009,35 @@ export default function StopsPage() {
                 )}
               </div>
 
-              {/* Action icon buttons — date filter + refresh */}
+              {/* Action icon buttons — cancel-pending filter + date filter + refresh */}
               <TooltipProvider delayDuration={400}>
                 <div className="flex items-center gap-0.5">
+                  {/* Pending cancellations toggle (2026-07-30) */}
+                  {pendingCancelCount > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Filter: pending cancellations"
+                          onClick={() => setPendingCancelOnly((v) => !v)}
+                          className={cn(
+                            "relative flex size-8 shrink-0 items-center justify-center rounded-lg transition-all active:scale-95",
+                            pendingCancelOnly
+                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                              : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
+                          )}
+                        >
+                          <AlertCircle className="size-3.5" aria-hidden="true" />
+                          <span className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-amber-500 font-bold text-10 text-white">
+                            {pendingCancelCount}
+                          </span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {pendingCancelCount} pending cancellation{pendingCancelCount > 1 ? "s" : ""}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   {/* Date filter */}
                   <Popover>
                     <Tooltip>
@@ -8065,6 +8283,11 @@ export default function StopsPage() {
                         {s.submit_error ? "Submit failed" : statusLabel(s.status)}
                       </span>
                     </div>
+                    {s.cancel_requested?.status === "pending" && (
+                      <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-10 text-amber-700 dark:text-amber-400">
+                        Cancel requested
+                      </span>
+                    )}
                     {/* Line 2 — address · city ST zip · tracking, one muted line
                         (tooltip carries the full text) + date right */}
                     <div className="mt-px flex items-center justify-between gap-2">

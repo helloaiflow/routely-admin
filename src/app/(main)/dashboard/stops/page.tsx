@@ -253,6 +253,27 @@ interface TodayStop {
   // Terminal-state disposition (2026-07-31 collapse) — the WHY behind delivered|failed.
   disposition?: string | null;
 }
+
+// Dispatch console status chips (2026-08-01) — module scope so statusChipOf
+// and the memoized counts below have a stable reference (no re-render churn).
+// "draft" matches `drafts` (separate fetch); the rest bucket real
+// `stops.status` values. Mirrors the API route's STATUS_BUCKETS.
+const STATUS_CHIP_VALUES: Record<string, string[]> = {
+  unassigned: ["pending", "approved", "paid", "unassigned", "created"],
+  in_route: ["assigned", "in_transit"],
+  delivered: ["delivered"],
+  failed: ["failed"],
+};
+const STATUS_CHIPS = ["draft", "unassigned", "in_route", "delivered", "failed"] as const;
+type StatusChip = (typeof STATUS_CHIPS)[number];
+function statusChipOf(s: TodayStop): StatusChip | null {
+  if (s.status === "draft") return "draft";
+  for (const chip of ["unassigned", "in_route", "delivered", "failed"] as const) {
+    if (STATUS_CHIP_VALUES[chip].includes(s.status)) return chip;
+  }
+  return null; // deleted/other — never shown
+}
+
 interface Rate {
   amount?: number | null;
   service?: string;
@@ -6535,7 +6556,33 @@ export default function StopsPage() {
   // location, which can be one of many sites per tenant).
   const [tenantCompanyName, setTenantCompanyName] = useState<string>("Routely");
   const [pricing, setPricing] = useState<Pricing>({ price_per_stop: 14, price_per_mile: 1.5, postpay_enabled: false });
-  const [statusTab, setStatusTab] = useState<"all" | "draft" | "submitted">("all");
+  // Dispatch console status chips (2026-08-01) — multi-select over the real
+  // post-collapse vocabulary. "draft" matches `drafts` (separate fetch);
+  // the rest bucket real `stops.status` values — see STATUS_CHIP_VALUES
+  // (module scope, near TodayStop).
+  // Default: everything a dispatcher needs to see today EXCEPT drafts.
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<StatusChip>>(
+    new Set<StatusChip>(["unassigned", "in_route", "delivered", "failed"]),
+  );
+  // Disposition sub-filter — only meaningful (and only shown) when "failed"
+  // or "delivered" is selected. Empty set = no disposition narrowing.
+  const [selectedDispositions, setSelectedDispositions] = useState<Set<string>>(new Set());
+  function toggleStatusChip(chip: StatusChip) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(chip)) next.delete(chip);
+      else next.add(chip);
+      return next;
+    });
+  }
+  function toggleDispositionChip(d: string) {
+    setSelectedDispositions((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+  }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [newAddr, setNewAddr] = useState<AddressResult | null>(null);
   // Apt / Suite / Unit — kept out of the Google-validated street; combined into
@@ -6673,24 +6720,38 @@ export default function StopsPage() {
     }
   }, []);
 
-  // Date filter — defaults to "today" so users see today's operational queue,
-  // not historical clutter. "all" returns everything; otherwise a literal
-  // YYYY-MM-DD string filters drafts/stops created on that date.
-  type DateFilter = "today" | "yesterday" | "tomorrow" | "all" | string;
+  // Date RANGE filter (2026-08-01, dispatch console) — defaults to "today".
+  // Submitted stops are ranged server-side by scheduled delivery day
+  // (service.date/delivery.date) via date_from/date_to on the API call;
+  // drafts (no delivery day yet) are ranged client-side by created_at.
+  // "all" returns everything; a literal YYYY-MM-DD `dateFilter` + optional
+  // `customRangeEnd` is a custom range (single day if customRangeEnd unset).
+  type DateFilter = "today" | "yesterday" | "tomorrow" | "last7" | "all" | string;
   const localDateStr = useCallback(
     (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
     [],
   );
-  const dateFilterToYMD = (f: DateFilter): string | null => {
-    if (f === "all") return null;
-    if (f === "today") return localDateStr(new Date());
-    if (f === "yesterday") return localDateStr(new Date(Date.now() - 86400000));
-    if (f === "tomorrow") return localDateStr(new Date(Date.now() + 86400000));
-    return f; // already YYYY-MM-DD
-  };
   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
-  const filterYMD = dateFilterToYMD(dateFilter);
+  const [customRangeEnd, setCustomRangeEnd] = useState<string>("");
+  const dateRange = useMemo((): { from: string | null; to: string | null } => {
+    const today = localDateStr(new Date());
+    if (dateFilter === "today") return { from: today, to: today };
+    if (dateFilter === "yesterday") {
+      const y = localDateStr(new Date(Date.now() - 86400000));
+      return { from: y, to: y };
+    }
+    if (dateFilter === "tomorrow") {
+      const t = localDateStr(new Date(Date.now() + 86400000));
+      return { from: t, to: t };
+    }
+    if (dateFilter === "last7") {
+      return { from: localDateStr(new Date(Date.now() - 6 * 86400000)), to: today };
+    }
+    if (dateFilter === "all") return { from: null, to: null };
+    // Literal YYYY-MM-DD — custom range (customRangeEnd) or a single custom day.
+    return { from: dateFilter, to: customRangeEnd || dateFilter };
+  }, [dateFilter, customRangeEnd, localDateStr]);
   const filterLabel =
     dateFilter === "today"
       ? "Today"
@@ -6698,64 +6759,77 @@ export default function StopsPage() {
         ? "Yesterday"
         : dateFilter === "tomorrow"
           ? "Tomorrow"
-          : dateFilter === "all"
-            ? "All"
-            : dateFilter;
+          : dateFilter === "last7"
+            ? "Last 7 days"
+            : dateFilter === "all"
+              ? "All"
+              : customRangeEnd && customRangeEnd !== dateFilter
+                ? `${dateFilter} → ${customRangeEnd}`
+                : dateFilter;
 
   // Sequence guard: realtime catch-ups + visibility refreshes can overlap the
   // mount load; without this, a SLOWER older response lands last and
   // overwrites the newest list (stale/empty flash).
   const loadStopsSeqRef = useRef(0);
+  // Dispatch console (2026-08-01): ONE fetch per date-range change, status-
+  // UNFILTERED (server only narrows by date_from/date_to) — status/disposition
+  // chips filter client-side over this same set, which is also how live
+  // per-chip counts are computed (no N+1 fetch per chip). Raised limit (up to
+  // 1000) since a 7-day range can be hundreds of stops; `stopsHasMore` +
+  // "Load more" cover the rest via offset.
+  const STOPS_PAGE_SIZE = 500;
+  const [stopsOffset, setStopsOffset] = useState(0);
+  const [stopsTotal, setStopsTotal] = useState(0);
+  const [stopsHasMore, setStopsHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const loadStops = useCallback(
-    async (opts?: { silent?: boolean }) => {
-      // Background refreshes (after a post / batch complete) skip the skeleton.
-      if (!opts?.silent) setLoading(true);
+    async (opts?: { silent?: boolean; append?: boolean }) => {
+      const append = opts?.append ?? false;
+      if (append) setLoadingMore(true);
+      else if (!opts?.silent) setLoading(true);
       const seq = ++loadStopsSeqRef.current;
+      const offset = append ? stopsOffset : 0;
       try {
-        // Server-side: route supports filter=today|week|all. For custom dates
-        // we fetch all and apply the day filter on the client.
-        const apiFilter = dateFilter === "today" ? "today" : "all";
-        const d = await fetchJsonSafe(`/api/client/stops?filter=${apiFilter}&limit=200`);
+        const params = new URLSearchParams({ limit: String(STOPS_PAGE_SIZE), offset: String(offset) });
+        if (dateRange.from) params.set("date_from", dateRange.from);
+        if (dateRange.to) params.set("date_to", dateRange.to);
+        const d = await fetchJsonSafe(`/api/client/stops?${params.toString()}`);
         if (seq !== loadStopsSeqRef.current) return; // a newer load owns the list
-        if (Array.isArray(d.stops)) setStops(d.stops as TodayStop[]);
+        if (Array.isArray(d.stops)) {
+          setStops((prev) => (append ? [...prev, ...(d.stops as TodayStop[])] : (d.stops as TodayStop[])));
+          setStopsOffset(offset + d.stops.length);
+        }
+        setStopsTotal(Number(d.total ?? 0));
+        setStopsHasMore(Boolean(d.has_more));
       } catch {
         /* timeout / HTTP error — keep the current list on screen, never blank it */
       } finally {
-        // ALWAYS drop the skeleton (fetch now has a hard 15s timeout, so this
-        // is guaranteed to run — the old code could hang here forever).
-        if (!opts?.silent) setLoading(false);
+        if (append) setLoadingMore(false);
+        else if (!opts?.silent) setLoading(false);
       }
     },
-    [dateFilter],
+    [dateRange.from, dateRange.to, stopsOffset],
   );
+  const loadMoreStops = useCallback(() => loadStops({ append: true }), [loadStops]);
 
-  // Submitted tab data: server-side unassigned filter (PENDING bucket +
-  // no driver + no route in the Mongo query). Separate from `stops` so KPI /
-  // duplicate-awareness consumers keep seeing the full set.
-  const [unassignedStops, setUnassignedStops] = useState<TodayStop[]>([]);
-  const loadUnassigned = useCallback(async () => {
-    try {
-      const d = await fetchJsonSafe("/api/client/stops?filter=unassigned&limit=200");
-      if (Array.isArray(d.stops)) setUnassignedStops(d.stops as TodayStop[]);
-    } catch {
-      /* timeout / HTTP error — keep the current list, never blank it */
-    }
-  }, []);
-
-  // One call to refresh everything the lists/tabs render after a post or a batch
-  // completes — drafts, the main stops list, and the Submitted (unassigned) tab —
-  // so the user never has to manually reload to see what they just submitted.
+  // One call to refresh everything the lists/panels render after a post or a
+  // batch completes — drafts + the main stops list — so the user never has to
+  // manually reload to see what they just submitted.
   const refreshAllLists = useCallback(() => {
     loadDrafts();
-    loadUnassigned();
     loadStops({ silent: true });
-  }, [loadDrafts, loadUnassigned, loadStops]);
+  }, [loadDrafts, loadStops]);
 
+  // loadStops itself changes identity on every dateRange change AND every
+  // stopsOffset change (its own deps) — depending on the FUNCTION here would
+  // re-fire this effect (and reset the offset) after every "Load more" click.
+  // Depend on the raw dateRange values instead; re-run on a genuine range change only.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
   useEffect(() => {
+    setStopsOffset(0);
     loadStops();
     loadDrafts();
-    loadUnassigned();
-  }, [loadStops, loadDrafts, loadUnassigned]);
+  }, [dateRange.from, dateRange.to, loadDrafts]);
 
   // Declared here (above the realtime hook) because the hook's `enabled` gate
   // depends on it. Batch state itself belongs to Phase D below.
@@ -6795,20 +6869,12 @@ export default function StopsPage() {
     }
   }, [drafts, activeDraft]);
   useEffect(() => {
-    // Submitted/unassigned stops live in `unassignedStops`, NOT `stops` (the
-    // Submitted tab fetches filter=unassigned separately). Only clear the
-    // selection when the stop is gone from BOTH lists. Previously this checked
-    // `stops` only, which wiped every Submitted-tab selection the instant it
-    // was clicked, since unassigned rows never live in `stops`.
-    if (
-      selected &&
-      (stops.length > 0 || unassignedStops.length > 0) &&
-      !stops.some((s) => s.id === selected.id) &&
-      !unassignedStops.some((s) => s.id === selected.id)
-    ) {
+    // 2026-08-01: `stops` is now the single unified fetch (every status, not
+    // just unassigned) — no more second list to check.
+    if (selected && stops.length > 0 && !stops.some((s) => s.id === selected.id)) {
       setSelected(null);
     }
-  }, [stops, unassignedStops, selected]);
+  }, [stops, selected]);
 
   // All items = drafts + stops, sorted newest first
   // Pickup the panel should display for the currently open item — prefers the
@@ -6830,20 +6896,31 @@ export default function StopsPage() {
     return pickup;
   }, [activeDraft, selected, locations, pickup]);
 
+  // `stops` arrives already date-range-narrowed server-side (by scheduled
+  // delivery day). `drafts` have no delivery day yet — ranged here client-side
+  // by created_at, same range, so a "Yesterday"/"Last 7 days" filter shows
+  // that window's drafts too.
+  const filteredDrafts = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) return drafts;
+    return drafts.filter((s) => {
+      if (!s.created_at) return false;
+      const ymd = localDateStr(new Date(s.created_at));
+      return (!dateRange.from || ymd >= dateRange.from) && (!dateRange.to || ymd <= dateRange.to);
+    });
+  }, [drafts, dateRange.from, dateRange.to, localDateStr]);
+
   const allItems = useMemo(() => {
     return [...drafts, ...stops].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [drafts, stops]);
 
-  // Client-side date filter applied uniformly across drafts + submitted stops.
-  // Server already narrows submitted to today when filter=today; this guarantees
-  // drafts respect the same window, plus supports yesterday/tomorrow/custom dates.
-  const filteredAllItems = useMemo(() => {
-    if (!filterYMD) return allItems;
-    return allItems.filter((s) => {
-      if (!s.created_at) return false;
-      return localDateStr(new Date(s.created_at)) === filterYMD;
-    });
-  }, [allItems, filterYMD, localDateStr]);
+  // filteredAllItems = the date-range-scoped universe every status chip count
+  // and the rendered list are computed from (drafts ranged client-side, stops
+  // already ranged server-side).
+  const filteredAllItems = useMemo(
+    () =>
+      [...filteredDrafts, ...stops].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [filteredDrafts, stops],
+  );
 
   // ALWAYS-today snapshot for the address-duplicate awareness in the new-stop
   // input — operational intent is "have we already processed this address
@@ -6856,21 +6933,16 @@ export default function StopsPage() {
   const [listSearch, setListSearch] = useState("");
   const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
 
-  // Submitted tab = ONLY unassigned (server-filtered), with the same
-  // client-side date narrowing every tab applies.
-  const filteredUnassigned = useMemo(() => {
-    if (!filterYMD) return unassignedStops;
-    return unassignedStops.filter((s) => s.created_at && localDateStr(new Date(s.created_at)) === filterYMD);
-  }, [unassignedStops, filterYMD, localDateStr]);
-
+  // Dispatch console list (2026-08-01): status chips (multi-select) →
+  // disposition sub-filter (only meaningful for failed/delivered) → search →
+  // cancel-pending toggle. Replaces the old Drafts/Submitted 2-tab switch.
   const filteredStops = useMemo(() => {
-    let items: TodayStop[];
-    switch (statusTab) {
-      case "submitted":
-        items = filteredUnassigned;
-        break;
-      default:
-        items = filteredAllItems.filter((s) => s.status === "draft");
+    let items = filteredAllItems.filter((s) => {
+      const chip = statusChipOf(s);
+      return chip !== null && selectedStatuses.has(chip);
+    });
+    if (selectedDispositions.size > 0) {
+      items = items.filter((s) => s.disposition && selectedDispositions.has(s.disposition));
     }
     if (listSearch.trim()) {
       const q = listSearch.toLowerCase();
@@ -6884,24 +6956,87 @@ export default function StopsPage() {
     }
     if (pendingCancelOnly) items = items.filter((s) => s.cancel_requested?.status === "pending");
     return items;
-  }, [filteredAllItems, filteredUnassigned, statusTab, listSearch, pendingCancelOnly]);
+  }, [filteredAllItems, selectedStatuses, selectedDispositions, listSearch, pendingCancelOnly]);
 
-  // Pending-cancellation count across BOTH tabs (drafts rarely have one, but
-  // a submitted/assigned stop can) — drives the toolbar toggle's badge.
+  // Pending-cancellation count across the full date-range-scoped set (any
+  // status) — drives the toolbar toggle's badge.
   const pendingCancelCount = useMemo(
-    () => [...filteredAllItems, ...filteredUnassigned].filter((s) => s.cancel_requested?.status === "pending").length,
-    [filteredAllItems, filteredUnassigned],
+    () => filteredAllItems.filter((s) => s.cancel_requested?.status === "pending").length,
+    [filteredAllItems],
   );
 
-  // Tab counts respect the active date filter
-  const tabCounts = useMemo(() => {
-    const ds = filteredAllItems.filter((s) => s.status === "draft");
-    return {
-      all: ds.length + filteredUnassigned.length,
-      draft: ds.length,
-      submitted: filteredUnassigned.length,
-    };
-  }, [filteredAllItems, filteredUnassigned]);
+  // Live per-chip counts — status-UNSCOPED (so a chip shows how many rows
+  // WOULD appear if toggled on), date-range-SCOPED (respects the active date
+  // filter). Disposition breakdown for the sub-filter, scoped to whichever of
+  // failed/delivered is currently selected (falls back to failed).
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusChip, number> = { draft: 0, unassigned: 0, in_route: 0, delivered: 0, failed: 0 };
+    for (const s of filteredAllItems) {
+      const chip = statusChipOf(s);
+      if (chip) counts[chip]++;
+    }
+    return counts;
+  }, [filteredAllItems]);
+  const dispositionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const scope: StatusChip[] =
+      selectedStatuses.has("delivered") && !selectedStatuses.has("failed") ? ["delivered"] : ["failed"];
+    for (const s of filteredAllItems) {
+      if (!s.disposition) continue;
+      const chip = statusChipOf(s);
+      if (chip && scope.includes(chip)) counts[s.disposition] = (counts[s.disposition] ?? 0) + 1;
+    }
+    return counts;
+  }, [filteredAllItems, selectedStatuses]);
+
+  // URL query param sync (2026-08-01) — shareable links + agent-consumable.
+  // Read once on mount (before the first fetch fires); write on every filter
+  // change via replaceState (no history spam, no Next router round-trip).
+  const urlInitRef = useRef(false);
+  useEffect(() => {
+    if (urlInitRef.current || typeof window === "undefined") return;
+    urlInitRef.current = true;
+    const sp = new URLSearchParams(window.location.search);
+    const status = sp.get("status");
+    if (status) {
+      const valid = status.split(",").filter((s): s is StatusChip => STATUS_CHIPS.includes(s as StatusChip));
+      if (valid.length) setSelectedStatuses(new Set(valid));
+    }
+    const disposition = sp.get("disposition");
+    if (disposition) setSelectedDispositions(new Set(disposition.split(",").filter(Boolean)));
+    const dateFrom = sp.get("date_from");
+    const dateTo = sp.get("date_to");
+    if (dateFrom) {
+      setDateFilter(dateFrom);
+      if (dateTo && dateTo !== dateFrom) setCustomRangeEnd(dateTo);
+    } else {
+      const preset = sp.get("date");
+      if (preset && ["today", "yesterday", "tomorrow", "last7", "all"].includes(preset)) setDateFilter(preset);
+    }
+    if (["1", "true"].includes(sp.get("cancel_pending") ?? "")) setPendingCancelOnly(true);
+    const q = sp.get("q");
+    if (q) setListSearch(q);
+  }, []);
+
+  useEffect(() => {
+    if (!urlInitRef.current || typeof window === "undefined") return;
+    const sp = new URLSearchParams();
+    if (selectedStatuses.size > 0 && selectedStatuses.size < STATUS_CHIPS.length) {
+      sp.set("status", [...selectedStatuses].join(","));
+    }
+    if (selectedDispositions.size > 0) sp.set("disposition", [...selectedDispositions].join(","));
+    if (dateFilter.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      sp.set("date_from", dateFilter);
+      if (customRangeEnd) sp.set("date_to", customRangeEnd);
+    } else if (dateFilter !== "today") {
+      sp.set("date", dateFilter);
+    }
+    if (pendingCancelOnly) sp.set("cancel_pending", "1");
+    if (listSearch.trim()) sp.set("q", listSearch.trim());
+    const qs = sp.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, [selectedStatuses, selectedDispositions, dateFilter, customRangeEnd, pendingCancelOnly, listSearch]);
 
   const allFilteredSelected = filteredStops.length > 0 && filteredStops.every((s) => selectedIds.has(s.id));
   const someSelected = selectedIds.size > 0;
@@ -7488,11 +7623,10 @@ export default function StopsPage() {
     setBulkProgress(null);
     setSelectedIds(new Set());
     // ONE full refresh replaces the realtime-driven storm that was paused
-    // during the run — including the Submitted tab (loadUnassigned was missing
-    // here, which is why freshly submitted stops "didn't appear" after a bulk).
+    // during the run — `loadStops` is the unified fetch now (2026-08-01), no
+    // separate Submitted-tab list to also refresh.
     loadStops();
     loadDrafts();
-    loadUnassigned();
     // Queued = dispatch service unreachable, handed to the untrusted n8n backup.
     // Those drafts are intentionally KEPT and remain submit-ready — report them
     // distinctly so the user knows to retry, never as "submitted".
@@ -7512,7 +7646,7 @@ export default function StopsPage() {
         `Dispatch service unreachable — ${queuedCount} draft${queuedCount > 1 ? "s" : ""} queued and kept. Please retry shortly.`,
       );
     else toast.error("Could not submit the selected drafts");
-  }, [selectedIds, bulkSubmitting, drafts, locations, loadStops, loadDrafts, loadUnassigned]);
+  }, [selectedIds, bulkSubmitting, drafts, locations, loadStops, loadDrafts]);
 
   async function addStop() {
     if (!newAddr) return;
@@ -7917,20 +8051,24 @@ export default function StopsPage() {
                         {filterLabel}
                       </TooltipContent>
                     </Tooltip>
-                    <PopoverContent align="end" className="w-48 p-2 text-xs">
+                    <PopoverContent align="end" className="w-56 p-2 text-xs">
                       <div className="grid grid-cols-2 gap-1">
                         {(
                           [
                             ["today", "Today"],
                             ["yesterday", "Yesterday"],
                             ["tomorrow", "Tomorrow"],
+                            ["last7", "Last 7 days"],
                             ["all", "All"],
                           ] as const
                         ).map(([v, l]) => (
                           <button
                             key={v}
                             type="button"
-                            onClick={() => setDateFilter(v)}
+                            onClick={() => {
+                              setDateFilter(v);
+                              setCustomRangeEnd("");
+                            }}
                             className={cn(
                               "rounded-lg px-2 py-1.5 text-left font-medium transition-colors",
                               dateFilter === v ? "bg-primary text-white" : "text-foreground hover:bg-accent",
@@ -7941,12 +8079,26 @@ export default function StopsPage() {
                         ))}
                       </div>
                       <Separator className="my-2" />
-                      <input
-                        type="date"
-                        value={dateFilter.match(/^\d{4}-\d{2}-\d{2}$/) ? dateFilter : ""}
-                        onChange={(e) => e.target.value && setDateFilter(e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-11 text-foreground outline-none focus:border-primary"
-                      />
+                      {/* Custom range — `dateFilter` holds the start date, `customRangeEnd` the end. */}
+                      <p className="mb-1 font-semibold text-10 text-muted-foreground/60 uppercase tracking-wide">
+                        Custom range
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={dateFilter.match(/^\d{4}-\d{2}-\d{2}$/) ? dateFilter : ""}
+                          onChange={(e) => e.target.value && setDateFilter(e.target.value)}
+                          className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1 text-11 text-foreground outline-none focus:border-primary"
+                        />
+                        <span className="shrink-0 text-muted-foreground/50">→</span>
+                        <input
+                          type="date"
+                          value={customRangeEnd}
+                          min={dateFilter.match(/^\d{4}-\d{2}-\d{2}$/) ? dateFilter : undefined}
+                          onChange={(e) => setCustomRangeEnd(e.target.value)}
+                          className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1 text-11 text-foreground outline-none focus:border-primary"
+                        />
+                      </div>
                     </PopoverContent>
                   </Popover>
 
@@ -7972,42 +8124,89 @@ export default function StopsPage() {
                 </div>
               </TooltipProvider>
             </div>
-            {/* Tabs row */}
-            <div className="flex items-center border-border/50 border-b bg-card">
+            {/* Status filter chips (2026-08-01 dispatch console) — multi-select
+                over the real post-collapse vocabulary, live counts per chip.
+                Horizontally scrollable so it degrades cleanly at 390px. */}
+            <div className="flex items-center gap-1 overflow-x-auto border-border/50 border-b bg-card px-2 py-1.5">
               <Checkbox
                 checked={allFilteredSelected}
                 onCheckedChange={toggleSelectAll}
-                className="mr-2 ml-2.5 size-3.5 shrink-0"
+                className="mr-1 size-3.5 shrink-0"
                 aria-label="Select all"
               />
               {(
                 [
-                  { value: "all", label: "Drafts", count: tabCounts.draft },
-                  { value: "submitted", label: "Submitted", count: tabCounts.submitted },
+                  { value: "draft", label: "Drafts" },
+                  { value: "unassigned", label: "Unassigned" },
+                  { value: "in_route", label: "In route" },
+                  { value: "delivered", label: "Delivered" },
+                  { value: "failed", label: "Failed" },
                 ] as const
-              )
-                .filter((t) => t.count > 0 || t.value === "all")
-                .map((t) => (
+              ).map((t) => {
+                const active = selectedStatuses.has(t.value);
+                const count = statusCounts[t.value];
+                return (
                   <button
                     key={t.value}
                     type="button"
-                    onClick={() => setStatusTab(t.value as typeof statusTab)}
+                    onClick={() => toggleStatusChip(t.value)}
+                    aria-pressed={active}
                     className={cn(
-                      "h-9 border-b-2 px-3 font-medium text-11 transition-colors",
-                      statusTab === t.value
-                        ? "border-primary text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
+                      "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 font-medium text-11 ring-1 transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground ring-primary"
+                        : "text-muted-foreground ring-border hover:bg-accent hover:text-foreground",
                     )}
                   >
                     {t.label}
-                    {t.count > 0 && (
-                      <span className="ml-1 text-10 text-muted-foreground/60 dark:text-muted-foreground/75">
-                        {t.count}
-                      </span>
-                    )}
+                    <span
+                      className={cn("ml-1 text-10", active ? "text-primary-foreground/75" : "text-muted-foreground/60")}
+                    >
+                      {count}
+                    </span>
                   </button>
-                ))}
+                );
+              })}
             </div>
+            {/* Disposition sub-filter — only meaningful (and only shown) once
+                failed or delivered is selected. Lets ops act on patterns
+                ("20 no one home this week"). */}
+            {(selectedStatuses.has("failed") || selectedStatuses.has("delivered")) &&
+              Object.keys(dispositionCounts).length > 0 && (
+                <div className="flex items-center gap-1 overflow-x-auto border-border/50 border-b bg-muted/20 px-2 py-1.5">
+                  <span className="shrink-0 text-10 text-muted-foreground/60">Reason:</span>
+                  {Object.entries(dispositionCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([d, count]) => {
+                      const active = selectedDispositions.has(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => toggleDispositionChip(d)}
+                          aria-pressed={active}
+                          className={cn(
+                            "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-10 ring-1 transition-colors",
+                            active
+                              ? "bg-foreground text-background ring-foreground"
+                              : "text-muted-foreground ring-border hover:bg-accent",
+                          )}
+                        >
+                          {dispositionLabel(d)} <span className="opacity-70">{count}</span>
+                        </button>
+                      );
+                    })}
+                  {selectedDispositions.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDispositions(new Set())}
+                      className="shrink-0 text-10 text-muted-foreground/60 underline hover:text-foreground"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              )}
           </div>
 
           {loading ? (
@@ -8026,17 +8225,17 @@ export default function StopsPage() {
               <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-muted">
                 <Package className="size-4 text-muted-foreground" />
               </div>
-              {statusTab === "submitted" ? (
+              {selectedStatuses.size === 0 ? (
                 <>
-                  <p className="font-semibold text-muted-foreground text-xs">All caught up</p>
-                  <p className="mt-0.5 text-11 text-muted-foreground/70">
-                    All submitted stops have been assigned to a driver
-                  </p>
+                  <p className="font-semibold text-muted-foreground text-xs">No status selected</p>
+                  <p className="mt-0.5 text-11 text-muted-foreground/70">Pick a status chip above to see stops</p>
                 </>
               ) : (
                 <>
-                  <p className="font-semibold text-muted-foreground text-xs">No stops</p>
-                  <p className="mt-0.5 text-11 text-muted-foreground/70">No stops today — type an address to add one</p>
+                  <p className="font-semibold text-muted-foreground text-xs">No stops match</p>
+                  <p className="mt-0.5 text-11 text-muted-foreground/70">
+                    Nothing for {filterLabel.toLowerCase()} with the selected filters
+                  </p>
                 </>
               )}
             </div>
@@ -8198,12 +8397,20 @@ export default function StopsPage() {
                   <span className="font-bold text-base text-foreground tabular-nums leading-none">
                     {filteredStops.length}
                   </span>
-                  <span className="text-11 text-muted-foreground/65">
-                    {statusTab !== "all" ? `of ${filteredAllItems.length}` : "showing"}
-                  </span>
+                  <span className="text-11 text-muted-foreground/65">of {filteredAllItems.length}</span>
                 </span>
                 <div className="h-3 w-px bg-border/40" />
                 <span className="text-11 text-muted-foreground/65">{filterLabel}</span>
+                {stopsHasMore && (
+                  <button
+                    type="button"
+                    onClick={loadMoreStops}
+                    disabled={loadingMore}
+                    className="text-11 text-primary underline decoration-dotted hover:text-primary/80 disabled:opacity-50"
+                  >
+                    {loadingMore ? "Loading…" : `Load more (${stopsTotal - stopsOffset} left)`}
+                  </button>
+                )}
                 {(doneCount > 0 || activeCount > 0) && (
                   <>
                     <div className="h-3 w-px bg-border/40" />
@@ -8333,7 +8540,6 @@ export default function StopsPage() {
                   setActiveDraft(null);
                   loadStops();
                   loadDrafts();
-                  loadUnassigned(); // newly submitted stops land in the Submitted (unassigned) tab
                   if (isMobile) setMobileTab("list");
                 }}
                 onAddressChange={(a) => {
@@ -8421,12 +8627,10 @@ export default function StopsPage() {
                   setSelected(null);
                   loadStops();
                   loadDrafts();
-                  loadUnassigned();
                 }}
                 onNoLongerUnassigned={() => {
                   setSelected(null);
                   loadStops();
-                  loadUnassigned();
                 }}
                 onAddressChange={(a) => {
                   // Optimistically sync the selected submitted-stop summary (header reads)
@@ -8455,20 +8659,11 @@ export default function StopsPage() {
                         : s,
                     ),
                   );
-                  setUnassignedStops((prev) =>
-                    prev.map((s) =>
-                      s.id === selected.id
-                        ? { ...s, address: a.street, city: a.city, state: a.state || "FL", zip: a.zip }
-                        : s,
-                    ),
-                  );
                 }}
                 onBasicInfoChange={(patch) => {
-                  // Same optimistic pattern as onAddressChange for name/phone —
-                  // mirrored into the Submitted-tab (unassigned) list too.
+                  // Same optimistic pattern as onAddressChange for name/phone.
                   setSelected((prev) => (prev ? { ...prev, ...patch } : prev));
                   setStops((prev) => prev.map((s) => (s.id === selected.id ? { ...s, ...patch } : s)));
-                  setUnassignedStops((prev) => prev.map((s) => (s.id === selected.id ? { ...s, ...patch } : s)));
                 }}
               />
             </motion.div>
@@ -8754,7 +8949,9 @@ export default function StopsPage() {
             onOpenChange={setScanOpen}
             onDetected={(value) => {
               setListSearch(value);
-              setStatusTab("submitted");
+              // The scanned stop could be in any submitted status — show all
+              // of them (drafts don't have printed barcodes).
+              setSelectedStatuses(new Set<StatusChip>(["unassigned", "in_route", "delivered", "failed"]));
               setScanOpen(false);
             }}
           />

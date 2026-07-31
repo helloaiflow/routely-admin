@@ -4,6 +4,46 @@ import { reviveStopDoc, shapeStopForList } from "@/lib/spoke-fields";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
+/* GET /api/client/stops — dispatch console list query (2026-08-01).
+ *
+ * Structured query params (agent-consumable — the AI dispatcher queries the
+ * same way a human does):
+ *
+ *   status         comma-separated, any of:
+ *                    unassigned  — pending/approved/paid/unassigned/created,
+ *                                  no driver, no route (never touched by dispatch)
+ *                    in_route    — assigned | in_transit (currently out with a driver)
+ *                    delivered
+ *                    failed      — terminal, post-2026-07-31 collapse
+ *                  Omit for no status restriction (still excludes deleted/pickup-leg).
+ *                  'draft' is NOT a value here — drafts live in draft_stops,
+ *                  fetched separately via /api/client/draft-stops.
+ *   disposition    comma-separated disposition enum values (e.g.
+ *                  no_one_home,bad_address) — narrows within status=failed or
+ *                  status=delivered. See routely-api DISPOSITIONS_BY_STATUS.
+ *   cancel_pending 1|true — only stops with cancel_requested.status='pending'.
+ *   date_from      YYYY-MM-DD, inclusive. Matches the stop's scheduled
+ *                  delivery day (service.date, legacy delivery.date fallback)
+ *                  — NOT created_at. Omit both date params for no date filter.
+ *   date_to        YYYY-MM-DD, inclusive.
+ *   filter         legacy shortcut, still supported: today|unassigned|
+ *                  recovered|week|all. Superseded by status/date_from/date_to
+ *                  but kept for backward compat with existing callers.
+ *   limit          default 200, max 1000.
+ *   offset         default 0 — pagination for wide date ranges.
+ *
+ * Response: { stops, total, returned, offset, limit, has_more }
+ *   total    = count of ALL rows matching the filter (for "N of M" UI text)
+ *   returned = stops.length (after limit/offset slice)
+ */
+
+const STATUS_BUCKETS: Record<string, string[]> = {
+  unassigned: ["pending", "approved", "paid", "unassigned", "created"],
+  in_route: ["assigned", "in_transit"],
+  delivered: ["delivered"],
+  failed: ["failed"],
+};
+
 export async function GET(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,8 +53,27 @@ export async function GET(request: Request) {
   // Admin cross-tenant: "all" scope drops the per-tenant filter.
   const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(Number(searchParams.get("limit") ?? "50"), 200);
+  const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? "200"), 1), 1000);
+  const offset = Math.max(Number(searchParams.get("offset") ?? "0"), 0);
   const filter = searchParams.get("filter") ?? "all";
+
+  const statusParam = searchParams.get("status");
+  const statusList = statusParam
+    ? statusParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+  const dispositionParam = searchParams.get("disposition");
+  const dispositionList = dispositionParam
+    ? dispositionParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+  const cancelPending = ["1", "true"].includes(searchParams.get("cancel_pending") ?? "");
+  const dateFrom = searchParams.get("date_from");
+  const dateTo = searchParams.get("date_to");
 
   const now = new Date();
   // Today's date in Florida (ET) as YYYY-MM-DD — handles DST automatically
@@ -26,26 +85,57 @@ export async function GET(request: Request) {
   // shared-tier Postgres hit statement timeouts → cascading 504s → the whole
   // app "frozen, nothing loads" (verified live in Supabase API logs).
   //
-  // Now each filter narrows SERVER-SIDE with a positive condition that is a
-  // strict SUPERSET of what the JS below keeps (verified against real data:
-  // today=28 · unassigned=136 · recovered=0 · all=361 — SQL counts match the
-  // JS semantics exactly), plus created_at DESC ordering and a hard cap. The
-  // fine-grained null/missing-field semantics still run in JS unchanged —
-  // just over ≤500 rows instead of 2000.
-  let q = supabase.from("stops").select("doc");
+  // Server-side narrowing stays a strict SUPERSET of what the JS below keeps
+  // (fine-grained null/missing-field semantics run in JS, where they're
+  // exact) — status/disposition/cancel_pending/date_from/date_to are all now
+  // real SQL predicates (2026-08-01), not just the legacy `filter` buckets.
+  let q = supabase.from("stops").select("doc", { count: "exact" });
   if (!scopeAll) q = q.eq("tenant_id", tenantId);
-  if (filter === "today") {
-    // service.date / delivery.date are plain "YYYY-MM-DD" strings in the doc.
+
+  if (statusList?.length) {
+    const values = statusList.flatMap((s) => STATUS_BUCKETS[s] ?? [s]);
+    q = q.in("doc->>status", values);
+  }
+  if (dispositionList?.length) {
+    q = q.in("doc->>disposition", dispositionList);
+  }
+  if (cancelPending) {
+    q = q.eq("doc->cancel_requested->>status", "pending");
+  }
+  if (dateFrom || dateTo) {
+    // service.date / delivery.date are plain "YYYY-MM-DD" strings — safe to
+    // range-compare lexicographically. OR across both fields, each leg
+    // range-bounded on whichever side was given.
+    const bound = (field: string) => {
+      const parts: string[] = [];
+      if (dateFrom) parts.push(`doc->${field}->>date.gte.${dateFrom}`);
+      if (dateTo) parts.push(`doc->${field}->>date.lte.${dateTo}`);
+      return parts;
+    };
+    // PostgREST .or() needs a single comma-joined expression; AND the two
+    // bounds per field, then OR across service/delivery via nested and().
+    const serviceParts = bound("service");
+    const deliveryParts = bound("delivery");
+    const clauses = [
+      serviceParts.length ? `and(${serviceParts.join(",")})` : null,
+      deliveryParts.length ? `and(${deliveryParts.join(",")})` : null,
+    ].filter(Boolean) as string[];
+    if (clauses.length) q = q.or(clauses.join(","));
+  } else if (filter === "today") {
+    // Legacy shortcut — same semantics as before.
     q = q.or(`doc->service->>date.eq.${etDateStr},doc->delivery->>date.eq.${etDateStr}`);
-  } else if (filter === "unassigned") {
-    // Every row the JS keeps has one of these statuses — driver/route null
-    // checks (null OR missing) stay in JS where the semantics are exact.
-    q = q.in("doc->>status", ["pending", "approved", "paid", "unassigned", "created"]);
+  } else if (filter === "unassigned" && !statusList) {
+    q = q.in("doc->>status", STATUS_BUCKETS.unassigned);
   } else if (filter === "recovered") {
     q = q.eq("doc->>status", "draft");
   }
+
   // created_at is an ISO string in the doc → lexicographic DESC is correct.
-  const { data: rows, error } = await q.order("doc->>created_at", { ascending: false }).limit(500);
+  const {
+    data: rows,
+    error,
+    count,
+  } = await q.order("doc->>created_at", { ascending: false }).range(offset, offset + limit - 1);
 
   if (error) {
     console.error("[stops] supabase error:", error);
@@ -59,45 +149,46 @@ export async function GET(request: Request) {
   // shown on the customer-facing Submitted tab. (!== matches missing too.)
   docs = docs.filter((d) => d.status !== "deleted" && d.stop_type !== "pickup");
 
-  if (filter === "today") {
-    // "Today" = delivers today, keyed STRICTLY off the canonical delivery day
-    // (service.date), legacy delivery.date as fallback. created_at must NOT
-    // define "today" — a stop created today but scheduled later belongs to its
-    // delivery day, not today's board.
-    docs = docs.filter((d) => d.service?.date === etDateStr || d.delivery?.date === etDateStr);
-  } else if (filter === "unassigned") {
-    // Submitted tab: only stops no dispatcher has worked yet — PENDING-bucket
-    // status AND no driver AND no route (null matches missing field too).
-    const PENDING = ["pending", "approved", "paid", "unassigned", "created"];
-    docs = docs.filter(
-      (d) =>
-        PENDING.includes(d.status) &&
-        (d.assignment?.driver_id ?? null) === null &&
-        (d.assignment?.route_id ?? null) === null,
-    );
-  } else if (filter === "recovered") {
-    // Recovered drafts: a submit failed (Spoke didn't accept) so the stop fell
-    // back to status "draft" + submit_error. These live in `stops` and must
-    // surface in the Drafts list so the user can edit + resubmit.
-    docs = docs.filter((d) => d.status === "draft" && d.submit_error != null);
-  } else if (filter === "week") {
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    docs = docs.filter((d) => d.created_at && new Date(d.created_at) >= weekAgo);
+  // Fine-grained JS pass for the legacy `filter` shortcut only (kept exact —
+  // see HOTFIX note above). Skipped when the new status/date params drove
+  // the query, since those are already exact SQL predicates.
+  if (!statusList && !dateFrom && !dateTo) {
+    if (filter === "today") {
+      docs = docs.filter((d) => d.service?.date === etDateStr || d.delivery?.date === etDateStr);
+    } else if (filter === "unassigned") {
+      const PENDING = STATUS_BUCKETS.unassigned;
+      docs = docs.filter(
+        (d) =>
+          PENDING.includes(d.status) &&
+          (d.assignment?.driver_id ?? null) === null &&
+          (d.assignment?.route_id ?? null) === null,
+      );
+    } else if (filter === "recovered") {
+      docs = docs.filter((d) => d.status === "draft" && d.submit_error != null);
+    } else if (filter === "week") {
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      docs = docs.filter((d) => d.created_at && new Date(d.created_at) >= weekAgo);
+    }
   }
-  // filter=all (default) → no date restriction, only base exclusions
+  // "unassigned" bucket additionally needs the driver/route null check even
+  // when status= drove the query (JS-only semantics — null OR missing).
+  if (statusList?.includes("unassigned")) {
+    docs = docs.filter((d) => {
+      if (!STATUS_BUCKETS.unassigned.includes(d.status)) return true; // other selected buckets untouched
+      return (d.assignment?.driver_id ?? null) === null && (d.assignment?.route_id ?? null) === null;
+    });
+  }
 
-  // created_at DESC, then cap at limit (matches Mongo's sort().limit() order).
-  docs.sort((a, b) => {
-    const ta = a.created_at instanceof Date ? a.created_at.getTime() : new Date(a.created_at ?? 0).getTime();
-    const tb = b.created_at instanceof Date ? b.created_at.getTime() : new Date(b.created_at ?? 0).getTime();
-    return tb - ta;
-  });
-  docs = docs.slice(0, limit);
-
-  // No driverMap needed: shapeStopForList falls back to the embedded
-  // assignment.driver_name. (A Supabase driver-name resolver is added later
-  // only if assigned stops come back without an embedded name.)
   const stops = docs.map((d) => shapeStopForList(d));
+  const total = count ?? stops.length;
 
-  return NextResponse.json({ stops, total: stops.length, filter });
+  return NextResponse.json({
+    stops,
+    total,
+    returned: stops.length,
+    offset,
+    limit,
+    has_more: offset + stops.length < total,
+    filter,
+  });
 }

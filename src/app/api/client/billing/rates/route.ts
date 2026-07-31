@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
@@ -18,7 +18,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data } = await supabase
     .from("tenants")
-    .select("billing_rates, default_billing_type, billing_rules")
+    .select("billing_rates, default_billing_type, billing_rules, postpay_enabled, credit_limit")
     .eq("tenant_id", Number(ctx.tenantId))
     .maybeSingle();
   return NextResponse.json(data ?? {});
@@ -41,7 +41,9 @@ export async function PATCH(req: NextRequest) {
     if (!Number.isInteger(split.routely) || !Number.isInteger(split.driver) || split.routely + split.driver !== 100)
       return NextResponse.json({ error: "on_demand_split must be integers summing 100" }, { status: 400 });
     patch.billing_rates = {
-      package: r.package, per_mile: r.per_mile, on_demand_per_mile: r.on_demand_per_mile,
+      package: r.package,
+      per_mile: r.per_mile,
+      on_demand_per_mile: r.on_demand_per_mile,
       on_demand_split: { routely: split.routely, driver: split.driver },
     };
   }
@@ -56,13 +58,30 @@ export async function PATCH(req: NextRequest) {
     for (const rule of body.billing_rules) {
       const cond = rule?.if ?? {};
       const keys = Object.keys(cond);
-      if (!keys.length || keys.some((k) => !RULE_KEYS.has(k)) ||
-          !TYPES.has(rule?.then) || keys.some((k) => typeof cond[k] !== "string"))
+      if (
+        !keys.length ||
+        keys.some((k) => !RULE_KEYS.has(k)) ||
+        !TYPES.has(rule?.then) ||
+        keys.some((k) => typeof cond[k] !== "string")
+      )
         return NextResponse.json(
           { error: "rules must be {if:{stop_type|service_type|package_type: string}, then: type}" },
-          { status: 400 });
+          { status: 400 },
+        );
     }
     patch.billing_rules = body.billing_rules;
+  }
+  // Postpay/prepay + credit terms (2026-08-01) — structured + API-writable
+  // so the AI dispatcher/ops agent can set it too, not just direct DB access.
+  if (body.postpay_enabled !== undefined) {
+    if (typeof body.postpay_enabled !== "boolean")
+      return NextResponse.json({ error: "postpay_enabled must be a boolean" }, { status: 400 });
+    patch.postpay_enabled = body.postpay_enabled;
+  }
+  if (body.credit_limit !== undefined) {
+    if (typeof body.credit_limit !== "number" || body.credit_limit < 0)
+      return NextResponse.json({ error: "credit_limit must be a number ≥ 0" }, { status: 400 });
+    patch.credit_limit = body.credit_limit;
   }
   if (!Object.keys(patch).length) return NextResponse.json({ error: "nothing to update" }, { status: 400 });
 

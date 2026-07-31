@@ -79,6 +79,8 @@ type Rates = {
   };
   default_billing_type: "package" | "miles" | "on_demand";
   billing_rules: { if: Record<string, string>; then: string }[];
+  postpay_enabled: boolean;
+  credit_limit: number;
 };
 
 export function BillingTab({
@@ -734,6 +736,63 @@ function BillingRatesEditor() {
           ))}
         </div>
       </div>
+      {/* Postpay/prepay (2026-08-01) — was DB-only, no UI. Same segmented-
+          control pattern as Default type above. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-11 text-muted-foreground/70">Payment terms</span>
+        <div className="flex overflow-hidden rounded-lg border border-border/60">
+          {(
+            [
+              { v: false, l: "Prepay" },
+              { v: true, l: "Postpay" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={String(opt.v)}
+              type="button"
+              onClick={() => {
+                const next = { ...rates, postpay_enabled: opt.v };
+                setRates(next);
+                void save({ postpay_enabled: opt.v });
+              }}
+              className={cn(
+                "px-2.5 py-1 font-semibold text-10 transition-colors",
+                rates.postpay_enabled === opt.v
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-transparent text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {opt.l}
+            </button>
+          ))}
+        </div>
+        {rates.postpay_enabled && (
+          <label className="flex items-center gap-1.5 text-11 text-muted-foreground/70">
+            Credit limit
+            <span className="text-muted-foreground/50">$</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={rates.credit_limit}
+              onBlur={(e) => {
+                const v = Number(e.target.value);
+                if (!Number.isNaN(v) && v >= 0) {
+                  const next = { ...rates, credit_limit: v };
+                  setRates(next);
+                  void save({ credit_limit: v });
+                }
+              }}
+              className="h-(--spacing-control-h-sm) w-[84px] rounded-md border border-border/60 bg-transparent px-2 text-right font-mono text-13 tabular-nums outline-none focus:border-primary/50"
+            />
+          </label>
+        )}
+      </div>
+      <p className="max-w-md text-10 text-muted-foreground/60 leading-snug">
+        {rates.postpay_enabled
+          ? "Postpay: charges accumulate on the ledger and are invoiced on the tenant's billing cycle."
+          : "Prepay: the card on file is charged per purchase (label, delivery attempt) as it happens."}
+      </p>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-11 text-muted-foreground/70">Rules (first match wins)</span>

@@ -69,6 +69,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -76,6 +77,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRoutelyRealtime } from "@/hooks/use-routely-realtime";
 import { BRAND_PRIMARY } from "@/lib/brand";
@@ -720,10 +722,10 @@ const OUTCOME_DOT: Record<string, string> = {
   failed: "bg-destructive",
 };
 
-/* Billing v2.1 — read-only list of every billed ATTEMPT for this stop (2
- * trips = 2 lines). Self-fetching; renders nothing until it knows whether
- * there's anything to show (no empty-state clutter on stops with 0 lines,
- * e.g. anything not yet delivered/failed). */
+/* Billing v2.1 (2026-08-01: moved into its own "Billing" section below Order
+ * Info, was tucked under Recipient) — read-only per-ATTEMPT billing for this
+ * stop (2 trips = 2 lines). Self-fetching; distinguishes "still loading"
+ * from "confirmed zero lines" so the Billing status row is always accurate. */
 function StopBillingLines({
   stopId,
   status,
@@ -744,7 +746,7 @@ function StopBillingLines({
       .catch(() => setLines([]));
   }, [stopId]);
 
-  if (!lines || lines.length === 0) return null;
+  if (lines === null) return null; // still loading — avoid a "not billable" flash
   const failedCount = lines.filter((l) => l.outcome === "failed").length;
   // Auto-return fires at 3 — the counter is a heads-up for dispatch before
   // that happens, not shown once the stop has already reached its final
@@ -753,42 +755,71 @@ function StopBillingLines({
   // 'failed') — disposition does.
   const showAttemptCounter = failedCount > 0 && disposition !== "returned_to_hub" && status !== "delivered";
 
+  // Billing status (2026-08-01) — derived from what OUR ledger actually
+  // knows: invoiced_at set or not. We deliberately do NOT claim "Paid" —
+  // that requires a live Stripe invoice-status check this panel doesn't
+  // make; "Invoiced" is the most specific truthful state available here.
+  const totalCents = lines.reduce((s, l) => s + (l.amount_cents ?? 0), 0);
+  const allInvoiced = lines.length > 0 && lines.every((l) => l.invoiced_at);
+  const billingStatus: { label: string; cls: string } =
+    lines.length === 0
+      ? { label: "Not billable", cls: "bg-muted text-muted-foreground" }
+      : allInvoiced
+        ? { label: "Invoiced", cls: "bg-success/15 text-success" }
+        : { label: "Unpaid", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
+
   return (
-    <FieldRow label="Billing lines">
-      <div className="flex w-full flex-col gap-1.5">
-        {showAttemptCounter && (
-          <span
-            className={cn(
-              "w-fit rounded-full px-2 py-0.5 font-semibold text-10",
-              failedCount >= 2
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                : "bg-muted text-muted-foreground",
+    <>
+      <FieldRow label="Billing status">
+        <span className={cn("w-fit rounded-full px-2 py-0.5 font-semibold text-10", billingStatus.cls)}>
+          {billingStatus.label}
+        </span>
+      </FieldRow>
+      {lines.length > 0 && (
+        <FieldRow label="Billing amount">
+          <span className="font-mono text-foreground text-xs tabular-nums">${(totalCents / 100).toFixed(2)}</span>
+        </FieldRow>
+      )}
+      {lines.length === 0 ? null : (
+        <FieldRow label="Billing lines">
+          <div className="flex w-full flex-col gap-1.5">
+            {showAttemptCounter && (
+              <span
+                className={cn(
+                  "w-fit rounded-full px-2 py-0.5 font-semibold text-10",
+                  failedCount >= 2
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                Attempt {failedCount} of 3 — {3 - failedCount} left before auto-return
+              </span>
             )}
-          >
-            Attempt {failedCount} of 3 — {3 - failedCount} left before auto-return
-          </span>
-        )}
-        {lines.map((l) => (
-          <div key={l.id} className="flex items-center gap-2 text-11">
-            <span className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")} />
-            <span className="w-14 shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
-            <span className="w-28 shrink-0 truncate text-foreground" title={dispositionLabel(l.disposition)}>
-              {l.disposition ? dispositionLabel(l.disposition) : l.outcome === "delivered" ? "Delivered" : "Failed"}
-            </span>
-            <span className="w-20 shrink-0 text-muted-foreground">{toTitle(l.resolved_type)}</span>
-            <span className="w-16 shrink-0 text-right text-muted-foreground tabular-nums">
-              {l.units != null ? `${l.units}mi` : l.flag ? "flagged" : "—"}
-            </span>
-            <span className="w-14 shrink-0 text-right font-mono text-foreground tabular-nums">
-              {l.amount_cents != null ? `$${(l.amount_cents / 100).toFixed(2)}` : "—"}
-            </span>
-            <span className={cn("text-10", l.invoiced_at ? "text-muted-foreground" : "text-primary")}>
-              {l.invoiced_at ? "Invoiced" : "Pending"}
-            </span>
+            {lines.map((l) => (
+              <div key={l.id} className="flex items-center gap-2 text-11">
+                <span
+                  className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")}
+                />
+                <span className="w-14 shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
+                <span className="w-28 shrink-0 truncate text-foreground" title={dispositionLabel(l.disposition)}>
+                  {l.disposition ? dispositionLabel(l.disposition) : l.outcome === "delivered" ? "Delivered" : "Failed"}
+                </span>
+                <span className="w-20 shrink-0 text-muted-foreground">{toTitle(l.resolved_type)}</span>
+                <span className="w-16 shrink-0 text-right text-muted-foreground tabular-nums">
+                  {l.units != null ? `${l.units}mi` : l.flag ? "flagged" : "—"}
+                </span>
+                <span className="w-14 shrink-0 text-right font-mono text-foreground tabular-nums">
+                  {l.amount_cents != null ? `$${(l.amount_cents / 100).toFixed(2)}` : "—"}
+                </span>
+                <span className={cn("text-10", l.invoiced_at ? "text-muted-foreground" : "text-primary")}>
+                  {l.invoiced_at ? "Invoiced" : "Pending"}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </FieldRow>
+        </FieldRow>
+      )}
+    </>
   );
 }
 
@@ -3494,8 +3525,6 @@ function StopDetailPanel({
   const [codAmt, setCodAmt] = useState("0");
   const [selectedRate, setSelectedRate] = useState<string | null>(null);
   const [dimsOpen, setDimsOpen] = useState(false);
-  // Payment / COD collapsible under Recipient — auto-opens when a COD is set.
-  const [payOpen, setPayOpen] = useState(false);
   // Realtime invalidation: bump to re-run the detail fetch below.
   const [realtimeTick, setRealtimeTick] = useState(0);
   const lastLocalSaveRef = useRef(0);
@@ -3643,8 +3672,6 @@ function StopDetailPanel({
     setReturnToSender(full.service.return_to_sender ?? false);
     setCod(full.service.collect_payment ?? false);
     setCodAmt(String(full.service.cod_amount ?? 0));
-    // Expanded when a COD already exists — never hide configured data.
-    setPayOpen((full.service.collect_payment ?? false) || Number(full.service.cod_amount ?? 0) > 0);
     setSelectedRate(full.rates.selected);
     setStopType((full.stop_type ?? "delivery") as "delivery" | "pickup" | "return");
     setRecipName(full.recipient.name ?? "");
@@ -5188,91 +5215,57 @@ function StopDetailPanel({
                     <span className="font-medium text-muted-foreground text-xs">—</span>
                   )}
                 </FieldRow>
-                <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
-                <StopBillingLines
-                  stopId={full?.stop_id ?? summary.stop_id ?? null}
-                  status={status}
-                  disposition={disposition}
-                />
-                {/* Payment / COD — moved here from the standalone Payment section.
-                  Same state + autosave bindings: writes service.collect_payment /
-                  service.cod_amount (the PATCH proxy maps them under body.service). */}
-                <div className="mt-2 px-3 pb-2">
-                  <button
-                    type="button"
-                    onClick={() => setPayOpen((v) => !v)}
-                    className="mb-2 flex items-center gap-1 font-semibold text-11 text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <ChevronDown className={cn("size-3 transition-transform", payOpen && "rotate-180")} />
-                    Payment / COD
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {payOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="overflow-hidden"
-                      >
-                        <FieldRow label="Collect on Delivery">
-                          <Toggle
-                            color="teal"
-                            value={cod}
-                            onChange={(v) => {
-                              setCod(v);
-                              scheduleAutoSave({
-                                service: { collect_payment: v, cod_amount: v ? parseFloat(codAmt) || 0 : 0 },
-                              });
-                            }}
-                          />
-                        </FieldRow>
-                        <AnimatePresence initial={false}>
-                          {cod && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.15 }}
-                              className="overflow-hidden"
-                            >
-                              <FieldRow label="COD Amount">
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold text-13 text-muted-foreground">$</span>
-                                  <input
-                                    value={codAmt}
-                                    inputMode="decimal"
-                                    min="0"
-                                    max="9999"
-                                    onChange={(e) => {
-                                      const v = e.target.value.replace(/[^0-9.]/g, "");
-                                      setCodAmt(v);
-                                      setValidationErrors((er) => {
-                                        const n = { ...er };
-                                        delete n.cod;
-                                        return n;
-                                      });
-                                      scheduleAutoSave({ service: { cod_amount: parseFloat(v) || 0 } });
-                                    }}
-                                    onBlur={(e) => {
-                                      const num = parseFloat(e.target.value);
-                                      if (!Number.isNaN(num)) setCodAmt(num.toFixed(2));
-                                    }}
-                                    placeholder="0.00"
-                                    className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
-                                  />
-                                </div>
-                              </FieldRow>
-                              {validationErrors.cod && (
-                                <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.cod}</p>
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* Payment / COD (2026-08-01) — now a normal FieldRow directly
+                  below Route Zone, not a nested collapsible submenu. Same
+                  state + autosave bindings as before: writes
+                  service.collect_payment / service.cod_amount (the PATCH
+                  proxy maps them under body.service). Billing type + billing
+                  lines moved to the new Billing section below Order Info —
+                  this is recipient-facing payment collection, not billing. */}
+                <FieldRow label="Collect on Delivery">
+                  <Toggle
+                    color="teal"
+                    value={cod}
+                    onChange={(v) => {
+                      setCod(v);
+                      scheduleAutoSave({
+                        service: { collect_payment: v, cod_amount: v ? parseFloat(codAmt) || 0 : 0 },
+                      });
+                    }}
+                  />
+                </FieldRow>
+                {cod && (
+                  <FieldRow label="COD Amount">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-13 text-muted-foreground">$</span>
+                      <input
+                        value={codAmt}
+                        inputMode="decimal"
+                        min="0"
+                        max="9999"
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^0-9.]/g, "");
+                          setCodAmt(v);
+                          setValidationErrors((er) => {
+                            const n = { ...er };
+                            delete n.cod;
+                            return n;
+                          });
+                          scheduleAutoSave({ service: { cod_amount: parseFloat(v) || 0 } });
+                        }}
+                        onBlur={(e) => {
+                          const num = parseFloat(e.target.value);
+                          if (!Number.isNaN(num)) setCodAmt(num.toFixed(2));
+                        }}
+                        placeholder="0.00"
+                        className="h-7 w-24 rounded-none border-0 border-transparent border-b bg-transparent text-right font-semibold text-foreground text-xs outline-none transition-colors focus:border-primary/40 focus:ring-0"
+                      />
+                    </div>
+                  </FieldRow>
+                )}
+                {validationErrors.cod && (
+                  <p className="px-3 pt-0.5 font-medium text-11 text-rose-500">{validationErrors.cod}</p>
+                )}
               </FormSection>
 
               {/* Pickup Location — collapsible to match the other sections */}
@@ -5654,9 +5647,10 @@ function StopDetailPanel({
                 the Recipient section under Package Type (same state + autosave). */}
 
               {/* Payment section removed — Collect on Delivery + COD Amount now
-                live in the Recipient section as the "Payment / COD" collapsible
-                (same state + autosave; still writes service.collect_payment /
-                service.cod_amount). */}
+                live in the Recipient section as normal FieldRows directly
+                below Route Zone (2026-08-01: was a collapsible, now a plain
+                field like Delivery Date; same state + autosave; still writes
+                service.collect_payment / service.cod_amount). */}
 
               {/* Order Info — read only */}
               <FormSection title="Order Info" icon="🔍" defaultOpen={false}>
@@ -5685,6 +5679,19 @@ function StopDetailPanel({
                       ? `$${(full?.total_price ?? summary.total_price).toFixed(2)}`
                       : undefined
                   }
+                />
+              </FormSection>
+
+              {/* Billing (2026-08-01, new section below Order Info) —
+                billing type (moved from Recipient — it's billing, not
+                recipient data), the total billed amount, per-attempt
+                breakdown, and a derived billing status. Compact, tokens only. */}
+              <FormSection title="Billing" icon="💳" defaultOpen={false}>
+                <StopBillingControl stopId={full?.stop_id ?? summary.stop_id ?? null} />
+                <StopBillingLines
+                  stopId={full?.stop_id ?? summary.stop_id ?? null}
+                  status={status}
+                  disposition={disposition}
                 />
               </FormSection>
             </>
@@ -6567,14 +6574,6 @@ export default function StopsPage() {
   // Disposition sub-filter — only meaningful (and only shown) when "failed"
   // or "delivered" is selected. Empty set = no disposition narrowing.
   const [selectedDispositions, setSelectedDispositions] = useState<Set<string>>(new Set());
-  function toggleStatusChip(chip: StatusChip) {
-    setSelectedStatuses((prev) => {
-      const next = new Set(prev);
-      if (next.has(chip)) next.delete(chip);
-      else next.add(chip);
-      return next;
-    });
-  }
   function toggleDispositionChip(d: string) {
     setSelectedDispositions((prev) => {
       const next = new Set(prev);
@@ -7799,11 +7798,23 @@ export default function StopsPage() {
   return (
     <div
       className="flex h-full overflow-hidden"
-      style={{
-        backgroundColor: "hsl(var(--muted) / 0.4)",
-        backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)",
-        backgroundSize: "20px 20px",
-      }}
+      style={
+        {
+          backgroundColor: "hsl(var(--muted) / 0.4)",
+          backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+          // Rebalance the 3-pane split for THIS page only (2026-08-01) — the
+          // list column was too narrow for the new status chips/rows to
+          // breathe. Overrides the shared --spacing-panel-list-w/detail-w
+          // tokens (defined in globals.css, also used by Fleet/Drivers,
+          // Fleet/Hubs, and Search) scoped to this subtree only, via CSS
+          // cascade — Fleet/Hubs/Search read the same var names from their
+          // OWN component trees and are completely unaffected. The map pane
+          // (flex-1) gives up the difference.
+          "--spacing-panel-list-w": "clamp(21rem, 20vw, 30rem)",
+          "--spacing-panel-detail-w": "clamp(20rem, 22vw, 34rem)",
+        } as React.CSSProperties
+      }
     >
       <style>{`.custom-scroll::-webkit-scrollbar{width:3px}.custom-scroll::-webkit-scrollbar-thumb{background:hsl(var(--border));border-radius:2px}.pb-safe{padding-bottom:calc(0.75rem + env(safe-area-inset-bottom, 60px))}@media(min-width:640px){.pb-safe{padding-bottom:0.75rem}}`}</style>
 
@@ -8124,56 +8135,60 @@ export default function StopsPage() {
                 </div>
               </TooltipProvider>
             </div>
-            {/* Status filter chips (2026-08-01 dispatch console) — multi-select
-                over the real post-collapse vocabulary, live counts per chip.
-                Horizontally scrollable so it degrades cleanly at 390px. */}
-            <div className="flex items-center gap-1 overflow-x-auto border-border/50 border-b bg-card px-2 py-1.5">
-              <Checkbox
-                checked={allFilteredSelected}
-                onCheckedChange={toggleSelectAll}
-                className="mr-1 size-3.5 shrink-0"
-                aria-label="Select all"
-              />
-              {(
-                [
-                  { value: "draft", label: "Drafts" },
-                  { value: "unassigned", label: "Unassigned" },
-                  { value: "in_route", label: "In route" },
-                  { value: "delivered", label: "Delivered" },
-                  { value: "failed", label: "Failed" },
-                ] as const
-              ).map((t) => {
-                const active = selectedStatuses.has(t.value);
-                const count = statusCounts[t.value];
-                return (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => toggleStatusChip(t.value)}
-                    aria-pressed={active}
-                    className={cn(
-                      "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 font-medium text-11 ring-1 transition-colors",
-                      active
-                        ? "bg-primary text-primary-foreground ring-primary"
-                        : "text-muted-foreground ring-border hover:bg-accent hover:text-foreground",
-                    )}
-                  >
-                    {t.label}
-                    <span
-                      className={cn("ml-1 text-10", active ? "text-primary-foreground/75" : "text-muted-foreground/60")}
+            {/* Status filter chips (2026-08-01 dispatch console, redesigned
+                2026-08-01): real shadcn ToggleGroup (Radix, type="multiple")
+                instead of hand-rolled buttons — proper aria-pressed/keyboard
+                nav for free, and it's the same primitive already used
+                elsewhere in this app (chart-area-interactive.tsx,
+                layout-controls.tsx). Wraps to a 2nd line instead of
+                clipping/scrolling — no chip is ever hidden. The select-all
+                checkbox moved OUT of this row (separate concern — see the
+                bulk-select strip right above the list). */}
+            <div className="flex flex-wrap items-center gap-1.5 border-border/50 border-b bg-card px-2 py-1.5">
+              <ToggleGroup
+                type="multiple"
+                value={[...selectedStatuses]}
+                onValueChange={(vals) => setSelectedStatuses(new Set(vals as StatusChip[]))}
+                variant="outline"
+                size="sm"
+                spacing={4}
+                className="flex-wrap justify-start"
+              >
+                {(
+                  [
+                    { value: "draft", label: "Drafts" },
+                    { value: "unassigned", label: "Unassigned" },
+                    { value: "in_route", label: "In route" },
+                    { value: "delivered", label: "Delivered" },
+                    { value: "failed", label: "Failed" },
+                  ] as const
+                ).map((t) => {
+                  const active = selectedStatuses.has(t.value);
+                  const count = statusCounts[t.value];
+                  return (
+                    <ToggleGroupItem
+                      key={t.value}
+                      value={t.value}
+                      className="h-6 gap-1 rounded-full! px-2.5 text-11 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                     >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+                      {t.label}
+                      <Badge
+                        variant={active ? "secondary" : "outline"}
+                        className={cn("h-4 px-1 text-10", active && "bg-primary-foreground/20 text-primary-foreground")}
+                      >
+                        {count}
+                      </Badge>
+                    </ToggleGroupItem>
+                  );
+                })}
+              </ToggleGroup>
             </div>
             {/* Disposition sub-filter — only meaningful (and only shown) once
                 failed or delivered is selected. Lets ops act on patterns
                 ("20 no one home this week"). */}
             {(selectedStatuses.has("failed") || selectedStatuses.has("delivered")) &&
               Object.keys(dispositionCounts).length > 0 && (
-                <div className="flex items-center gap-1 overflow-x-auto border-border/50 border-b bg-muted/20 px-2 py-1.5">
+                <div className="flex flex-wrap items-center gap-1 border-border/50 border-b bg-muted/20 px-2 py-1.5">
                   <span className="shrink-0 text-10 text-muted-foreground/60">Reason:</span>
                   {Object.entries(dispositionCounts)
                     .sort((a, b) => b[1] - a[1])
@@ -8208,6 +8223,24 @@ export default function StopsPage() {
                 </div>
               )}
           </div>
+
+          {/* Bulk-select strip (2026-08-01) — separate concern from the status
+              filter row above: this checkbox drives selection for bulk
+              actions, not filtering. Only shown once there's something to
+              select. */}
+          {!loading && filteredStops.length > 0 && (
+            <div className="flex items-center gap-2 border-border/40 border-b bg-card px-3 py-1">
+              <Checkbox
+                checked={allFilteredSelected}
+                onCheckedChange={toggleSelectAll}
+                className="size-3.5 shrink-0"
+                aria-label="Select all"
+              />
+              <span className="text-10 text-muted-foreground/60">
+                {someSelected ? `${selectedIds.size} selected` : "Select all"}
+              </span>
+            </div>
+          )}
 
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (

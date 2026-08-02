@@ -878,7 +878,12 @@ function BillingRatesEditor() {
           </span>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2 lg:grid-cols-4">
+      {/* 2026-08-02: was `lg:grid-cols-4`, a VIEWPORT-width breakpoint — wrong
+          now that this editor lives inside a fixed ~448px Sheet rather than
+          the full page, so it kept trying to lay out 4 columns in a
+          container far narrower than the viewport and overflowed. Fixed at
+          2 columns, which fits the Sheet at any window size. */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {money("package", "Per package")}
         {money("per_mile", "Per mile")}
         {money("on_demand_per_mile", "On-demand / mile")}

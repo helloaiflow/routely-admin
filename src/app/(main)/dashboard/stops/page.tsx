@@ -8346,30 +8346,50 @@ export default function StopsPage() {
                     className="size-3.5 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    {/* Line 1 — name + status (6px dot + colored 10px label) */}
+                    {/* Line 1 — name (left) + status (6px dot + colored 10px
+                        label, disposition merged in when it adds real info)
+                        + date (right). 2026-08-01: date moved up from line 2,
+                        and the standalone disposition sublabel that used to
+                        duplicate "Delivered" for the trivial delivered_ok
+                        case was folded in here instead — it's only appended
+                        when its text actually differs from the status label. */}
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate font-semibold text-12 text-foreground leading-snug">
                         {toTitle(s.recipient_name) || "—"}
                       </p>
-                      <span
-                        className={cn(
-                          "flex shrink-0 items-center gap-1 font-medium text-10",
-                          s.submit_error
-                            ? "text-rose-500"
-                            : s.status === "draft"
-                              ? "text-violet-500"
-                              : DELIVERED.includes(s.status)
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : TRANSIT.includes(s.status)
-                                  ? "text-blue-600 dark:text-blue-400"
-                                  : FAILED.includes(s.status)
-                                    ? "text-rose-600 dark:text-rose-400"
-                                    : "text-amber-600 dark:text-amber-500",
-                        )}
-                        title={s.submit_error ? (s.submit_error.reason ?? "Submit failed — fix & resubmit") : undefined}
-                      >
-                        <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-                        {s.submit_error ? "Submit failed" : statusLabel(s.status)}
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={cn(
+                            "flex min-w-0 items-center gap-1 font-medium text-10",
+                            s.submit_error
+                              ? "text-rose-500"
+                              : s.status === "draft"
+                                ? "text-violet-500"
+                                : DELIVERED.includes(s.status)
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : TRANSIT.includes(s.status)
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : FAILED.includes(s.status)
+                                      ? "text-rose-600 dark:text-rose-400"
+                                      : "text-amber-600 dark:text-amber-500",
+                          )}
+                          title={
+                            s.submit_error ? (s.submit_error.reason ?? "Submit failed — fix & resubmit") : undefined
+                          }
+                        >
+                          <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
+                          <span className="truncate">
+                            {(() => {
+                              if (s.submit_error) return "Submit failed";
+                              const base = statusLabel(s.status);
+                              const dispo = s.disposition ? dispositionLabel(s.disposition) : "";
+                              return dispo && dispo !== base ? `${base} · ${dispo}` : base;
+                            })()}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-10 text-muted-foreground/60 tabular-nums">
+                          {fmtStopDate(s.created_at)}
+                        </span>
                       </span>
                     </div>
                     {s.cancel_requested?.status === "pending" && (
@@ -8377,40 +8397,33 @@ export default function StopsPage() {
                         Cancel requested
                       </span>
                     )}
-                    {/* Disposition sublabel (2026-07-31 collapse) — the WHY
-                        behind a terminal delivered|failed row. */}
-                    {s.disposition && (
-                      <span className="mt-0.5 block w-fit truncate text-10 text-muted-foreground">
-                        {dispositionLabel(s.disposition)}
-                      </span>
+                    {/* Line 2 — address · city ST zip, one muted line (tooltip
+                        carries the full text). Tracking ID no longer lives
+                        inline here — it used to get clipped by the address's
+                        own truncation (2026-08-01: moved to its own line 3
+                        below so it's never cut off). */}
+                    {(() => {
+                      const addr = [
+                        toTitle(s.address),
+                        [toTitle(s.city), `${s.state ?? ""} ${s.zip ?? ""}`.trim()].filter(Boolean).join(", "),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return (
+                        <p
+                          className="mt-px min-w-0 truncate text-11 text-muted-foreground/75 leading-snug"
+                          title={addr}
+                        >
+                          {addr || "—"}
+                        </p>
+                      );
+                    })()}
+                    {/* Line 3 — stop ID, mono, never truncated. */}
+                    {!s.id.startsWith("draft_") && s.stop_id && (
+                      <p className="mt-px whitespace-nowrap font-mono text-10 text-primary/80 tabular-nums">
+                        {s.stop_id}
+                      </p>
                     )}
-                    {/* Line 2 — address · city ST zip · tracking, one muted line
-                        (tooltip carries the full text) + date right */}
-                    <div className="mt-px flex items-center justify-between gap-2">
-                      {(() => {
-                        const addr = [
-                          toTitle(s.address),
-                          [toTitle(s.city), `${s.state ?? ""} ${s.zip ?? ""}`.trim()].filter(Boolean).join(", "),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ");
-                        const tracking = s.id.startsWith("draft_") ? "" : s.stop_id || "";
-                        return (
-                          <p
-                            className="min-w-0 truncate text-11 text-muted-foreground/75 leading-snug"
-                            title={[addr, tracking].filter(Boolean).join(" · ")}
-                          >
-                            {addr || "—"}
-                            {tracking && (
-                              <span className="font-mono text-10 text-primary/80 tabular-nums"> · {tracking}</span>
-                            )}
-                          </p>
-                        );
-                      })()}
-                      <span className="shrink-0 text-10 text-muted-foreground/60 tabular-nums">
-                        {fmtStopDate(s.created_at)}
-                      </span>
-                    </div>
                   </div>
                 </div>
               );

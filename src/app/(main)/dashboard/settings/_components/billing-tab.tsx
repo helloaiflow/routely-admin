@@ -441,7 +441,12 @@ export function BillingTab({
           latest charges), not an occasional deep-dive — it doesn't
           belong below the charts. ── */}
       <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
-        <Card className="lg:col-span-2">
+        {/* Below lg: Payment method/term (order-1) renders before Recent
+            charges (order-2) — otherwise the 15-row charges list pushes the
+            payment card, the thing needed most often, far down the mobile
+            stack. At lg+ both reset to source order for the existing
+            2-col/1-col layout. */}
+        <Card className="order-2 lg:order-none lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-13">Recent charges</CardTitle>
             <p className="text-muted-foreground text-sm">Latest delivery-ledger lines (not shipping labels).</p>
@@ -495,7 +500,7 @@ export function BillingTab({
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        <div className="order-1 space-y-4 lg:order-none">
           <Card>
             <CardHeader>
               <CardTitle className="text-13">Payment method</CardTitle>

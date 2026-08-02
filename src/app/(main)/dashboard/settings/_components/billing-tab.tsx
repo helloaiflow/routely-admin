@@ -716,7 +716,7 @@ export function BillingTab({
                   not a broken one — and adding Miles/On-Demand data later
                   needs no layout change, just more Pie slices. */}
               <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-                <ChartContainer config={donutConfig} className="mx-auto aspect-square max-h-40 shrink-0">
+                <ChartContainer config={donutConfig} className="mx-auto h-40 w-40 shrink-0">
                   <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                     <ChartTooltip
                       cursor={false}

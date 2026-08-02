@@ -947,7 +947,7 @@ export function DriversTab() {
           mobileTab === "map" ? "block" : "hidden",
         )}
       >
-        <DriverMapPanel driver={selectedDriver} hubs={hubs} />
+        <DriverMapPanel driver={selectedDriver} hubs={hubs} onGoToAddress={() => setMobileTab("detail")} />
       </div>
 
       {/* ═══ MOBILE — sticky bottom nav (List · Details · Map) ═══ */}
@@ -1045,7 +1045,15 @@ function DriverRow({
 }
 
 // ── Persistent map panel — empty state when nothing selected ──────────────────
-function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }) {
+function DriverMapPanel({
+  driver,
+  hubs,
+  onGoToAddress,
+}: {
+  driver: Driver | null;
+  hubs: Hub[];
+  onGoToAddress: () => void;
+}) {
   if (!driver) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/30">
@@ -1089,15 +1097,22 @@ function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }
       {mapHint && (
         <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
           {/* 2026-08-02: was static text — now an actionable button so the
-              empty state doesn't dead-end; focuses the Address field, which
-              is already visible whenever this hint can show (same "Details"
-              group renders whenever a driver is selected). */}
+              empty state doesn't dead-end; focuses the Address field. On
+              desktop that field is already visible in the side-by-side
+              Details panel. On mobile, Details is a separate display:none
+              tab until selected — focus() on a hidden element is a silent
+              no-op, so switch tabs first and focus on the next frame once
+              the field is actually visible (verified live: without this the
+              button did nothing on mobile). */}
           <button
             type="button"
             onClick={() => {
-              const el = document.getElementById("driver-address");
-              el?.scrollIntoView({ behavior: "smooth", block: "center" });
-              (el as HTMLInputElement | null)?.focus();
+              onGoToAddress();
+              requestAnimationFrame(() => {
+                const el = document.getElementById("driver-address");
+                el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                (el as HTMLInputElement | null)?.focus();
+              });
             }}
             className="type-caption inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-card/95 px-3 py-1.5 text-primary shadow-sm backdrop-blur-sm transition-colors hover:bg-primary/5"
           >

@@ -1124,7 +1124,7 @@ export function HubsTab() {
           mobileTab === "map" ? "block" : "hidden",
         )}
       >
-        <HubMapPanel hub={selectedHub} />
+        <HubMapPanel hub={selectedHub} onGoToAddress={() => setMobileTab("detail")} />
       </div>
 
       {/* ═══ MOBILE — sticky bottom nav (List · Details · Map) ═══ */}
@@ -1237,7 +1237,7 @@ function HubRow({ hub, selected, onSelect }: { hub: Hub; selected: boolean; onSe
 }
 
 // ── Persistent map panel — empty state when nothing selected ──────────────────
-function HubMapPanel({ hub }: { hub: Hub | null }) {
+function HubMapPanel({ hub, onGoToAddress }: { hub: Hub | null; onGoToAddress: () => void }) {
   if (!hub) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/30">
@@ -1265,9 +1265,17 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
         <button
           type="button"
           onClick={() => {
-            const el = document.getElementById("hub-start-from-address");
-            el?.scrollIntoView({ behavior: "smooth", block: "center" });
-            (el as HTMLInputElement | null)?.focus();
+            // On mobile the Details tab (where this field lives) is
+            // display:none until selected — focus() on a hidden element is a
+            // silent no-op, so switch tabs first and focus on the next frame
+            // once the field is actually visible. No-op on desktop (both
+            // panels are already visible side by side).
+            onGoToAddress();
+            requestAnimationFrame(() => {
+              const el = document.getElementById("hub-start-from-address");
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              (el as HTMLInputElement | null)?.focus();
+            });
           }}
           className="rounded-lg border border-primary/30 bg-background px-3 py-1.5 font-medium text-11 text-primary transition-colors hover:bg-primary/5"
         >

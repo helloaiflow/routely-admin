@@ -34,7 +34,7 @@ export async function GET() {
   // "old uninvoiced" overdue signal. ──
   const { data: uninvoicedRows } = await supabase
     .from("billing_ledger")
-    .select("resolved_type, outcome, amount_cents, attempted_at, flag")
+    .select("resolved_type, outcome, amount_cents, units, attempted_at, flag")
     .eq("tenant_id", tenantId)
     .is("invoiced_at", null);
   const uninvoiced = uninvoicedRows ?? [];
@@ -44,16 +44,20 @@ export async function GET() {
   let oldUninvoicedCount = 0;
   let failedLines = 0;
   let totalLines = 0;
-  const byType: Record<string, { lines: number; amount_cents: number }> = {};
+  // `qty` is the natural unit for the type — package/on_demand count lines
+  // (1 line = 1 stop), miles sums the actual mileage (`units` column).
+  // Powers the donut's "$X / N packages" / "$Y / M miles" legend rows.
+  const byType: Record<string, { lines: number; amount_cents: number; qty: number }> = {};
   for (const l of uninvoiced) {
     if (l.flag) continue;
     const cents = l.amount_cents ?? 0;
     amountDueCents += cents;
     totalLines++;
     if (l.outcome === "failed") failedLines++;
-    byType[l.resolved_type] ??= { lines: 0, amount_cents: 0 };
+    byType[l.resolved_type] ??= { lines: 0, amount_cents: 0, qty: 0 };
     byType[l.resolved_type].lines++;
     byType[l.resolved_type].amount_cents += cents;
+    byType[l.resolved_type].qty += l.resolved_type === "miles" ? Number(l.units ?? 0) : 1;
     if (new Date(l.attempted_at) < thirtyDaysAgo) {
       oldUninvoicedCount++;
       oldUninvoicedCents += cents;
@@ -73,6 +77,21 @@ export async function GET() {
     .limit(500);
   const recent = recentRows ?? [];
 
+  // Like-for-like month-over-month: comparing the FULL previous month against
+  // a partial current month produces a false "-100%" on day 1-2 of every
+  // month (verified live: this is exactly what showed for both delivery
+  // charges and label spend). Cap "last month" at the same elapsed day count
+  // as this month so far.
+  const elapsedDaysThisMonth = now.getDate();
+  const lastMonthComparableEnd = new Date(
+    lastMonthStart.getFullYear(),
+    lastMonthStart.getMonth(),
+    elapsedDaysThisMonth,
+    23,
+    59,
+    59,
+    999,
+  );
   let deliveryThisMonthCents = 0;
   let deliveryLastMonthCents = 0;
   const deliverySeries = new Map<string, number>();
@@ -84,7 +103,7 @@ export async function GET() {
     const at = new Date(l.attempted_at);
     const cents = l.amount_cents ?? 0;
     if (at >= monthStart) deliveryThisMonthCents += cents;
-    else if (at >= lastMonthStart && at < monthStart) deliveryLastMonthCents += cents;
+    else if (at >= lastMonthStart && at <= lastMonthComparableEnd) deliveryLastMonthCents += cents;
     const k = dayKey(at);
     if (deliverySeries.has(k)) deliverySeries.set(k, (deliverySeries.get(k) ?? 0) + cents);
   }
@@ -130,7 +149,7 @@ export async function GET() {
     const cents = round0((Number(doc.rate?.client_price) || 0) * 100);
     const at = new Date(o.created_at);
     if (at >= monthStart) labelsThisMonthCents += cents;
-    else if (at >= lastMonthStart && at < monthStart) labelsLastMonthCents += cents;
+    else if (at >= lastMonthStart && at <= lastMonthComparableEnd) labelsLastMonthCents += cents;
   }
 
   return NextResponse.json({

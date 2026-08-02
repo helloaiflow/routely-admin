@@ -21,7 +21,7 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Pie, PieChart, Label as RechartsLabel, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,15 @@ const TYPE_COLOR: Record<string, string> = {
   miles: "bg-[var(--chart-2)]",
   on_demand: "bg-[var(--chart-3)]",
 };
+// Natural unit label per type for the donut legend's quantity number
+// ("58 packages" / "12.4 miles" / "3 stops") — same triplet of hues as
+// TYPE_COLOR above, just expressed as chart-config vars for recharts.
+const QTY_UNIT: Record<string, string> = { package: "packages", miles: "miles", on_demand: "stops" };
+const donutConfig = {
+  package: { label: "Packages", color: "var(--primary)" },
+  miles: { label: "Miles", color: "var(--chart-2)" },
+  on_demand: { label: "On-Demand", color: "var(--chart-3)" },
+} satisfies ChartConfig;
 /* Delta vs last period — same up/down/flat convention throughout the KPI
  * row. Flat (both zero, or unchanged) shows neither arrow nor color. */
 function Delta({ current, previous }: { current: number; previous: number }) {
@@ -696,25 +705,87 @@ export function BillingTab({
               <p className="text-muted-foreground text-sm">Uninvoiced this period, by billing type.</p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                {typeEntries.map(([type, g]) => (
-                  <div
-                    key={type}
-                    className={TYPE_COLOR[type] ?? "bg-muted-foreground"}
-                    style={{ width: `${typeTotalCents > 0 ? (g.amount_cents / typeTotalCents) * 100 : 0}%` }}
-                    title={`${TYPE_LABEL[type] ?? type}: ${centsToUsd(g.amount_cents)}`}
-                  />
-                ))}
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {typeEntries.map(([type, g]) => (
-                  <div key={type} className="flex items-center gap-2">
-                    <span className={cn("size-2 shrink-0 rounded-full", TYPE_COLOR[type] ?? "bg-muted-foreground")} />
-                    <span className="min-w-0 flex-1 truncate text-13">{TYPE_LABEL[type] ?? type}</span>
-                    <span className="shrink-0 text-11 text-muted-foreground tabular-nums">{g.lines} lines</span>
-                    <span className="shrink-0 font-semibold text-13 tabular-nums">{centsToUsd(g.amount_cents)}</span>
-                  </div>
-                ))}
+              {/* 2026-08-02 (item 4): donut + center total, replacing the
+                  flat stacked bar — conveys money AND quantity per type at
+                  once. Chosen over a grouped bar because the "part of a
+                  whole" question ("what share of my charges is Miles?") is
+                  what a donut answers natively; a center total keeps the
+                  headline number visible even while scanning the legend.
+                  With only one non-zero type (today's reality) it renders
+                  as a single-hue ring — still a deliberate, readable state,
+                  not a broken one — and adding Miles/On-Demand data later
+                  needs no layout change, just more Pie slices. */}
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+                <ChartContainer config={donutConfig} className="mx-auto aspect-square max-h-40 shrink-0">
+                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          hideLabel
+                          formatter={(value, name) => (
+                            <span className="flex w-full items-center justify-between gap-3">
+                              <span className="text-muted-foreground">{TYPE_LABEL[name as string] ?? name}</span>
+                              <span className="font-semibold tabular-nums">{centsToUsd(Number(value))}</span>
+                            </span>
+                          )}
+                        />
+                      }
+                    />
+                    <Pie
+                      data={typeEntries.map(([type, g]) => ({
+                        type,
+                        amount_cents: g.amount_cents,
+                        fill: `var(--color-${type})`,
+                      }))}
+                      dataKey="amount_cents"
+                      nameKey="type"
+                      innerRadius={52}
+                      outerRadius={72}
+                      paddingAngle={typeEntries.length > 1 ? 2 : 0}
+                      cornerRadius={4}
+                    >
+                      <RechartsLabel
+                        content={({ viewBox }) => {
+                          if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                            return (
+                              <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                                <tspan
+                                  x={viewBox.cx}
+                                  y={viewBox.cy}
+                                  className="fill-foreground font-bold text-lg tabular-nums"
+                                >
+                                  {centsToUsd(typeTotalCents)}
+                                </tspan>
+                                <tspan
+                                  x={viewBox.cx}
+                                  y={(viewBox.cy ?? 0) + 18}
+                                  className="fill-muted-foreground text-11"
+                                >
+                                  total
+                                </tspan>
+                              </text>
+                            );
+                          }
+                        }}
+                      />
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <div className="w-full min-w-0 flex-1 space-y-2">
+                  {typeEntries.map(([type, g]) => (
+                    <div key={type} className="flex items-center gap-2">
+                      <span className={cn("size-2 shrink-0 rounded-full", TYPE_COLOR[type] ?? "bg-muted-foreground")} />
+                      <span className="min-w-0 flex-1 truncate text-13">{TYPE_LABEL[type] ?? type}</span>
+                      <span className="shrink-0 text-11 text-muted-foreground tabular-nums">
+                        {g.qty % 1 === 0 ? g.qty : g.qty.toFixed(1)} {QTY_UNIT[type] ?? "lines"}
+                      </span>
+                      <span className="w-16 shrink-0 text-right font-semibold text-13 tabular-nums">
+                        {centsToUsd(g.amount_cents)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
               {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per
                   ATTEMPT, not per successful delivery, so a tenant's charges

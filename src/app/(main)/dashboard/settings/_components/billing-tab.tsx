@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
   AlertCircle,
   Check,
   CircleCheck,
   CreditCard,
   ExternalLink,
+  FileText,
   Loader2,
   Package,
   Receipt,
@@ -144,6 +147,7 @@ export function BillingTab({
   billingLoading: boolean;
   plan: string;
 }) {
+  const router = useRouter();
   const isPro = ["professional", "enterprise"].includes(plan);
   const [data, setData] = useState<BillingCharges | null>(null);
   const [loading, setLoading] = useState(true);
@@ -271,32 +275,45 @@ export function BillingTab({
           #2 is also delivery charges (this month, any invoice status), #3 is
           the OTHER flow — shipping label spend (label_orders). ── */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Card className="relative overflow-hidden">
+        {/* 2026-08-02 (item 2): the page's primary card — dynamic amount +
+            two full-width actions anchored at the bottom, own design
+            language (our radii/tokens/density), not a copy of the
+            reference. Ring + stronger tint set it apart from the 3
+            secondary KPI cards beside it. */}
+        <Card className="relative overflow-hidden ring-1 ring-primary/15">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-10 -right-8 size-24 rounded-full bg-primary/10 blur-2xl"
+            className="pointer-events-none absolute -top-10 -right-8 size-28 rounded-full bg-primary/15 blur-2xl"
           />
-          <CardContent className="relative space-y-1.5 py-4">
+          <CardContent className="relative flex h-full flex-col gap-3 py-4">
             <div className="flex items-center justify-between gap-2">
               <span className="type-label truncate text-muted-foreground">Amount due this period</span>
               <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                 <Receipt className="size-3.5" aria-hidden="true" />
               </span>
             </div>
-            {!summary ? (
-              <Skeleton className="h-7 w-20" />
-            ) : (
-              <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">
-                {centsToUsd(summary.amount_due_cents)}
-              </p>
-            )}
-            <div className="flex items-center justify-between gap-2">
+            <div className="space-y-1">
+              {!summary ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <p className="font-semibold text-2xl tabular-nums tracking-tight">
+                  {centsToUsd(summary.amount_due_cents)}
+                </p>
+              )}
               <p className="truncate text-muted-foreground text-xs">Delivery charges, not yet invoiced</p>
+            </div>
+            <div className="mt-auto grid grid-cols-2 gap-2 pt-1">
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span>
-                      <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-11" disabled>
+                    <span className="min-w-0">
+                      <Button
+                        size="sm"
+                        className="h-8 w-full gap-1.5 border border-success/30 bg-success/10 text-11 text-success hover:bg-success/15 disabled:opacity-50"
+                        variant="ghost"
+                        disabled
+                      >
+                        <Wallet className="size-3.5 shrink-0" aria-hidden="true" />
                         Pay now
                       </Button>
                     </span>
@@ -307,6 +324,15 @@ export function BillingTab({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 w-full gap-1.5 text-11"
+                onClick={() => router.push("/dashboard/settings?tab=invoices")}
+              >
+                <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                Invoices
+              </Button>
             </div>
           </CardContent>
         </Card>

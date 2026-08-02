@@ -46,6 +46,7 @@ import {
   RotateCcw,
   ScanLine,
   Search,
+  SlidersHorizontal,
   Snowflake,
   StickyNote,
   Trash2,
@@ -76,6 +77,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -843,6 +845,117 @@ function StopBillingLines({
         </FieldRow>
       )}
     </>
+  );
+}
+
+/* Status filter chips — real shadcn ToggleGroup (Radix, type="multiple").
+ * Extracted (2026-08-02) so the exact same content can render both inline
+ * (sm: and up) and inside the mobile Filters sheet (below sm:) without
+ * duplicating the JSX. */
+function StatusFilterRow({
+  selectedStatuses,
+  setSelectedStatuses,
+  statusCounts,
+}: {
+  selectedStatuses: Set<StatusChip>;
+  setSelectedStatuses: (next: Set<StatusChip>) => void;
+  statusCounts: Record<string, number>;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-border/50 border-b bg-card px-2 py-1.5">
+      <ToggleGroup
+        type="multiple"
+        value={[...selectedStatuses]}
+        onValueChange={(vals) => setSelectedStatuses(new Set(vals as StatusChip[]))}
+        variant="outline"
+        size="sm"
+        spacing={4}
+        className="flex-wrap justify-start"
+      >
+        {(
+          [
+            { value: "draft", label: "Drafts" },
+            { value: "unassigned", label: "Unassigned" },
+            { value: "in_route", label: "In route" },
+            { value: "delivered", label: "Delivered" },
+            { value: "failed", label: "Failed" },
+          ] as const
+        ).map((t) => {
+          const active = selectedStatuses.has(t.value);
+          const count = statusCounts[t.value];
+          return (
+            <ToggleGroupItem
+              key={t.value}
+              value={t.value}
+              className="h-6 gap-1 rounded-full! px-2.5 text-11 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              {t.label}
+              <Badge
+                variant={active ? "secondary" : "outline"}
+                className={cn("h-4 px-1 text-10", active && "bg-primary-foreground/20 text-primary-foreground")}
+              >
+                {count}
+              </Badge>
+            </ToggleGroupItem>
+          );
+        })}
+      </ToggleGroup>
+    </div>
+  );
+}
+
+/* Disposition sub-filter — only meaningful (and only shown) once failed or
+ * delivered is selected. Extracted alongside StatusFilterRow for the same
+ * inline/sheet reuse reason. */
+function DispositionSubFilterRow({
+  selectedStatuses,
+  dispositionCounts,
+  selectedDispositions,
+  toggleDispositionChip,
+  setSelectedDispositions,
+}: {
+  selectedStatuses: Set<StatusChip>;
+  dispositionCounts: Record<string, number>;
+  selectedDispositions: Set<string>;
+  toggleDispositionChip: (d: string) => void;
+  setSelectedDispositions: (next: Set<string>) => void;
+}) {
+  if (!(selectedStatuses.has("failed") || selectedStatuses.has("delivered"))) return null;
+  if (Object.keys(dispositionCounts).length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-border/50 border-b bg-muted/20 px-2 py-1.5">
+      <span className="shrink-0 text-10 text-muted-foreground/60">Reason:</span>
+      {Object.entries(dispositionCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([d, count]) => {
+          const active = selectedDispositions.has(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => toggleDispositionChip(d)}
+              aria-pressed={active}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-10 ring-1 transition-colors",
+                active
+                  ? "bg-foreground text-background ring-foreground"
+                  : "text-muted-foreground ring-border hover:bg-accent",
+              )}
+            >
+              {dispositionLabel(d)} <span className="opacity-70">{count}</span>
+            </button>
+          );
+        })}
+      {selectedDispositions.size > 0 && (
+        <button
+          type="button"
+          onClick={() => setSelectedDispositions(new Set())}
+          className="shrink-0 text-10 text-muted-foreground/60 underline hover:text-foreground"
+        >
+          clear
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -6748,7 +6861,7 @@ export default function StopsPage() {
   // drafts (no delivery day yet) are ranged client-side by created_at.
   // "all" returns everything; a literal YYYY-MM-DD `dateFilter` + optional
   // `customRangeEnd` is a custom range (single day if customRangeEnd unset).
-  type DateFilter = "today" | "yesterday" | "tomorrow" | "last7" | "all" | string;
+  type DateFilter = "today" | "yesterday" | "tomorrow" | "last7" | "thismonth" | "all" | string;
   const localDateStr = useCallback(
     (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
@@ -6770,6 +6883,11 @@ export default function StopsPage() {
     if (dateFilter === "last7") {
       return { from: localDateStr(new Date(Date.now() - 6 * 86400000)), to: today };
     }
+    if (dateFilter === "thismonth") {
+      const now = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: localDateStr(first), to: today };
+    }
     if (dateFilter === "all") return { from: null, to: null };
     // Literal YYYY-MM-DD — custom range (customRangeEnd) or a single custom day.
     return { from: dateFilter, to: customRangeEnd || dateFilter };
@@ -6783,11 +6901,13 @@ export default function StopsPage() {
           ? "Tomorrow"
           : dateFilter === "last7"
             ? "Last 7 days"
-            : dateFilter === "all"
-              ? "All"
-              : customRangeEnd && customRangeEnd !== dateFilter
-                ? `${dateFilter} → ${customRangeEnd}`
-                : dateFilter;
+            : dateFilter === "thismonth"
+              ? "This month"
+              : dateFilter === "all"
+                ? "All"
+                : customRangeEnd && customRangeEnd !== dateFilter
+                  ? `${dateFilter} → ${customRangeEnd}`
+                  : dateFilter;
 
   // Sequence guard: realtime catch-ups + visibility refreshes can overlap the
   // mount load; without this, a SLOWER older response lands last and
@@ -7033,7 +7153,8 @@ export default function StopsPage() {
       if (dateTo && dateTo !== dateFrom) setCustomRangeEnd(dateTo);
     } else {
       const preset = sp.get("date");
-      if (preset && ["today", "yesterday", "tomorrow", "last7", "all"].includes(preset)) setDateFilter(preset);
+      if (preset && ["today", "yesterday", "tomorrow", "last7", "thismonth", "all"].includes(preset))
+        setDateFilter(preset);
     }
     if (["1", "true"].includes(sp.get("cancel_pending") ?? "")) setPendingCancelOnly(true);
     const q = sp.get("q");
@@ -8093,6 +8214,7 @@ export default function StopsPage() {
                             ["yesterday", "Yesterday"],
                             ["tomorrow", "Tomorrow"],
                             ["last7", "Last 7 days"],
+                            ["thismonth", "This month"],
                             ["all", "All"],
                           ] as const
                         ).map(([v, l]) => (
@@ -8158,93 +8280,70 @@ export default function StopsPage() {
                 </div>
               </TooltipProvider>
             </div>
-            {/* Status filter chips (2026-08-01 dispatch console, redesigned
-                2026-08-01): real shadcn ToggleGroup (Radix, type="multiple")
-                instead of hand-rolled buttons — proper aria-pressed/keyboard
-                nav for free, and it's the same primitive already used
-                elsewhere in this app (chart-area-interactive.tsx,
-                layout-controls.tsx). Wraps to a 2nd line instead of
-                clipping/scrolling — no chip is ever hidden. The select-all
-                checkbox moved OUT of this row (separate concern — see the
-                bulk-select strip right above the list). */}
-            <div className="flex flex-wrap items-center gap-1.5 border-border/50 border-b bg-card px-2 py-1.5">
-              <ToggleGroup
-                type="multiple"
-                value={[...selectedStatuses]}
-                onValueChange={(vals) => setSelectedStatuses(new Set(vals as StatusChip[]))}
-                variant="outline"
-                size="sm"
-                spacing={4}
-                className="flex-wrap justify-start"
-              >
-                {(
-                  [
-                    { value: "draft", label: "Drafts" },
-                    { value: "unassigned", label: "Unassigned" },
-                    { value: "in_route", label: "In route" },
-                    { value: "delivered", label: "Delivered" },
-                    { value: "failed", label: "Failed" },
-                  ] as const
-                ).map((t) => {
-                  const active = selectedStatuses.has(t.value);
-                  const count = statusCounts[t.value];
-                  return (
-                    <ToggleGroupItem
-                      key={t.value}
-                      value={t.value}
-                      className="h-6 gap-1 rounded-full! px-2.5 text-11 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                    >
-                      {t.label}
-                      <Badge
-                        variant={active ? "secondary" : "outline"}
-                        className={cn("h-4 px-1 text-10", active && "bg-primary-foreground/20 text-primary-foreground")}
-                      >
-                        {count}
-                      </Badge>
-                    </ToggleGroupItem>
-                  );
-                })}
-              </ToggleGroup>
+            {/* Status filter chips + disposition sub-filter (2026-08-01
+                dispatch console). sm: and up — inline, unchanged from
+                before: real shadcn ToggleGroup, wraps to a 2nd line instead
+                of clipping/scrolling. Below sm: this collapses into a single
+                "Filters (N)" trigger (see mobile block right below) so the
+                list keeps its vertical space on a phone screen instead of
+                spending 2-3 rows on filter chrome above the fold. */}
+            <div className="hidden sm:block">
+              <StatusFilterRow
+                selectedStatuses={selectedStatuses}
+                setSelectedStatuses={setSelectedStatuses}
+                statusCounts={statusCounts}
+              />
+              <DispositionSubFilterRow
+                selectedStatuses={selectedStatuses}
+                dispositionCounts={dispositionCounts}
+                selectedDispositions={selectedDispositions}
+                toggleDispositionChip={toggleDispositionChip}
+                setSelectedDispositions={setSelectedDispositions}
+              />
             </div>
-            {/* Disposition sub-filter — only meaningful (and only shown) once
-                failed or delivered is selected. Lets ops act on patterns
-                ("20 no one home this week"). */}
-            {(selectedStatuses.has("failed") || selectedStatuses.has("delivered")) &&
-              Object.keys(dispositionCounts).length > 0 && (
-                <div className="flex flex-wrap items-center gap-1 border-border/50 border-b bg-muted/20 px-2 py-1.5">
-                  <span className="shrink-0 text-10 text-muted-foreground/60">Reason:</span>
-                  {Object.entries(dispositionCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([d, count]) => {
-                      const active = selectedDispositions.has(d);
-                      return (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => toggleDispositionChip(d)}
-                          aria-pressed={active}
-                          className={cn(
-                            "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-10 ring-1 transition-colors",
-                            active
-                              ? "bg-foreground text-background ring-foreground"
-                              : "text-muted-foreground ring-border hover:bg-accent",
-                          )}
-                        >
-                          {dispositionLabel(d)} <span className="opacity-70">{count}</span>
-                        </button>
-                      );
-                    })}
-                  {selectedDispositions.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDispositions(new Set())}
-                      className="shrink-0 text-10 text-muted-foreground/60 underline hover:text-foreground"
-                    >
-                      clear
-                    </button>
-                  )}
-                </div>
-              )}
+            {/* Mobile (below sm:) — same filter state, collapsed into one
+                compact trigger + bottom sheet so the row list is reachable
+                without scrolling past filter chrome. */}
+            <div className="flex items-center border-border/50 border-b bg-card px-2 py-1.5 sm:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-11 transition-colors active:scale-95",
+                      selectedStatuses.size > 0 || selectedDispositions.size > 0
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-accent",
+                    )}
+                  >
+                    <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                    Filters
+                    {selectedStatuses.size + selectedDispositions.size > 0 && (
+                      <Badge variant="secondary" className="h-4 px-1 text-10">
+                        {selectedStatuses.size + selectedDispositions.size}
+                      </Badge>
+                    )}
+                  </button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto p-0">
+                  <SheetHeader className="pb-0">
+                    <SheetTitle className="text-13">Filters</SheetTitle>
+                  </SheetHeader>
+                  <StatusFilterRow
+                    selectedStatuses={selectedStatuses}
+                    setSelectedStatuses={setSelectedStatuses}
+                    statusCounts={statusCounts}
+                  />
+                  <DispositionSubFilterRow
+                    selectedStatuses={selectedStatuses}
+                    dispositionCounts={dispositionCounts}
+                    selectedDispositions={selectedDispositions}
+                    toggleDispositionChip={toggleDispositionChip}
+                    setSelectedDispositions={setSelectedDispositions}
+                  />
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
 
           {/* Bulk-select strip (2026-08-01) — separate concern from the status

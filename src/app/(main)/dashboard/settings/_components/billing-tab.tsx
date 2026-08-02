@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  ArrowUpRight,
+  AlertCircle,
   Check,
   CircleCheck,
   CreditCard,
@@ -11,8 +11,11 @@ import {
   Loader2,
   Package,
   Receipt,
-  Route as RouteIcon,
   Settings2,
+  SlidersHorizontal,
+  TrendingDown,
+  TrendingUp,
+  Truck,
   Wallet,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
@@ -22,17 +25,62 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import { type BillingCharges, type BillingData, money, PAYMENT_TERMS, shortDate } from "./settings-types";
 
-const chargeStatusCls = (s: string) =>
-  s === "purchased"
-    ? "bg-success/10 text-success border-success/25"
-    : s === "pending_payment"
-      ? "bg-warning/15 text-warning-foreground border-warning/30 dark:text-warning"
-      : "bg-destructive/10 text-destructive border-destructive/25";
+/* GET /api/client/billing/summary (2026-08-02) — see route for the full
+ * data-source rationale. Two distinct money flows, kept distinct: delivery
+ * charges (billing_ledger) vs shipping label spend (label_orders). */
+type BillingSummary = {
+  amount_due_cents: number;
+  delivery_this_month_cents: number;
+  delivery_last_month_cents: number;
+  labels_this_month_cents: number;
+  labels_last_month_cents: number;
+  outstanding_old_uninvoiced_cents: number;
+  outstanding_old_uninvoiced_count: number;
+  charges_by_type: Record<string, { lines: number; amount_cents: number }>;
+  failed_attempts: { failed: number; total: number };
+  delivery_series_30d: { date: string; amount_cents: number }[];
+  recent_charges: {
+    id: number;
+    stop_id: string;
+    recipient_name: string;
+    date: string;
+    resolved_type: string;
+    outcome: string;
+    amount_cents: number | null;
+    invoiced_at: string | null;
+    flagged: boolean;
+  }[];
+};
+const centsToUsd = (c: number | null | undefined) => money(typeof c === "number" ? c / 100 : null);
+const TYPE_LABEL: Record<string, string> = { package: "Packages", miles: "Miles", on_demand: "On-Demand" };
+const TYPE_COLOR: Record<string, string> = {
+  package: "bg-primary",
+  miles: "bg-[var(--chart-2)]",
+  on_demand: "bg-[var(--chart-3)]",
+};
+/* Delta vs last period — same up/down/flat convention throughout the KPI
+ * row. Flat (both zero, or unchanged) shows neither arrow nor color. */
+function Delta({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0 && current === 0) return null;
+  if (previous === 0) return <span className="text-11 text-muted-foreground">new this month</span>;
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return <span className="text-11 text-muted-foreground">flat vs last month</span>;
+  const up = pct > 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-11", up ? "text-success" : "text-destructive")}>
+      <Icon className="size-3" aria-hidden="true" />
+      {Math.abs(pct)}% vs last month
+    </span>
+  );
+}
 
 /* Interactive bar chart — same pattern as the Shipping Labels overview. */
 const barConfig = {
@@ -40,6 +88,10 @@ const barConfig = {
   count: { label: "Labels", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 type BarMetric = keyof typeof barConfig;
+
+const deliveryBarConfig = {
+  amount_cents: { label: "Delivery charges", color: "var(--chart-2)" },
+} satisfies ChartConfig;
 
 type UsageGroup = { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number };
 type OutcomeGroup = { lines: number; amount_cents: number };
@@ -113,6 +165,17 @@ export function BillingTab({
       });
   }, []);
 
+  // KPI/chart/table data for the redesign (2026-08-02) — see BillingSummary.
+  const [summary, setSummary] = useState<BillingSummary | null>(null);
+  useEffect(() => {
+    fetch("/api/client/billing/summary")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setSummary(d))
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
+  }, []);
+
   useEffect(() => {
     if (billing) {
       setPaymentTerm(billing.paymentTerm);
@@ -162,7 +225,6 @@ export function BillingTab({
     if (j.url) window.location.href = j.url;
   }
 
-  const m = data?.month;
   const chartData = useMemo(
     () => (data?.series ?? []).map((s) => ({ ...s, label: shortDate(s.date) })),
     [data?.series],
@@ -172,148 +234,250 @@ export function BillingTab({
     return { spend: s.reduce((a, b) => a + b.spend, 0), count: s.reduce((a, b) => a + b.count, 0) };
   }, [data?.series]);
 
-  const kpiCards = [
-    {
-      key: "package",
-      label: "Package Expenses",
-      value: m?.package_expense,
-      icon: Package,
-      hint: "Shipping labels this month",
-      danger: false,
-    },
-    {
-      key: "miles",
-      label: "Miles Expense",
-      value: m?.miles_expense,
-      icon: RouteIcon,
-      hint: `${m?.miles ?? 0} mi · ${m?.packages ?? 0} deliveries`,
-      danger: false,
-    },
-    { key: "total", label: "Total This Month", value: m?.total, icon: Wallet, hint: m?.label ?? "", danger: false },
-    {
-      key: "outstanding",
-      label: "Outstanding",
-      value: m?.outstanding,
-      icon: Receipt,
-      hint: (m?.outstanding ?? 0) > 0 ? "Balance due" : "All settled",
-      danger: (m?.outstanding ?? 0) > 0,
-    },
-  ];
+  const deliveryChartData = useMemo(
+    () => (summary?.delivery_series_30d ?? []).map((s) => ({ ...s, label: shortDate(s.date) })),
+    [summary?.delivery_series_30d],
+  );
+  const typeEntries = Object.entries(summary?.charges_by_type ?? {});
+  const typeTotalCents = typeEntries.reduce((s, [, g]) => s + g.amount_cents, 0);
 
   return (
     <div className="space-y-4">
-      {/* ── Billing v2 — uninvoiced ledger (read-only; = next invoice preview) ── */}
-      {usage && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border/60 bg-card px-4 py-2.5">
-          <span className="type-label text-muted-foreground">Uninvoiced this period</span>
-          {usage.by_type.package && (
-            <span className="text-13 tabular-nums">
-              <b>{usage.by_type.package.lines}</b> packages · ${(usage.by_type.package.amount_cents / 100).toFixed(2)}
-            </span>
-          )}
-          {usage.by_type.miles && (
-            <span className="text-13 tabular-nums">
-              <b>{usage.by_type.miles.units.toFixed(1)}</b> mi · ${(usage.by_type.miles.amount_cents / 100).toFixed(2)}
-            </span>
-          )}
-          {usage.by_type.on_demand && (
-            <span className="text-13 tabular-nums">
-              <b>{usage.by_type.on_demand.units.toFixed(1)}</b> mi on-demand · $
-              {(usage.by_type.on_demand.amount_cents / 100).toFixed(2)}
-              <span className="text-muted-foreground">
-                {" "}
-                (Routely ${(usage.by_type.on_demand.routely_cents / 100).toFixed(2)} / driver $
-                {(usage.by_type.on_demand.driver_cents / 100).toFixed(2)})
-              </span>
-            </span>
-          )}
-          <span className="text-13 tabular-nums">
-            next invoice <b>${(usage.total_cents / 100).toFixed(2)}</b>
-          </span>
-          {usage.flagged_needs_miles > 0 && (
-            <span className="rounded-full bg-warning/15 px-2 py-0.5 font-semibold text-10 text-warning">
-              {usage.flagged_needs_miles} stop{usage.flagged_needs_miles > 1 ? "s" : ""} need miles
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per ATTEMPT,
-        not per successful delivery, so a tenant's charges include failed
-        attempts too — outcome is just delivered|failed now, disposition is
-        the granular WHY ("38 failed: 20 no one home · 12 bad address · 6
-        returned"). Only shown once something other than a clean delivery
-        exists — a tenant with 100% delivered sees nothing extra here. */}
-      {usage &&
-        (() => {
-          const entries = Object.entries(usage.by_outcome ?? {});
-          const total = entries.reduce((s, [, o]) => s + o.lines, 0);
-          const nonDelivered = entries.filter(([o]) => o !== "delivered");
-          if (!total || !nonDelivered.length) return null;
-          return (
-            <div className="flex flex-col gap-1 px-1 text-11 text-muted-foreground">
-              {nonDelivered.map(([outcome, o]) => {
-                const dispositions = Object.entries(usage.by_disposition?.[outcome] ?? {}).sort(
-                  (a, b) => b[1].lines - a[1].lines,
-                );
-                return (
-                  <div key={outcome} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span>
-                      <b className="text-foreground">{o.lines}</b> of {total} charges were {outcome} attempts ( $
-                      {(o.amount_cents / 100).toFixed(2)}){dispositions.length > 0 && ":"}
-                    </span>
-                    {dispositions.map(([disposition, d], i) => (
-                      <span key={disposition}>
-                        {i > 0 && <span className="mx-1 text-muted-foreground/40">·</span>}
-                        {d.lines} {DISPOSITION_LABEL[disposition] ?? disposition.replace(/_/g, " ")}
-                      </span>
-                    ))}
-                  </div>
-                );
-              })}
+      {/* ── Billing rates — moved into a right-side Sheet (2026-08-02): rarely
+          touched config, doesn't need to occupy the top third of the page. ── */}
+      <div className="flex items-center justify-between">
+        <p className="text-13 text-muted-foreground">Delivery charges, label spend, and your account balance.</p>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5">
+              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+              Edit billing rates
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+            <SheetHeader>
+              <SheetTitle className="text-13">Billing rates</SheetTitle>
+            </SheetHeader>
+            <div className="px-4 pb-6">
+              <BillingRatesEditor />
             </div>
-          );
-        })()}
-
-      <BillingRatesEditor />
-
-      {/* ── KPI cards — 2-up on mobile, 4-up on desktop ── */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {kpiCards.map((c) => (
-          <Card key={c.key} className={cn("relative overflow-hidden", c.danger && "ring-1 ring-warning/40")}>
-            <div
-              aria-hidden="true"
-              className={cn(
-                "pointer-events-none absolute -top-10 -right-8 size-24 rounded-full blur-2xl",
-                c.danger ? "bg-warning/20" : "bg-primary/10",
-              )}
-            />
-            <CardContent className="relative space-y-1.5 py-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="type-label truncate text-muted-foreground">{c.label}</span>
-                <span
-                  className={cn(
-                    "grid size-7 shrink-0 place-items-center rounded-lg",
-                    c.danger ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary",
-                  )}
-                >
-                  <c.icon className="size-3.5" aria-hidden="true" />
-                </span>
-              </div>
-              {loading ? (
-                <Skeleton className="h-7 w-20" />
-              ) : (
-                <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">{money(c.value)}</p>
-              )}
-              <p className="truncate text-muted-foreground text-xs">{c.hint}</p>
-            </CardContent>
-          </Card>
-        ))}
+          </SheetContent>
+        </Sheet>
       </div>
 
-      {/* ── Chart (labels-style bar) + payment card column ── */}
-      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
-        <Card className="lg:col-span-2">
+      {/* ── KPI row — the two money flows, explicitly labeled so they never
+          read as one contradicting number (see BillingSummary route docstring):
+          #1/#4 are delivery charges (billing_ledger, what's owed to Routely),
+          #2 is also delivery charges (this month, any invoice status), #3 is
+          the OTHER flow — shipping label spend (label_orders). ── */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Card className="relative overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-10 -right-8 size-24 rounded-full bg-primary/10 blur-2xl"
+          />
+          <CardContent className="relative space-y-1.5 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="type-label truncate text-muted-foreground">Amount due this period</span>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <Receipt className="size-3.5" aria-hidden="true" />
+              </span>
+            </div>
+            {!summary ? (
+              <Skeleton className="h-7 w-20" />
+            ) : (
+              <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">
+                {centsToUsd(summary.amount_due_cents)}
+              </p>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-muted-foreground text-xs">Delivery charges, not yet invoiced</p>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-11" disabled>
+                        Pay now
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-56 text-11">
+                    Invoice-specific payment isn't wired up yet — only a general Stripe billing-portal redirect exists
+                    today (see Payment method below). Building this requires an invoice-scoped Checkout session.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-10 -right-8 size-24 rounded-full bg-primary/10 blur-2xl"
+          />
+          <CardContent className="relative space-y-1.5 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="type-label truncate text-muted-foreground">Delivery charges this month</span>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <Truck className="size-3.5" aria-hidden="true" />
+              </span>
+            </div>
+            {!summary ? (
+              <Skeleton className="h-7 w-20" />
+            ) : (
+              <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">
+                {centsToUsd(summary.delivery_this_month_cents)}
+              </p>
+            )}
+            {summary && (
+              <Delta current={summary.delivery_this_month_cents} previous={summary.delivery_last_month_cents} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-10 -right-8 size-24 rounded-full bg-primary/10 blur-2xl"
+          />
+          <CardContent className="relative space-y-1.5 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="type-label truncate text-muted-foreground">Shipping labels spend</span>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <Package className="size-3.5" aria-hidden="true" />
+              </span>
+            </div>
+            {!summary ? (
+              <Skeleton className="h-7 w-20" />
+            ) : (
+              <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">
+                {centsToUsd(summary.labels_this_month_cents)}
+              </p>
+            )}
+            {summary && <Delta current={summary.labels_this_month_cents} previous={summary.labels_last_month_cents} />}
+            <p className="truncate text-muted-foreground text-xs">A separate spend from delivery charges above</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={cn(
+            "relative overflow-hidden",
+            (summary?.outstanding_old_uninvoiced_count ?? 0) > 0 && "ring-1 ring-destructive/40",
+          )}
+        >
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute -top-10 -right-8 size-24 rounded-full blur-2xl",
+              (summary?.outstanding_old_uninvoiced_count ?? 0) > 0 ? "bg-destructive/15" : "bg-primary/10",
+            )}
+          />
+          <CardContent className="relative space-y-1.5 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="type-label truncate text-muted-foreground">Outstanding</span>
+              <span
+                className={cn(
+                  "grid size-7 shrink-0 place-items-center rounded-lg",
+                  (summary?.outstanding_old_uninvoiced_count ?? 0) > 0
+                    ? "bg-destructive/15 text-destructive"
+                    : "bg-primary/10 text-primary",
+                )}
+              >
+                <AlertCircle className="size-3.5" aria-hidden="true" />
+              </span>
+            </div>
+            {!summary ? (
+              <Skeleton className="h-7 w-20" />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-xl tabular-nums tracking-tight sm:text-2xl">
+                  {centsToUsd(summary.outstanding_old_uninvoiced_cents)}
+                </p>
+                {summary.outstanding_old_uninvoiced_count > 0 && (
+                  <Badge variant="outline" className="border-destructive/40 text-10 text-destructive">
+                    {summary.outstanding_old_uninvoiced_count} overdue
+                  </Badge>
+                )}
+              </div>
+            )}
+            <p className="truncate text-muted-foreground text-xs">Uninvoiced 30+ days — should be invoiced by now</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Charges by type — stacked bar + legend rows (uninvoiced period),
+          plus the existing failed-attempts breakdown caption. ── */}
+      {typeEntries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-13">Charges by type</CardTitle>
+            <p className="text-muted-foreground text-sm">Uninvoiced this period, by billing type.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              {typeEntries.map(([type, g]) => (
+                <div
+                  key={type}
+                  className={TYPE_COLOR[type] ?? "bg-muted-foreground"}
+                  style={{ width: `${typeTotalCents > 0 ? (g.amount_cents / typeTotalCents) * 100 : 0}%` }}
+                  title={`${TYPE_LABEL[type] ?? type}: ${centsToUsd(g.amount_cents)}`}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {typeEntries.map(([type, g]) => (
+                <div key={type} className="flex items-center gap-2">
+                  <span className={cn("size-2 shrink-0 rounded-full", TYPE_COLOR[type] ?? "bg-muted-foreground")} />
+                  <span className="min-w-0 flex-1 truncate text-13">{TYPE_LABEL[type] ?? type}</span>
+                  <span className="shrink-0 text-11 text-muted-foreground tabular-nums">{g.lines} lines</span>
+                  <span className="shrink-0 font-semibold text-13 tabular-nums">{centsToUsd(g.amount_cents)}</span>
+                </div>
+              ))}
+            </div>
+            {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per
+                ATTEMPT, not per successful delivery, so a tenant's charges
+                include failed attempts too. Only shown once something other
+                than a clean delivery exists. */}
+            {usage &&
+              (() => {
+                const entries = Object.entries(usage.by_outcome ?? {});
+                const total = entries.reduce((s, [, o]) => s + o.lines, 0);
+                const nonDelivered = entries.filter(([o]) => o !== "delivered");
+                if (!total || !nonDelivered.length) return null;
+                return (
+                  <div className="flex flex-col gap-1 border-t pt-3 text-11 text-muted-foreground">
+                    {nonDelivered.map(([outcome, o]) => {
+                      const dispositions = Object.entries(usage.by_disposition?.[outcome] ?? {}).sort(
+                        (a, b) => b[1].lines - a[1].lines,
+                      );
+                      return (
+                        <div key={outcome} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                          <span>
+                            <b className="text-foreground">{o.lines}</b> of {total} charges were {outcome} attempts ( $
+                            {(o.amount_cents / 100).toFixed(2)}){dispositions.length > 0 && ":"}
+                          </span>
+                          {dispositions.map(([disposition, d], i) => (
+                            <span key={disposition}>
+                              {i > 0 && <span className="mx-1 text-muted-foreground/40">·</span>}
+                              {d.lines} {DISPOSITION_LABEL[disposition] ?? disposition.replace(/_/g, " ")}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Charts: label spend (existing) + delivery charges (new), same
+          30-day window, side by side so the two flows are visually adjacent
+          but never merged into one series. ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
           <CardHeader className="!pb-0 flex flex-col gap-3 border-b sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
             <div className="flex-1 pb-3 sm:pb-4">
               <CardTitle className="text-13">Spend — last 30 days</CardTitle>
@@ -362,141 +526,87 @@ export function BillingTab({
           </CardContent>
         </Card>
 
-        {/* Payment card column */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-13">Payment method</CardTitle>
+          <CardHeader className="!pb-0 border-b pb-3 sm:pb-4">
+            <CardTitle className="text-13">Delivery charges — last 30 days</CardTitle>
+            <p className="text-muted-foreground text-sm">Ledger amount per attempt, by day.</p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {billingLoading ? (
-              <Skeleton className="aspect-[1.586] w-full rounded-2xl" />
+          <CardContent className="px-2 pt-4 sm:px-4">
+            {!summary ? (
+              <Skeleton className="h-[200px] w-full" />
             ) : (
-              <CreditCardVisual
-                brand={billing?.paymentMethod?.brand}
-                last4={billing?.paymentMethod?.last4}
-                expMonth={billing?.paymentMethod?.expMonth}
-                expYear={billing?.paymentMethod?.expYear}
-              />
+              <ChartContainer config={deliveryBarConfig} className="aspect-auto h-[240px] w-full">
+                <BarChart data={deliveryChartData} margin={{ left: 4, right: 4, top: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={28}
+                    className="text-xs"
+                  />
+                  <ChartTooltip
+                    cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
+                    content={<ChartTooltipContent className="w-36" />}
+                  />
+                  <Bar dataKey="amount_cents" fill="var(--color-amount_cents)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
             )}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 flex-1"
-                onClick={openBillingPortal}
-                disabled={saving === "portal"}
-              >
-                {saving === "portal" && <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />}
-                {billing?.paymentMethod ? "Change card" : "Add card"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 text-muted-foreground"
-                onClick={openBillingPortal}
-                disabled={saving === "portal"}
-                aria-label="Manage billing in Stripe"
-              >
-                <Settings2 className="size-3.5" aria-hidden="true" />
-                <ExternalLink className="size-3" aria-hidden="true" />
-              </Button>
-            </div>
-            <div className="space-y-2">
-              <Label className="font-medium text-sm">Payment type</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {(
-                  [
-                    { id: "card", label: "Card", icon: CreditCard, disabled: false },
-                    { id: "ach", label: "ACH", icon: Receipt, disabled: true },
-                    { id: "cash", label: "Cash", icon: Wallet, disabled: false },
-                  ] as const
-                ).map((t) => {
-                  const selected = paymentType === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      disabled={t.disabled || saving !== null}
-                      onClick={() => savePref("paymentType", t.id)}
-                      className={cn(
-                        "relative flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-all",
-                        selected
-                          ? "border-primary bg-primary/[0.04] shadow-sm"
-                          : "hover:border-muted-foreground/25 hover:bg-muted/40",
-                        t.disabled && "cursor-not-allowed opacity-40",
-                      )}
-                    >
-                      <t.icon
-                        className={cn("size-4", selected ? "text-primary" : "text-muted-foreground")}
-                        aria-hidden="true"
-                      />
-                      <span className="font-medium text-xs">{t.label}</span>
-                      {t.disabled && (
-                        <Badge variant="outline" className="absolute -top-2 right-1 h-4 text-10">
-                          Soon
-                        </Badge>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Recent charges + payment term ── */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* ── Recent charges (ledger, not label_orders) + payment method/term column ── */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-13">Recent charges</CardTitle>
-            <p className="text-muted-foreground text-sm">Your latest shipping-label charges.</p>
+            <p className="text-muted-foreground text-sm">Latest delivery-ledger lines (not shipping labels).</p>
           </CardHeader>
           <CardContent className="pt-0">
-            {loading ? (
+            {!summary ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <Skeleton key={`ch-${i}`} className="h-12 w-full" />
                 ))}
               </div>
-            ) : (data?.charges.length ?? 0) === 0 ? (
+            ) : summary.recent_charges.length === 0 ? (
               <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground text-sm">
-                No charges yet — they&apos;ll appear after your first label purchase.
+                No delivery charges yet — they&apos;ll appear after your first attempt.
               </div>
             ) : (
               <div className="divide-y divide-border/50">
-                {data?.charges.slice(0, 5).map((c) => (
+                {summary.recent_charges.map((c) => (
                   <div key={c.id} className="flex items-center gap-3 py-2.5">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                      <Package className="size-4" aria-hidden="true" />
-                    </span>
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        c.outcome === "delivered" ? "bg-success" : "bg-destructive",
+                      )}
+                      aria-hidden="true"
+                    />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-sm">{c.title}</p>
-                      <p className="truncate text-muted-foreground text-xs">{c.subtitle}</p>
+                      <p className="truncate font-medium text-sm">{c.recipient_name || c.stop_id}</p>
+                      <p className="truncate font-mono text-10 text-muted-foreground">{c.stop_id}</p>
                     </div>
+                    <Badge variant="outline" className="hidden shrink-0 capitalize sm:inline-flex">
+                      {TYPE_LABEL[c.resolved_type] ?? c.resolved_type}
+                    </Badge>
                     <Badge
                       variant="outline"
-                      className={cn("hidden shrink-0 capitalize sm:inline-flex", chargeStatusCls(c.status))}
+                      className={cn(
+                        "hidden shrink-0 sm:inline-flex",
+                        c.invoiced_at ? "text-muted-foreground" : "border-primary/40 text-primary",
+                      )}
                     >
-                      {c.status.replace("_", " ")}
+                      {c.invoiced_at ? "Invoiced" : "Pending"}
                     </Badge>
                     <div className="shrink-0 text-right">
-                      <p className="font-semibold text-sm tabular-nums">{money(c.amount)}</p>
+                      <p className="font-semibold text-sm tabular-nums">{centsToUsd(c.amount_cents)}</p>
                       <p className="text-muted-foreground text-xs">{shortDate(c.date)}</p>
                     </div>
-                    {c.tracking_url ? (
-                      <a
-                        href={c.tracking_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="Track"
-                      >
-                        <ArrowUpRight className="size-4" aria-hidden="true" />
-                      </a>
-                    ) : (
-                      <span className="hidden w-7 shrink-0 sm:block" />
-                    )}
                   </div>
                 ))}
               </div>
@@ -504,56 +614,139 @@ export function BillingTab({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-13">Payment term</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            {PAYMENT_TERMS.map((t) => {
-              const eligible = t.tier === "all" || isPro;
-              const selected = paymentTerm === t.id;
-              const isSaving = saving === `paymentTerm-${t.id}`;
-              const isSaved = saved === `paymentTerm-${t.id}`;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  disabled={!eligible || saving !== null}
-                  onClick={() => savePref("paymentTerm", t.id)}
-                  className={cn(
-                    "group relative flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
-                    selected
-                      ? "border-primary bg-primary/[0.04] shadow-sm"
-                      : "hover:border-muted-foreground/25 hover:bg-muted/40",
-                    !eligible && "cursor-not-allowed opacity-40",
-                  )}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-13">Payment method</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {billingLoading ? (
+                <Skeleton className="aspect-[1.586] w-full rounded-2xl" />
+              ) : (
+                <CreditCardVisual
+                  brand={billing?.paymentMethod?.brand}
+                  last4={billing?.paymentMethod?.last4}
+                  expMonth={billing?.paymentMethod?.expMonth}
+                  expYear={billing?.paymentMethod?.expYear}
+                />
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 flex-1"
+                  onClick={openBillingPortal}
+                  disabled={saving === "portal"}
                 >
-                  <span
+                  {saving === "portal" && <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />}
+                  {billing?.paymentMethod ? "Change card" : "Add card"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-muted-foreground"
+                  onClick={openBillingPortal}
+                  disabled={saving === "portal"}
+                  aria-label="Manage billing in Stripe"
+                >
+                  <Settings2 className="size-3.5" aria-hidden="true" />
+                  <ExternalLink className="size-3" aria-hidden="true" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-medium text-sm">Payment type</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { id: "card", label: "Card", icon: CreditCard, disabled: false },
+                      { id: "ach", label: "ACH", icon: Receipt, disabled: true },
+                      { id: "cash", label: "Cash", icon: Wallet, disabled: false },
+                    ] as const
+                  ).map((t) => {
+                    const selected = paymentType === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        disabled={t.disabled || saving !== null}
+                        onClick={() => savePref("paymentType", t.id)}
+                        className={cn(
+                          "relative flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-all",
+                          selected
+                            ? "border-primary bg-primary/[0.04] shadow-sm"
+                            : "hover:border-muted-foreground/25 hover:bg-muted/40",
+                          t.disabled && "cursor-not-allowed opacity-40",
+                        )}
+                      >
+                        <t.icon
+                          className={cn("size-4", selected ? "text-primary" : "text-muted-foreground")}
+                          aria-hidden="true"
+                        />
+                        <span className="font-medium text-xs">{t.label}</span>
+                        {t.disabled && (
+                          <Badge variant="outline" className="absolute -top-2 right-1 h-4 text-10">
+                            Soon
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-13">Payment term</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              {PAYMENT_TERMS.map((t) => {
+                const eligible = t.tier === "all" || isPro;
+                const selected = paymentTerm === t.id;
+                const isSaving = saving === `paymentTerm-${t.id}`;
+                const isSaved = saved === `paymentTerm-${t.id}`;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    disabled={!eligible || saving !== null}
+                    onClick={() => savePref("paymentTerm", t.id)}
                     className={cn(
-                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
-                      selected ? "border-primary bg-primary" : "border-muted-foreground/30",
+                      "group relative flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
+                      selected
+                        ? "border-primary bg-primary/[0.04] shadow-sm"
+                        : "hover:border-muted-foreground/25 hover:bg-muted/40",
+                      !eligible && "cursor-not-allowed opacity-40",
                     )}
                   >
-                    {selected && <Check className="size-2.5 text-primary-foreground" aria-hidden="true" />}
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-medium text-sm leading-tight">{t.label}</span>
-                    <span className="mt-0.5 block text-muted-foreground text-xs leading-relaxed">{t.desc}</span>
-                  </span>
-                  {isSaving && (
-                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
-                  )}
-                  {isSaved && <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />}
-                  {!eligible && (
-                    <Badge variant="outline" className="h-5 shrink-0 text-10">
-                      Pro+
-                    </Badge>
-                  )}
-                </button>
-              );
-            })}
-          </CardContent>
-        </Card>
+                    <span
+                      className={cn(
+                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
+                        selected ? "border-primary bg-primary" : "border-muted-foreground/30",
+                      )}
+                    >
+                      {selected && <Check className="size-2.5 text-primary-foreground" aria-hidden="true" />}
+                    </span>
+                    <span className="flex-1">
+                      <span className="block font-medium text-sm leading-tight">{t.label}</span>
+                      <span className="mt-0.5 block text-muted-foreground text-xs leading-relaxed">{t.desc}</span>
+                    </span>
+                    {isSaving && (
+                      <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
+                    )}
+                    {isSaved && <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />}
+                    {!eligible && (
+                      <Badge variant="outline" className="h-5 shrink-0 text-10">
+                        Pro+
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

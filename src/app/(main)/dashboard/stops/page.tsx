@@ -795,25 +795,48 @@ function StopBillingLines({
                 Attempt {failedCount} of 3 — {3 - failedCount} left before auto-return
               </span>
             )}
+            {/* 2026-08-01: was one squeezed flex row of fixed w-14/w-28/w-20/
+                w-16 spans that ran together and overflowed the detail
+                column at any width narrower than ~430px (this column is
+                ~320px at 1280 and 390). Now: descriptive fields wrap freely
+                on the left (natural width, no fixed cols), amount + invoice
+                state stay grouped on the right as their own shrink-0
+                cluster so they never get squeezed out. */}
             {lines.map((l) => (
-              <div key={l.id} className="flex items-center gap-2 text-11">
-                <span
-                  className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")}
-                />
-                <span className="w-14 shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
-                <span className="w-28 shrink-0 truncate text-foreground" title={dispositionLabel(l.disposition)}>
-                  {l.disposition ? dispositionLabel(l.disposition) : l.outcome === "delivered" ? "Delivered" : "Failed"}
-                </span>
-                <span className="w-20 shrink-0 text-muted-foreground">{toTitle(l.resolved_type)}</span>
-                <span className="w-16 shrink-0 text-right text-muted-foreground tabular-nums">
-                  {l.units != null ? `${l.units}mi` : l.flag ? "flagged" : "—"}
-                </span>
-                <span className="w-14 shrink-0 text-right font-mono text-foreground tabular-nums">
-                  {l.amount_cents != null ? `$${(l.amount_cents / 100).toFixed(2)}` : "—"}
-                </span>
-                <span className={cn("text-10", l.invoiced_at ? "text-muted-foreground" : "text-primary")}>
-                  {l.invoiced_at ? "Invoiced" : "Pending"}
-                </span>
+              <div
+                key={l.id}
+                className="flex items-start justify-between gap-2 border-border/40 border-b py-1.5 text-11 last:border-b-0"
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span
+                    className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[l.outcome] ?? "bg-muted-foreground")}
+                  />
+                  <span className="shrink-0 text-muted-foreground">Attempt {l.attempt_seq}</span>
+                  <span className="text-foreground" title={dispositionLabel(l.disposition)}>
+                    {l.disposition
+                      ? dispositionLabel(l.disposition)
+                      : l.outcome === "delivered"
+                        ? "Delivered"
+                        : "Failed"}
+                  </span>
+                  <span className="text-muted-foreground/50">·</span>
+                  <span className="text-muted-foreground">{toTitle(l.resolved_type)}</span>
+                  {l.units != null && <span className="text-muted-foreground tabular-nums">{l.units}mi</span>}
+                  {l.flag && l.units == null && <span className="text-amber-600 dark:text-amber-500">flagged</span>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="font-mono text-foreground tabular-nums">
+                    {l.amount_cents != null ? `$${(l.amount_cents / 100).toFixed(2)}` : "—"}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-10",
+                      l.invoiced_at ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
+                    )}
+                  >
+                    {l.invoiced_at ? "Invoiced" : "Pending"}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

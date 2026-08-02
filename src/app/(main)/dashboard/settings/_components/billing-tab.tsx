@@ -21,15 +21,17 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Pie, PieChart, Label as RechartsLabel, XAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Pie, PieChart, Label as RechartsLabel, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +106,31 @@ type BarMetric = keyof typeof barConfig;
 const deliveryBarConfig = {
   amount_cents: { label: "Delivery charges", color: "var(--chart-2)" },
 } satisfies ChartConfig;
+
+/* Item 5 — "Usage & charges" interactive stacked area chart. Same config
+ * shape/colors as donutConfig above, keyed by the *_cents fields
+ * GET /api/client/billing/daily returns (see route docstring: no existing
+ * endpoint had a per-day, per-type, money-AND-quantity breakdown). */
+const usageAreaConfig = {
+  package_cents: { label: "Packages", color: "var(--primary)" },
+  miles_cents: { label: "Miles", color: "var(--chart-2)" },
+  on_demand_cents: { label: "On-Demand", color: "var(--chart-3)" },
+} satisfies ChartConfig;
+const DAILY_RANGES = [
+  { value: "90d", label: "Last 3 months" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "7d", label: "Last 7 days" },
+] as const;
+type DailyRange = (typeof DAILY_RANGES)[number]["value"];
+type DailyPoint = {
+  date: string;
+  package_cents: number;
+  package_qty: number;
+  miles_cents: number;
+  miles_qty: number;
+  on_demand_cents: number;
+  on_demand_qty: number;
+};
 
 type UsageGroup = { lines: number; units: number; amount_cents: number; routely_cents: number; driver_cents: number };
 type OutcomeGroup = { lines: number; amount_cents: number };
@@ -189,6 +216,19 @@ export function BillingTab({
       });
   }, []);
 
+  // Item 5 — "Usage & charges" per-day series, refetched on range change.
+  const [dailyRange, setDailyRange] = useState<DailyRange>("30d");
+  const [dailyData, setDailyData] = useState<DailyPoint[] | null>(null);
+  useEffect(() => {
+    setDailyData(null);
+    fetch(`/api/client/billing/daily?range=${dailyRange}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDailyData(d.days))
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
+  }, [dailyRange]);
+
   useEffect(() => {
     if (billing) {
       setPaymentTerm(billing.paymentTerm);
@@ -253,6 +293,7 @@ export function BillingTab({
   );
   const typeEntries = Object.entries(summary?.charges_by_type ?? {});
   const typeTotalCents = typeEntries.reduce((s, [, g]) => s + g.amount_cents, 0);
+  const dailyChartData = useMemo(() => (dailyData ?? []).map((d) => ({ ...d, label: shortDate(d.date) })), [dailyData]);
 
   return (
     <div className="space-y-4">
@@ -856,6 +897,108 @@ export function BillingTab({
           </CardContent>
         </Card>
       </div>
+
+      {/* Item 5 (new): "Usage & charges" — interactive stacked area chart,
+          per-day cost by billing type, range ToggleGroup (desktop) /
+          Select (narrow) via container query on this Card. Tooltip shows
+          BOTH cost and quantity per type for the hovered day — see
+          GET /api/client/billing/daily's docstring for why this needed a
+          new endpoint (no existing aggregate had a per-day, per-type,
+          money-AND-quantity breakdown). */}
+      <Card className="@container/card">
+        <CardHeader className="!pb-0 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0 sm:pb-4">
+          <div>
+            <CardTitle className="text-13">Usage & charges</CardTitle>
+            <p className="text-muted-foreground text-sm">Delivery-ledger cost and volume per day, by billing type.</p>
+          </div>
+          <ToggleGroup
+            type="single"
+            value={dailyRange}
+            onValueChange={(v) => v && setDailyRange(v as DailyRange)}
+            variant="outline"
+            size="sm"
+            className="hidden @[560px]/card:flex"
+          >
+            {DAILY_RANGES.map((r) => (
+              <ToggleGroupItem key={r.value} value={r.value} className="text-11">
+                {r.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <Select value={dailyRange} onValueChange={(v) => setDailyRange(v as DailyRange)}>
+            <SelectTrigger className="flex w-40 @[560px]/card:hidden" size="sm" aria-label="Select a range">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {DAILY_RANGES.map((r) => (
+                <SelectItem key={r.value} value={r.value} className="rounded-lg">
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
+        <CardContent className="px-2 pt-4 sm:px-4">
+          {!dailyData ? (
+            <Skeleton className="h-[240px] w-full" />
+          ) : (
+            <ChartContainer config={usageAreaConfig} className="aspect-auto h-[240px] w-full">
+              <AreaChart data={dailyChartData} margin={{ left: 4, right: 4, top: 8 }}>
+                <defs>
+                  {(Object.keys(usageAreaConfig) as (keyof typeof usageAreaConfig)[]).map((key) => (
+                    <linearGradient key={key} id={`fill-${key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={`var(--color-${key})`} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={`var(--color-${key})`} stopOpacity={0.1} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={28}
+                  className="text-xs"
+                />
+                <ChartTooltip
+                  cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
+                  content={
+                    <ChartTooltipContent
+                      indicator="dot"
+                      formatter={(value, name, item) => {
+                        const type = String(name).replace("_cents", "");
+                        const qty = (item?.payload as Record<string, number> | undefined)?.[`${type}_qty`] ?? 0;
+                        return (
+                          <span className="flex w-full items-center justify-between gap-3">
+                            <span className="text-muted-foreground">{TYPE_LABEL[type] ?? type}</span>
+                            <span className="flex items-center gap-2 tabular-nums">
+                              <span className="text-10 text-muted-foreground">
+                                {qty % 1 === 0 ? qty : qty.toFixed(1)} {QTY_UNIT[type] ?? ""}
+                              </span>
+                              <span className="font-semibold">{centsToUsd(Number(value))}</span>
+                            </span>
+                          </span>
+                        );
+                      }}
+                    />
+                  }
+                />
+                {(Object.keys(usageAreaConfig) as (keyof typeof usageAreaConfig)[]).map((key) => (
+                  <Area
+                    key={key}
+                    dataKey={key}
+                    type="natural"
+                    fill={`url(#fill-${key})`}
+                    stroke={`var(--color-${key})`}
+                    stackId="a"
+                  />
+                ))}
+              </AreaChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   AdvancedMarker,
   AdvancedMarkerAnchorPoint,
   APIProvider,
+  // biome-ignore lint/suspicious/noShadowRestrictedNames: this is @vis.gl/react-google-maps' actual export name, used as <Map> throughout this file
   Map,
   useMap,
   useMapsLibrary,
@@ -258,7 +259,9 @@ function RouteLayer({
                 B
               </div>
               <div style={{ width: 2, height: 8, background: "var(--destructive)", opacity: 0.7 }} />
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--destructive)", opacity: 0.5 }} />
+              <div
+                style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--destructive)", opacity: 0.5 }}
+              />
             </div>
           </div>
         </AdvancedMarker>
@@ -268,15 +271,7 @@ function RouteLayer({
 }
 
 /* ── Single-point layer: geocode one address, drop one marker, no route ───── */
-function SinglePointLayer({
-  address,
-  onDone,
-  onFail,
-}: {
-  address: string;
-  onDone: () => void;
-  onFail: () => void;
-}) {
+function SinglePointLayer({ address, onDone, onFail }: { address: string; onDone: () => void; onFail: () => void }) {
   const map = useMap();
   const geocodingLib = useMapsLibrary("geocoding");
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -329,12 +324,16 @@ function SinglePointLayer({
   );
 }
 
-/* ── Graceful placeholder (no key / no address / geocode or route failure) ── */
-function MapFallback({ text }: { text: string }) {
+/* ── Graceful placeholder (no key / no address / geocode or route failure) ──
+ * `action` (2026-08-02) — an optional button/link so the "no address" case
+ * can be actionable instead of a dead end; only meaningful for the
+ * no-destination-address fallback below, not the other failure modes. */
+function MapFallback({ text, action }: { text: string; action?: React.ReactNode }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/60">
       <MapPin className="size-5 text-muted-foreground/25" aria-hidden="true" />
       <p className="max-w-[200px] px-3 text-center text-11 leading-snug text-muted-foreground/55">{text}</p>
+      {action}
     </div>
   );
 }
@@ -345,12 +344,15 @@ export function FleetRouteMap({
   originName,
   destinationName,
   singlePoint,
+  noAddressAction,
 }: {
   originAddr?: string;
   destinationAddr: string;
   originName?: string;
   destinationName?: string;
   singlePoint?: boolean;
+  /** Rendered inside the "No address on file to map yet." empty state. */
+  noAddressAction?: React.ReactNode;
 }) {
   const [result, setResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -369,7 +371,11 @@ export function FleetRouteMap({
   }, []);
   const onDone = useCallback(() => setLoading(false), []);
 
-  // Reset transient state when the addresses / mode change.
+  // Reset transient state when the addresses / mode change. The deps are
+  // trigger-only (nothing in the body reads them) — that's the point, not a
+  // miss; auto-removing them would make this effect only ever run once on
+  // mount instead of resetting on every address/mode change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only deps, see comment above
   useEffect(() => {
     setResult(null);
     setLoading(true);
@@ -390,7 +396,7 @@ export function FleetRouteMap({
 
   // Hard fallbacks — no map at all.
   if (!GMAP_KEY) return <MapFallback text="Map preview unavailable — no Maps API key configured." />;
-  if (!destinationAddr) return <MapFallback text="No address on file to map yet." />;
+  if (!destinationAddr) return <MapFallback text="No address on file to map yet." action={noAddressAction} />;
 
   const fallbackText = twoPoint
     ? [originName, destinationName].filter(Boolean).join(" → ") || destinationAddr

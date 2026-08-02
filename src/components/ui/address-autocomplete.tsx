@@ -34,6 +34,9 @@ interface AddressAutocompleteProps {
   disabled?: boolean;
   disableDropdown?: boolean;
   error?: string;
+  /** Forwarded to the underlying input — lets a caller elsewhere on the page
+   *  (e.g. a map empty-state action) focus this exact field by id. */
+  id?: string;
 }
 
 export function AddressAutocomplete({
@@ -46,6 +49,7 @@ export function AddressAutocomplete({
   disabled,
   disableDropdown = false,
   error,
+  id,
 }: AddressAutocompleteProps) {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [open, setOpen] = useState(false);
@@ -155,6 +159,7 @@ export function AddressAutocomplete({
         <MapPin className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         {loading && <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />}
         <input
+          id={id}
           type="text"
           value={value}
           onChange={(e) => {

@@ -6,12 +6,12 @@ import {
   ArrowLeft,
   Ban,
   Building2,
-  ClipboardList,
-  List,
   ChevronDown,
   CircleCheck,
+  ClipboardList,
   Clock,
   Copy,
+  List,
   Loader2,
   Map as MapIcon,
   Plus,
@@ -24,25 +24,8 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  AddressAutocomplete,
-  type PlaceDetails,
-} from "@/components/ui/address-autocomplete";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { formatDisplayCase } from "@/lib/format-display";
-import { Group, FieldRow, StackRow, ROW_INPUT } from "@/components/form-rows";
-import { type Address, addressLine as addressLineOf, buildAddress, formatAddr, fullAddress, hasAddr } from "@/lib/format";
-import { cn } from "@/lib/utils";
-
+import { FieldRow, Group, ROW_INPUT, StackRow } from "@/components/form-rows";
+import { AddressAutocomplete, type PlaceDetails } from "@/components/ui/address-autocomplete";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +37,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AvatarGroup } from "@/components/ui/avatar-group";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  type Address,
+  addressLine as addressLineOf,
+  buildAddress,
+  formatAddr,
+  fullAddress,
+  hasAddr,
+} from "@/lib/format";
+import { formatDisplayCase } from "@/lib/format-display";
+import { cn } from "@/lib/utils";
 
 import { MobileTabBar, SearchMultiSelect, Stepper, TimeCombobox } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
@@ -160,8 +157,7 @@ function routeCells(rd?: RouteDefaults | null) {
     start: rd?.start_time || "—",
     end: rd?.end_time || "—",
     maxStops: rd?.max_stops != null && rd.max_stops > 0 ? String(rd.max_stops) : rd ? "∞" : "—",
-    minPerStop:
-      rd?.default_time_at_stop != null ? `${Math.round(rd.default_time_at_stop / 60)}m` : "—",
+    minPerStop: rd?.default_time_at_stop != null ? `${Math.round(rd.default_time_at_stop / 60)}m` : "—",
     roundtrip: Boolean(rd?.round_trip),
   };
 }
@@ -259,7 +255,9 @@ export function HubsTab() {
     if (!editing) return;
     setDeleting(true);
     setDeleteError("");
-    const res = await fetch(`/api/client/hubs/${encodeURIComponent(editing.id)}`, { method: "DELETE" }).catch(() => null);
+    const res = await fetch(`/api/client/hubs/${encodeURIComponent(editing.id)}`, { method: "DELETE" }).catch(
+      () => null,
+    );
     setDeleting(false);
     if (res?.ok) {
       setDeleteOpen(false);
@@ -288,6 +286,7 @@ export function HubsTab() {
       });
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only load, `load` is not memoized so adding it would refetch every render
   useEffect(() => {
     load();
     fetch("/api/admin/tenants")
@@ -296,7 +295,9 @@ export function HubsTab() {
       .catch(() => setTenants([]));
     fetch("/api/client/drivers")
       .then((r) => (r.ok ? r.json() : { drivers: [] }))
-      .then((d) => setDriverOpts(((d.drivers ?? []) as { id: string; name: string }[]).map(({ id, name }) => ({ id, name }))))
+      .then((d) =>
+        setDriverOpts(((d.drivers ?? []) as { id: string; name: string }[]).map(({ id, name }) => ({ id, name }))),
+      )
       .catch(() => setDriverOpts([]));
   }, []);
 
@@ -307,7 +308,9 @@ export function HubsTab() {
     fetch(`/api/client/hubs/${encodeURIComponent(hubId)}/drivers`)
       .then((r) => (r.ok ? r.json() : { allowed: [], blocked: [] }))
       .then((d) => setRelations({ allowed: d.allowed ?? [], blocked: d.blocked ?? [] }))
-      .catch(() => {});
+      .catch(() => {
+        /* best-effort — fire-and-forget, failure does not block the UI */
+      });
   }
 
   async function saveRelations(hubId: string, next: { allowed: string[]; blocked: string[] }) {
@@ -359,8 +362,7 @@ export function HubsTab() {
       is_default: Boolean(hub.is_default),
       rdStartTime: rd.start_time ?? "",
       rdEndTime: rd.end_time ?? "",
-      rdMinutesPerStop:
-        rd.default_time_at_stop != null ? String(Math.round(rd.default_time_at_stop / 60)) : "",
+      rdMinutesPerStop: rd.default_time_at_stop != null ? String(Math.round(rd.default_time_at_stop / 60)) : "",
       rdMaxStops: rd.max_stops != null ? String(rd.max_stops) : "",
       rdRoundTrip: Boolean(rd.round_trip),
       endValue: formatAddr(rd.end_address),
@@ -532,8 +534,7 @@ export function HubsTab() {
   }
 
   // Client hint only — the server does the real validation.
-  const endBeforeStart =
-    Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
+  const endBeforeStart = Boolean(form.rdStartTime && form.rdEndTime) && form.rdEndTime <= form.rdStartTime;
   const nameError = (attempted || Boolean(editing)) && !form.name.trim();
 
   // ── Autosave (existing records only) ──────────────────────────────────────
@@ -554,12 +555,16 @@ export function HubsTab() {
       headers: { "Content-Type": "application/json" },
       body: pending.serialized,
       keepalive: true,
-    }).catch(() => {});
+    }).catch(() => {
+      /* best-effort — fire-and-forget, failure does not block the UI */
+    });
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: unmount-only flush, deliberately empty deps
   useEffect(() => () => flushPendingSave(), []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `load` intentionally excluded — not memoized, would re-run every render
   useEffect(() => {
     if (!editing || creating || saving) return;
     if (!form.name.trim() || endBeforeStart) return;
@@ -598,15 +603,12 @@ export function HubsTab() {
       if (rtFilter === "roundtrip" && !rt) return false;
       if (rtFilter === "oneway" && rt) return false;
       if (!q) return true;
-      return (
-        (hub.name ?? "").toLowerCase().includes(q) ||
-        addressLineOf(hub.address).toLowerCase().includes(q)
-      );
+      return (hub.name ?? "").toLowerCase().includes(q) || addressLineOf(hub.address).toLowerCase().includes(q);
     });
   }, [hubs, query, rtFilter]);
 
   // Resolve the currently selected hub from the loaded list (stays in sync on reload).
-  const selectedHub = selectedId ? (hubs ?? []).find((h) => h.id === selectedId) ?? null : null;
+  const selectedHub = selectedId ? ((hubs ?? []).find((h) => h.id === selectedId) ?? null) : null;
   const showForm = creating || Boolean(selectedHub);
 
   // City/state/zip line for the detail header identity block.
@@ -627,11 +629,12 @@ export function HubsTab() {
       <div className="relative sticky top-0 z-10 shrink-0 overflow-hidden border-border/50 border-b bg-card">
         <div className="h-[3px] w-full bg-primary" />
         {/* Stops-class header treatment: soft accent wash, no artwork */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/15 to-transparent" aria-hidden="true" />
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/15 to-transparent"
+          aria-hidden="true"
+        />
         <div className="relative flex items-center justify-between px-4 pt-2.5 pb-1.5">
-          <span className="font-mono text-10 text-primary dark:text-white/80">
-            {editing ? "Hub" : "New hub"}
-          </span>
+          <span className="font-mono text-10 text-primary dark:text-white/80">{editing ? "Hub" : "New hub"}</span>
           <div className="flex items-center gap-1">
             {editing && (
               <button
@@ -647,7 +650,10 @@ export function HubsTab() {
             {editing && (
               <button
                 type="button"
-                onClick={() => { setDeleteError(""); setDeleteOpen(true); }}
+                onClick={() => {
+                  setDeleteError("");
+                  setDeleteOpen(true);
+                }}
                 title="Delete hub"
                 aria-label="Delete hub"
                 className={cn(HEADER_BTN, "hover:bg-rose-500/10 hover:text-rose-500")}
@@ -671,9 +677,7 @@ export function HubsTab() {
               {formatDisplayCase(form.line1)}
             </p>
           )}
-          {headerAddr && (
-            <p className="truncate text-11 text-muted-foreground/55">{formatDisplayCase(headerAddr)}</p>
-          )}
+          {headerAddr && <p className="truncate text-11 text-muted-foreground/55">{formatDisplayCase(headerAddr)}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {form.is_default && (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-10 font-semibold text-primary ring-1 ring-primary/20">
@@ -689,10 +693,7 @@ export function HubsTab() {
               border (overflow-hidden was clipping ~3px at -bottom-1). */}
           {editing && relations.allowed.length > 0 && (
             <div className="absolute right-4 bottom-1">
-              <AvatarGroup
-                people={driverOpts.filter((d) => relations.allowed.includes(d.id))}
-                max={5}
-              />
+              <AvatarGroup people={driverOpts.filter((d) => relations.allowed.includes(d.id))} max={5} />
             </div>
           )}
         </div>
@@ -714,6 +715,7 @@ export function HubsTab() {
 
           <StackRow label="Start From" hint="Route origin">
             <AddressField
+              id="hub-start-from-address"
               value={form.startValue}
               selected={form.startSelected}
               placeholder="Search start address…"
@@ -758,7 +760,11 @@ export function HubsTab() {
           {form.visibility === "dedicated" && (
             <StackRow label="Tenants" hint="Who can use this hub">
               <SearchMultiSelect
-                items={tenants.map((t) => ({ id: String(t.tenant_id), label: formatDisplayCase(t.name), hint: `#${t.tenant_id}` }))}
+                items={tenants.map((t) => ({
+                  id: String(t.tenant_id),
+                  label: formatDisplayCase(t.name),
+                  hint: `#${t.tenant_id}`,
+                }))}
                 selected={form.tenantIds.map(String)}
                 onToggle={(id) =>
                   setForm((f) => ({
@@ -802,7 +808,13 @@ export function HubsTab() {
               built yet, so NOTHING routes off this value. null = unset. */}
           <FieldRow label="Optimize type">
             <div className="flex overflow-hidden rounded-lg border border-border/60">
-              {([["round_trip", "Round trip"], ["last_stop", "Last stop"], ["other", "Other"]] as const).map(([v, label]) => (
+              {(
+                [
+                  ["round_trip", "Round trip"],
+                  ["last_stop", "Last stop"],
+                  ["other", "Other"],
+                ] as const
+              ).map(([v, label]) => (
                 <button
                   key={v}
                   type="button"
@@ -823,12 +835,8 @@ export function HubsTab() {
             </div>
           </FieldRow>
 
-
           <FieldRow label="Default hub">
-            <Switch
-              checked={form.is_default}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))}
-            />
+            <Switch checked={form.is_default} onCheckedChange={(v) => setForm((f) => ({ ...f, is_default: v }))} />
           </FieldRow>
         </Group>
 
@@ -839,10 +847,7 @@ export function HubsTab() {
           note="Defaults a route inherits from this hub — overridable per route."
         >
           <FieldRow label="Timezone">
-            <Select
-              value={form.timezone}
-              onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}
-            >
+            <Select value={form.timezone} onValueChange={(v) => setForm((f) => ({ ...f, timezone: v }))}>
               <SelectTrigger className="h-7 w-[150px] justify-end gap-1 border-0 bg-transparent pr-1 font-medium text-13 text-foreground focus:ring-0">
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>
@@ -881,7 +886,9 @@ export function HubsTab() {
             <Stepper
               value={form.rdMinutesPerStop}
               onChange={(v) => setForm((f) => ({ ...f, rdMinutesPerStop: v }))}
-              min={1} max={120} unit="m"
+              min={1}
+              max={120}
+              unit="m"
               ariaLabel="minutes per stop"
             />
           </FieldRow>
@@ -889,11 +896,13 @@ export function HubsTab() {
             <Stepper
               value={form.rdMaxStops}
               onChange={(v) => setForm((f) => ({ ...f, rdMaxStops: v }))}
-              min={0} max={200} step={5} zeroLabel="∞"
+              min={0}
+              max={200}
+              step={5}
+              zeroLabel="∞"
               ariaLabel="max stops"
             />
           </FieldRow>
-
         </Group>
 
         {/* ── Drivers — allowed / blocked for this hub (saved instantly) ── */}
@@ -999,10 +1008,12 @@ export function HubsTab() {
       }}
     >
       {/* ═══ LEFT COLUMN — the list (v2 split: 17% / min 240px; map gets the rest) ═══ */}
-      <div className={cn(
-        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0 lg:pb-0",
-        mobileTab === "list" ? "flex" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0 lg:pb-0",
+          mobileTab === "list" ? "flex" : "hidden",
+        )}
+      >
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -1020,10 +1031,7 @@ export function HubsTab() {
               <Plus className="mr-1 size-4" aria-hidden="true" /> New
             </Button>
           </div>
-          <Select
-            value={rtFilter}
-            onValueChange={(v) => setRtFilter(v as "all" | "roundtrip" | "oneway")}
-          >
+          <Select value={rtFilter} onValueChange={(v) => setRtFilter(v as "all" | "roundtrip" | "oneway")}>
             <SelectTrigger
               size="sm"
               className="h-8 w-full border-border/60 bg-background text-13"
@@ -1069,18 +1077,11 @@ export function HubsTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-13 text-muted-foreground">
-              No hubs match those filters.
-            </p>
+            <p className="px-4 py-10 text-center text-13 text-muted-foreground">No hubs match those filters.</p>
           ) : (
             <div>
               {filtered.map((hub) => (
-                <HubRow
-                  key={hub.id}
-                  hub={hub}
-                  selected={selectedId === hub.id}
-                  onSelect={() => selectHub(hub)}
-                />
+                <HubRow key={hub.id} hub={hub} selected={selectedId === hub.id} onSelect={() => selectHub(hub)} />
               ))}
             </div>
           )}
@@ -1088,10 +1089,12 @@ export function HubsTab() {
       </div>
 
       {/* ═══ CENTER COLUMN — inline editable form (v2 split: 21% / min 300px) ═══ */}
-      <div className={cn(
-        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:pb-0",
-        mobileTab === "detail" ? "flex" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:pb-0",
+          mobileTab === "detail" ? "flex" : "hidden",
+        )}
+      >
         {showForm ? (
           centerForm
         ) : (
@@ -1115,10 +1118,12 @@ export function HubsTab() {
       </div>
 
       {/* ═══ MAP COLUMN — persistent (flex-1, now ~62% of the screen) ═══ */}
-      <div className={cn(
-        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 lg:block lg:flex-1 lg:pb-0",
-        mobileTab === "map" ? "block" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 lg:block lg:flex-1 lg:pb-0",
+          mobileTab === "map" ? "block" : "hidden",
+        )}
+      >
         <HubMapPanel hub={selectedHub} />
       </div>
 
@@ -1140,8 +1145,7 @@ export function HubsTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this hub?</AlertDialogTitle>
             <AlertDialogDescription>
-              This is irreversible — the hub, its route defaults, and its driver
-              assignments will be permanently lost.
+              This is irreversible — the hub, its route defaults, and its driver assignments will be permanently lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError && (
@@ -1152,7 +1156,10 @@ export function HubsTab() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); void confirmDeleteHub(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDeleteHub();
+              }}
               disabled={deleting}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
@@ -1162,21 +1169,12 @@ export function HubsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
 
 // ── Compact list row — literal Stops row layout (3-line block + right badge) ──
-function HubRow({
-  hub,
-  selected,
-  onSelect,
-}: {
-  hub: Hub;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function HubRow({ hub, selected, onSelect }: { hub: Hub; selected: boolean; onSelect: () => void }) {
   const c = routeCells(hub.route_defaults);
   const a = hub.address ?? {};
   const cityLine = [a.city, a.state, a.zip]
@@ -1184,21 +1182,12 @@ function HubRow({
     .join(", ")
     .replace(/, (\d)/, " $1");
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
-        selected
-          ? "border-l-primary bg-blue-50 dark:bg-primary/20"
-          : "border-l-transparent bg-card hover:bg-muted/30",
+        selected ? "border-l-primary bg-blue-50 dark:bg-primary/20" : "border-l-transparent bg-card hover:bg-muted/30",
       )}
     >
       <span
@@ -1243,7 +1232,7 @@ function HubRow({
           </span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1267,7 +1256,26 @@ function HubMapPanel({ hub }: { hub: Hub | null }) {
     );
   }
   const addr = fullAddress(hub.address);
-  return <FleetRouteMap singlePoint destinationAddr={addr} destinationName={hub.name} />;
+  return (
+    <FleetRouteMap
+      singlePoint
+      destinationAddr={addr}
+      destinationName={hub.name}
+      noAddressAction={
+        <button
+          type="button"
+          onClick={() => {
+            const el = document.getElementById("hub-start-from-address");
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            (el as HTMLInputElement | null)?.focus();
+          }}
+          className="rounded-lg border border-primary/30 bg-background px-3 py-1.5 font-medium text-11 text-primary transition-colors hover:bg-primary/5"
+        >
+          Add hub address
+        </button>
+      }
+    />
+  );
 }
 
 function AddressField({
@@ -1277,6 +1285,7 @@ function AddressField({
   onChange,
   onPlaceDetails,
   onClear,
+  id,
 }: {
   value: string;
   selected: boolean;
@@ -1284,6 +1293,7 @@ function AddressField({
   onChange: (v: string) => void;
   onPlaceDetails: (d: PlaceDetails) => void;
   onClear: () => void;
+  id?: string;
 }) {
   return (
     <div
@@ -1294,6 +1304,7 @@ function AddressField({
     >
       <div className="relative flex items-center">
         <AddressAutocomplete
+          id={id}
           value={value}
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}
@@ -1317,4 +1328,3 @@ function AddressField({
     </div>
   );
 }
-

@@ -5,14 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Ban,
-  ClipboardList,
-  List,
   Building2,
   ChevronDown,
   ChevronsUpDown,
   CircleCheck,
+  ClipboardList,
   Contact,
   Copy,
+  List,
   Loader2,
   Map as MapIcon,
   Navigation,
@@ -24,10 +24,8 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  AddressAutocomplete,
-  type PlaceDetails,
-} from "@/components/ui/address-autocomplete";
+import { FieldRow, Group, ROW_INPUT, StackRow } from "@/components/form-rows";
+import { AddressAutocomplete, type PlaceDetails } from "@/components/ui/address-autocomplete";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,26 +36,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PersonAvatar } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import {
+  type Address,
+  buildAddress,
+  formatAddr,
+  formatPhone,
+  formatPhoneInput,
+  fullAddress,
+  hasAddr,
+} from "@/lib/format";
 import { formatDisplayCase } from "@/lib/format-display";
-import { Group, FieldRow, StackRow, ROW_INPUT } from "@/components/form-rows";
-import { type Address, buildAddress, formatAddr, formatPhone, formatPhoneInput, fullAddress, hasAddr } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-import { PersonAvatar } from "@/components/ui/avatar-group";
 
 import { MobileTabBar } from "./field-controls";
 import { FleetRouteMap } from "./fleet-route-map";
@@ -189,10 +186,7 @@ function HubMultiSelect({
   onToggle: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const selectedHubs = useMemo(
-    () => hubs.filter((h) => selected.includes(h.id)),
-    [hubs, selected],
-  );
+  const selectedHubs = useMemo(() => hubs.filter((h) => selected.includes(h.id)), [hubs, selected]);
 
   return (
     <div className="space-y-2">
@@ -227,12 +221,7 @@ function HubMultiSelect({
                 {hubs.map((h) => {
                   const isSel = selected.includes(h.id);
                   return (
-                    <CommandItem
-                      key={h.id}
-                      value={h.name}
-                      data-checked={isSel}
-                      onSelect={() => onToggle(h.id)}
-                    >
+                    <CommandItem key={h.id} value={h.name} data-checked={isSel} onSelect={() => onToggle(h.id)}>
                       <Building2 className="size-4 text-muted-foreground" aria-hidden="true" />
                       <span className="truncate">{h.name}</span>
                     </CommandItem>
@@ -326,6 +315,7 @@ export function DriversTab() {
       });
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only load, neither function is memoized so adding them would refetch every render
   useEffect(() => {
     loadDrivers();
     loadHubs();
@@ -345,10 +335,7 @@ export function DriversTab() {
     return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
   }
 
-  const inactiveCount = useMemo(
-    () => (drivers ?? []).filter((d) => d.status !== "active").length,
-    [drivers],
-  );
+  const inactiveCount = useMemo(() => (drivers ?? []).filter((d) => d.status !== "active").length, [drivers]);
 
   // Apply status filter → search query, then keep active-first alphabetical order.
   const filtered = useMemo(() => {
@@ -371,16 +358,12 @@ export function DriversTab() {
   }, [drivers, statusFilter, query]);
 
   // Resolve the selected driver from the loaded list (stays in sync on reload).
-  const selectedDriver = selectedId ? (drivers ?? []).find((d) => d.id === selectedId) ?? null : null;
+  const selectedDriver = selectedId ? ((drivers ?? []).find((d) => d.id === selectedId) ?? null) : null;
   const showForm = creating || Boolean(selectedDriver);
 
   // Map a driver record → the editable form state.
   function formFromDriver(driver: Driver): FormState {
-    const ids = Array.isArray(driver.hub_ids)
-      ? driver.hub_ids
-      : driver.hub_id
-        ? [driver.hub_id]
-        : [];
+    const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
     return {
       name: driver.name ?? "",
       phone: formatPhoneInput(driver.phone ?? ""),
@@ -546,6 +529,7 @@ export function DriversTab() {
   // the last-saved baseline, PATCHes silently, and shows Saving…/Saved inline.
   // New records save only via the button. Invalid states never autosave.
   const lastSavedRef = useRef("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `loadDrivers` intentionally excluded — not memoized, would re-run every render
   useEffect(() => {
     if (!editing || creating || saving) return;
     const digits = form.phone.replace(/\D/g, "");
@@ -591,9 +575,7 @@ export function DriversTab() {
     if (res?.ok) {
       // Keep the open editor's header badge in sync with the new status.
       setEditing((prev) =>
-        prev && prev.id === driver.id
-          ? { ...prev, status: deactivating ? "inactive" : "active" }
-          : prev,
+        prev && prev.id === driver.id ? { ...prev, status: deactivating ? "inactive" : "active" } : prev,
       );
       loadDrivers();
     } else {
@@ -611,7 +593,6 @@ export function DriversTab() {
   }
 
   const inactive = editing ? editing.status !== "active" : false;
-
 
   // Stops detail-header icon-button recipe (shared by every header command).
   const HEADER_BTN =
@@ -633,9 +614,7 @@ export function DriversTab() {
           aria-hidden="true"
         />
         <div className="relative flex items-center justify-between px-4 pt-2.5 pb-1.5">
-          <span className="font-mono text-10 text-primary dark:text-white/80">
-            {editing ? "Driver" : "New driver"}
-          </span>
+          <span className="font-mono text-10 text-primary dark:text-white/80">{editing ? "Driver" : "New driver"}</span>
           <div className="flex items-center gap-1">
             {editing && (
               <button
@@ -726,11 +705,7 @@ export function DriversTab() {
             />
           </FieldRow>
 
-          <FieldRow
-            label="Phone"
-            required
-            error={phoneError ? "Enter a 10-digit phone number." : undefined}
-          >
+          <FieldRow label="Phone" required error={phoneError ? "Enter a 10-digit phone number." : undefined}>
             <input
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: formatPhoneInput(e.target.value) }))}
@@ -763,6 +738,7 @@ export function DriversTab() {
 
           <StackRow label="Address" hint="Optional">
             <AddressField
+              id="driver-address"
               value={form.addressValue}
               selected={form.addressSelected}
               placeholder="Search driver address…"
@@ -776,18 +752,13 @@ export function DriversTab() {
         {/* ── Hubs ── */}
         <Group icon={Building2} title="Hubs">
           <FieldRow label="All hubs">
-            <Switch
-              checked={form.allHubs}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))}
-            />
+            <Switch checked={form.allHubs} onCheckedChange={(v) => setForm((f) => ({ ...f, allHubs: v }))} />
           </FieldRow>
 
           {!form.allHubs && (
             <StackRow label="Assigned hubs">
               {hubs.length === 0 ? (
-                <p className="rounded-lg border border-border/60 px-3 py-2 type-caption">
-                  No hubs available yet.
-                </p>
+                <p className="rounded-lg border border-border/60 px-3 py-2 type-caption">No hubs available yet.</p>
               ) : (
                 <HubMultiSelect hubs={hubs} selected={form.hubIds} onToggle={toggleHub} />
               )}
@@ -845,10 +816,12 @@ export function DriversTab() {
       }}
     >
       {/* ═══ LEFT COLUMN — the list (v2 split: 17% / min 240px; map gets the rest) ═══ */}
-      <div className={cn(
-        "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0 lg:pb-0",
-        mobileTab === "list" ? "flex" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full min-w-0 flex-col overflow-hidden border-r border-border/50 bg-card pb-14 shadow-[inset_-1px_0_0_0_hsl(var(--border)/0.6)] lg:flex lg:w-(--spacing-panel-list-w) lg:shrink-0 lg:pb-0",
+          mobileTab === "list" ? "flex" : "hidden",
+        )}
+      >
         {/* Toolbar */}
         <div className="shrink-0 space-y-2 border-b border-border/50 bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -866,10 +839,7 @@ export function DriversTab() {
               <Plus className="mr-1 size-4" aria-hidden="true" /> New
             </Button>
           </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as "active" | "inactive" | "all")}
-          >
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "active" | "inactive" | "all")}>
             <SelectTrigger
               size="sm"
               className="h-8 w-full border-border/60 bg-background text-13"
@@ -924,9 +894,7 @@ export function DriversTab() {
               )}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-13 text-muted-foreground">
-              No drivers match those filters.
-            </p>
+            <p className="px-4 py-10 text-center text-13 text-muted-foreground">No drivers match those filters.</p>
           ) : (
             <div>
               {filtered.map((driver) => (
@@ -944,10 +912,12 @@ export function DriversTab() {
       </div>
 
       {/* ═══ CENTER COLUMN — inline editable form (v2 split: 21% / min 300px) ═══ */}
-      <div className={cn(
-        "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:pb-0",
-        mobileTab === "detail" ? "flex" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full flex-col overflow-hidden border-r border-border/50 bg-card pb-14 lg:flex lg:w-(--spacing-panel-detail-w) lg:shrink-0 lg:pb-0",
+          mobileTab === "detail" ? "flex" : "hidden",
+        )}
+      >
         {showForm ? (
           centerForm
         ) : (
@@ -971,10 +941,12 @@ export function DriversTab() {
       </div>
 
       {/* ═══ MAP COLUMN — persistent (flex-1, now ~62% of the screen) ═══ */}
-      <div className={cn(
-        "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 lg:block lg:flex-1 lg:pb-0",
-        mobileTab === "map" ? "block" : "hidden",
-      )}>
+      <div
+        className={cn(
+          "h-full w-full min-h-0 overflow-hidden bg-muted/20 pb-14 lg:block lg:flex-1 lg:pb-0",
+          mobileTab === "map" ? "block" : "hidden",
+        )}
+      >
         <DriverMapPanel driver={selectedDriver} hubs={hubs} />
       </div>
 
@@ -989,7 +961,6 @@ export function DriversTab() {
           { key: "map", label: "Map", icon: MapIcon },
         ]}
       />
-
 
       {/* Status change confirm — rendered regardless of view */}
       <StatusConfirm
@@ -1017,25 +988,21 @@ function DriverRow({
   const ids = Array.isArray(driver.hub_ids) ? driver.hub_ids : driver.hub_id ? [driver.hub_id] : [];
   const vehicle = vehicleText(driver.vehicle);
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 border-b border-l-2 border-border/50 px-2.5 py-1.5 text-left transition-colors",
         inactive && "opacity-60",
-        selected
-          ? "border-l-primary bg-blue-50 dark:bg-primary/20"
-          : "border-l-transparent bg-card hover:bg-muted/30",
+        selected ? "border-l-primary bg-blue-50 dark:bg-primary/20" : "border-l-transparent bg-card hover:bg-muted/30",
       )}
     >
-      <PersonAvatar person={{ id: driver.id, name: driver.name }} size="size-7" ring={false} className={cn(inactive && "grayscale opacity-70")} />
+      <PersonAvatar
+        person={{ id: driver.id, name: driver.name }}
+        size="size-7"
+        ring={false}
+        className={cn(inactive && "grayscale opacity-70")}
+      />
       <div className="min-w-0 flex-1">
         {/* Line 1 — name + status (6px dot + colored 10px label) */}
         <div className="flex items-center justify-between gap-2">
@@ -1057,10 +1024,7 @@ function DriverRow({
             (own slot, never swallowed by the truncation). */}
         <div className="mt-px flex items-center justify-between gap-2">
           {(() => {
-            const meta = [
-              formatPhone(driver.phone),
-              driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids)),
-            ]
+            const meta = [formatPhone(driver.phone), driver.all_hubs ? "All hubs" : formatDisplayCase(hubNames(ids))]
               .filter((x) => x && x !== "—")
               .join(" · ");
             return (
@@ -1076,7 +1040,7 @@ function DriverRow({
           )}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1124,9 +1088,21 @@ function DriverMapPanel({ driver, hubs }: { driver: Driver | null; hubs: Hub[] }
       )}
       {mapHint && (
         <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
-          <p className="type-caption inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/95 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+          {/* 2026-08-02: was static text — now an actionable button so the
+              empty state doesn't dead-end; focuses the Address field, which
+              is already visible whenever this hint can show (same "Details"
+              group renders whenever a driver is selected). */}
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById("driver-address");
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              (el as HTMLInputElement | null)?.focus();
+            }}
+            className="type-caption inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-card/95 px-3 py-1.5 text-primary shadow-sm backdrop-blur-sm transition-colors hover:bg-primary/5"
+          >
             <Navigation className="size-3.5" aria-hidden="true" /> {mapHint}
-          </p>
+          </button>
         </div>
       )}
     </div>
@@ -1160,8 +1136,7 @@ function StatusConfirm({
           <AlertDialogAction
             onClick={confirmStatusChange}
             className={cn(
-              statusTarget?.status === "active" &&
-                "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+              statusTarget?.status === "active" && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
             )}
           >
             {statusTarget?.status === "active" ? "Deactivate" : "Reactivate"}
@@ -1181,6 +1156,7 @@ function AddressField({
   onChange,
   onPlaceDetails,
   onClear,
+  id,
 }: {
   value: string;
   selected: boolean;
@@ -1188,6 +1164,7 @@ function AddressField({
   onChange: (v: string) => void;
   onPlaceDetails: (d: PlaceDetails) => void;
   onClear: () => void;
+  id?: string;
 }) {
   return (
     <div
@@ -1198,6 +1175,7 @@ function AddressField({
     >
       <div className="relative flex items-center">
         <AddressAutocomplete
+          id={id}
           value={value}
           onChange={onChange}
           onPlaceDetails={onPlaceDetails}

@@ -432,158 +432,14 @@ export function BillingTab({
         </Card>
       </div>
 
-      {/* ── Swapped 2026-08-02 (item 1): "Spend — last 30 days" now takes the
-          full-width slot "Charges by type" used to occupy; "Charges by
-          type" moved into the 2-col grid below, alongside "Delivery
-          charges". Pure position swap — neither card's content changed. ── */}
-      <Card>
-        <CardHeader className="!pb-0 flex flex-col gap-3 border-b sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
-          <div className="flex-1 pb-3 sm:pb-4">
-            <CardTitle className="text-13">Spend — last 30 days</CardTitle>
-            <p className="text-muted-foreground text-sm">Shipping-label purchases over time.</p>
-          </div>
-          <div className="flex gap-0 border-t sm:border-t-0 sm:border-l">
-            {(Object.keys(barConfig) as BarMetric[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setMetric(k)}
-                data-active={metric === k}
-                className="flex flex-1 flex-col justify-center gap-0.5 px-4 py-2.5 text-left transition-colors data-[active=true]:bg-muted/50 sm:px-5"
-              >
-                <span className="type-label text-muted-foreground">{barConfig[k].label}</span>
-                <span className="font-semibold text-13 tabular-nums sm:text-13">
-                  {loading ? "—" : k === "spend" ? money(totals.spend) : totals.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent className="px-2 pt-4 sm:px-4">
-          {loading ? (
-            <Skeleton className="h-[200px] w-full" />
-          ) : (
-            <ChartContainer config={barConfig} className="aspect-auto h-[240px] w-full">
-              <BarChart data={chartData} margin={{ left: 4, right: 4, top: 8 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  minTickGap={28}
-                  className="text-xs"
-                />
-                <ChartTooltip
-                  cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
-                  content={<ChartTooltipContent className="w-36" />}
-                />
-                <Bar dataKey={metric} fill={`var(--color-${metric})`} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {typeEntries.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-13">Charges by type</CardTitle>
-              <p className="text-muted-foreground text-sm">Uninvoiced this period, by billing type.</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                {typeEntries.map(([type, g]) => (
-                  <div
-                    key={type}
-                    className={TYPE_COLOR[type] ?? "bg-muted-foreground"}
-                    style={{ width: `${typeTotalCents > 0 ? (g.amount_cents / typeTotalCents) * 100 : 0}%` }}
-                    title={`${TYPE_LABEL[type] ?? type}: ${centsToUsd(g.amount_cents)}`}
-                  />
-                ))}
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {typeEntries.map(([type, g]) => (
-                  <div key={type} className="flex items-center gap-2">
-                    <span className={cn("size-2 shrink-0 rounded-full", TYPE_COLOR[type] ?? "bg-muted-foreground")} />
-                    <span className="min-w-0 flex-1 truncate text-13">{TYPE_LABEL[type] ?? type}</span>
-                    <span className="shrink-0 text-11 text-muted-foreground tabular-nums">{g.lines} lines</span>
-                    <span className="shrink-0 font-semibold text-13 tabular-nums">{centsToUsd(g.amount_cents)}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per
-                  ATTEMPT, not per successful delivery, so a tenant's charges
-                  include failed attempts too. Only shown once something
-                  other than a clean delivery exists. */}
-              {usage &&
-                (() => {
-                  const entries = Object.entries(usage.by_outcome ?? {});
-                  const total = entries.reduce((s, [, o]) => s + o.lines, 0);
-                  const nonDelivered = entries.filter(([o]) => o !== "delivered");
-                  if (!total || !nonDelivered.length) return null;
-                  return (
-                    <div className="flex flex-col gap-1 border-t pt-3 text-11 text-muted-foreground">
-                      {nonDelivered.map(([outcome, o]) => {
-                        const dispositions = Object.entries(usage.by_disposition?.[outcome] ?? {}).sort(
-                          (a, b) => b[1].lines - a[1].lines,
-                        );
-                        return (
-                          <div key={outcome} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                            <span>
-                              <b className="text-foreground">{o.lines}</b> of {total} charges were {outcome} attempts (
-                              ${(o.amount_cents / 100).toFixed(2)}){dispositions.length > 0 && ":"}
-                            </span>
-                            {dispositions.map(([disposition, d], i) => (
-                              <span key={disposition}>
-                                {i > 0 && <span className="mx-1 text-muted-foreground/40">·</span>}
-                                {d.lines} {DISPOSITION_LABEL[disposition] ?? disposition.replace(/_/g, " ")}
-                              </span>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader className="!pb-0 border-b pb-3 sm:pb-4">
-            <CardTitle className="text-13">Delivery charges — last 30 days</CardTitle>
-            <p className="text-muted-foreground text-sm">Ledger amount per attempt, by day.</p>
-          </CardHeader>
-          <CardContent className="px-2 pt-4 sm:px-4">
-            {!summary ? (
-              <Skeleton className="h-[200px] w-full" />
-            ) : (
-              <ChartContainer config={deliveryBarConfig} className="aspect-auto h-[240px] w-full">
-                <BarChart data={deliveryChartData} margin={{ left: 4, right: 4, top: 8 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    minTickGap={28}
-                    className="text-xs"
-                  />
-                  <ChartTooltip
-                    cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
-                    content={<ChartTooltipContent className="w-36" />}
-                  />
-                  <Bar dataKey="amount_cents" fill="var(--color-amount_cents)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Recent charges (ledger, not label_orders) + payment method/term column ── */}
+      {/* ── Reorganized 2026-08-02 (item 3): "frequent" tier — Recent
+          charges + Payment method/term — moved up to right after the
+          at-a-glance KPI row. Measured live before this change: at
+          1920×1080 this section needed ~70% more scroll to reach
+          (1745px content vs 1028px visible); at 390px it was 2792px vs
+          809px. It's what a tenant needs OFTEN (their card, their
+          latest charges), not an occasional deep-dive — it doesn't
+          belong below the charts. ── */}
       <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -772,6 +628,157 @@ export function BillingTab({
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* ── "Occasional" tier — deep charts. Swapped 2026-08-02 (item 1):
+          "Spend — last 30 days" now takes the full-width slot "Charges by
+          type" used to occupy; "Charges by type" moved into the 2-col grid
+          below, alongside "Delivery charges". ── */}
+      <Card>
+        <CardHeader className="!pb-0 flex flex-col gap-3 border-b sm:flex-row sm:items-stretch sm:gap-0 sm:space-y-0">
+          <div className="flex-1 pb-3 sm:pb-4">
+            <CardTitle className="text-13">Spend — last 30 days</CardTitle>
+            <p className="text-muted-foreground text-sm">Shipping-label purchases over time.</p>
+          </div>
+          <div className="flex gap-0 border-t sm:border-t-0 sm:border-l">
+            {(Object.keys(barConfig) as BarMetric[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setMetric(k)}
+                data-active={metric === k}
+                className="flex flex-1 flex-col justify-center gap-0.5 px-4 py-2.5 text-left transition-colors data-[active=true]:bg-muted/50 sm:px-5"
+              >
+                <span className="type-label text-muted-foreground">{barConfig[k].label}</span>
+                <span className="font-semibold text-13 tabular-nums sm:text-13">
+                  {loading ? "—" : k === "spend" ? money(totals.spend) : totals.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent className="px-2 pt-4 sm:px-4">
+          {loading ? (
+            <Skeleton className="h-[200px] w-full" />
+          ) : (
+            <ChartContainer config={barConfig} className="aspect-auto h-[240px] w-full">
+              <BarChart data={chartData} margin={{ left: 4, right: 4, top: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={28}
+                  className="text-xs"
+                />
+                <ChartTooltip
+                  cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
+                  content={<ChartTooltipContent className="w-36" />}
+                />
+                <Bar dataKey={metric} fill={`var(--color-${metric})`} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {typeEntries.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-13">Charges by type</CardTitle>
+              <p className="text-muted-foreground text-sm">Uninvoiced this period, by billing type.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                {typeEntries.map(([type, g]) => (
+                  <div
+                    key={type}
+                    className={TYPE_COLOR[type] ?? "bg-muted-foreground"}
+                    style={{ width: `${typeTotalCents > 0 ? (g.amount_cents / typeTotalCents) * 100 : 0}%` }}
+                    title={`${TYPE_LABEL[type] ?? type}: ${centsToUsd(g.amount_cents)}`}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {typeEntries.map(([type, g]) => (
+                  <div key={type} className="flex items-center gap-2">
+                    <span className={cn("size-2 shrink-0 rounded-full", TYPE_COLOR[type] ?? "bg-muted-foreground")} />
+                    <span className="min-w-0 flex-1 truncate text-13">{TYPE_LABEL[type] ?? type}</span>
+                    <span className="shrink-0 text-11 text-muted-foreground tabular-nums">{g.lines} lines</span>
+                    <span className="shrink-0 font-semibold text-13 tabular-nums">{centsToUsd(g.amount_cents)}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Billing v2.1 + 2026-07-31 disposition collapse: bills per
+                  ATTEMPT, not per successful delivery, so a tenant's charges
+                  include failed attempts too. Only shown once something
+                  other than a clean delivery exists. */}
+              {usage &&
+                (() => {
+                  const entries = Object.entries(usage.by_outcome ?? {});
+                  const total = entries.reduce((s, [, o]) => s + o.lines, 0);
+                  const nonDelivered = entries.filter(([o]) => o !== "delivered");
+                  if (!total || !nonDelivered.length) return null;
+                  return (
+                    <div className="flex flex-col gap-1 border-t pt-3 text-11 text-muted-foreground">
+                      {nonDelivered.map(([outcome, o]) => {
+                        const dispositions = Object.entries(usage.by_disposition?.[outcome] ?? {}).sort(
+                          (a, b) => b[1].lines - a[1].lines,
+                        );
+                        return (
+                          <div key={outcome} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                            <span>
+                              <b className="text-foreground">{o.lines}</b> of {total} charges were {outcome} attempts (
+                              ${(o.amount_cents / 100).toFixed(2)}){dispositions.length > 0 && ":"}
+                            </span>
+                            {dispositions.map(([disposition, d], i) => (
+                              <span key={disposition}>
+                                {i > 0 && <span className="mx-1 text-muted-foreground/40">·</span>}
+                                {d.lines} {DISPOSITION_LABEL[disposition] ?? disposition.replace(/_/g, " ")}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader className="!pb-0 border-b pb-3 sm:pb-4">
+            <CardTitle className="text-13">Delivery charges — last 30 days</CardTitle>
+            <p className="text-muted-foreground text-sm">Ledger amount per attempt, by day.</p>
+          </CardHeader>
+          <CardContent className="px-2 pt-4 sm:px-4">
+            {!summary ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : (
+              <ChartContainer config={deliveryBarConfig} className="aspect-auto h-[240px] w-full">
+                <BarChart data={deliveryChartData} margin={{ left: 4, right: 4, top: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={28}
+                    className="text-xs"
+                  />
+                  <ChartTooltip
+                    cursor={{ fill: "var(--primary)", fillOpacity: 0.06, radius: 4 }}
+                    content={<ChartTooltipContent className="w-36" />}
+                  />
+                  <Bar dataKey="amount_cents" fill="var(--color-amount_cents)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type DocRow = {
@@ -159,6 +159,7 @@ export function InvoicesTab() {
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>{detail ? detail.document_number : "Loading…"}</SheetTitle>
+            <SheetDescription className="sr-only">Full document detail, line items, and PDF download</SheetDescription>
           </SheetHeader>
           {detailLoading && !detail && <Skeleton className="mx-4 h-40" />}
           {detail && (

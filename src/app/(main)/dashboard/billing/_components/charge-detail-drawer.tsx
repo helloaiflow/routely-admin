@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export type ChargeRow = {
   id: number;
@@ -46,6 +46,7 @@ export function ChargeDetailDrawer({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Charge detail</SheetTitle>
+          <SheetDescription className="sr-only">Full breakdown for this ledger charge</SheetDescription>
         </SheetHeader>
         {charge && (
           <div className="space-y-4 px-4 pb-6">

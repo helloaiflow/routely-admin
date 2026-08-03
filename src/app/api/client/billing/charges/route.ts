@@ -6,7 +6,8 @@ import { requirePagePermission } from "@/lib/tenant";
 /* ───────────────────────────────────────────────────────────────────────────
  * Billing charges + metrics — everything derived STRICTLY from real data:
  *   • tenant counters  (packages_this_month, miles_this_month, price_per_*,
- *                       outstanding_amount, billing_method, plan_type)
+ *                       billing_method, plan_type)
+ *   • v_tenant_outstanding (derived from billing_ledger — never stored)
  *   • label_orders     (Shippo label spend + the concrete charge history)
  *
  * No invoices collection exists yet, so we DO NOT fabricate invoices. The
@@ -40,11 +41,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: tenantRow } = await supabase
-      .from("tenants")
-      .select("*")
-      .eq("tenant_id", ctx.tenantId)
-      .maybeSingle();
+    const { data: tenantRow } = await supabase.from("tenants").select("*").eq("tenant_id", ctx.tenantId).maybeSingle();
     if (!tenantRow) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
     // Promoted columns win; everything else lives in the original `doc`.
@@ -52,10 +49,16 @@ export async function GET() {
     const tenant: Record<string, unknown> = {
       ...tdoc,
       plan_type: tenantRow.plan_type ?? tdoc.plan_type,
-      outstanding_amount: tenantRow.outstanding_amount ?? tdoc.outstanding_amount,
       company_name: tenantRow.company_name ?? tdoc.company_name,
       email: tenantRow.email ?? tdoc.email,
     };
+
+    // Outstanding is derived from billing_ledger, never stored on the tenant row.
+    const { data: outstandingRow } = await supabase
+      .from("v_tenant_outstanding")
+      .select("outstanding_cents")
+      .eq("tenant_id", ctx.tenantId)
+      .maybeSingle();
 
     // Last 180 days of label orders for this tenant (chart series + ledger).
     const since = new Date(Date.now() - 180 * 86400_000).toISOString();
@@ -94,7 +97,7 @@ export async function GET() {
     labelExpense = round2(labelExpense);
 
     const total = round2(deliveryExpense + milesExpense + labelExpense);
-    const outstanding = round2(Number(tenant.outstanding_amount) || 0);
+    const outstanding = round2(Number(outstandingRow?.outstanding_cents ?? 0) / 100);
 
     // ── 30-day daily series for the chart (label spend + count) ──
     const series: { date: string; spend: number; count: number }[] = [];
@@ -171,7 +174,12 @@ export async function GET() {
         billing_method: tenant.billing_method ?? "prepaid",
         billing_status: tenant.billing_status ?? null,
       },
-      projection: { run_rate: round2(runRate), projected_total: projectedTotal, days_in_month: daysInMonth, day_of_month: dayOfMonth },
+      projection: {
+        run_rate: round2(runRate),
+        projected_total: projectedTotal,
+        days_in_month: daysInMonth,
+        day_of_month: dayOfMonth,
+      },
       series,
       charges,
     });

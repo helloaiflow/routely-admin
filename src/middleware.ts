@@ -1,5 +1,6 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTELY ADMIN middleware. Reuses client's Clerk login UI (/login) but gates
@@ -21,6 +22,12 @@ const isPublicRoute = createRouteMatcher([
   "/auth(.*)",
   "/unauthorized(.*)",
   "/api/webhooks(.*)",
+  // Stripe's webhook lives at /api/stripe/webhook (not /api/webhooks/*) — the
+  // OTHER webhook file at /api/webhooks/stripe was consolidated away (2026-08
+  // billing v3), but this app's Clerk gate never whitelisted THIS path, so
+  // Stripe calls here would have 401'd at auth before signature verification
+  // even ran. Fixed alongside the consolidation.
+  "/api/stripe/webhook(.*)",
   "/api/data/package-scans(.*)",
   "/api/client/distance(.*)",
   "/api/client/places(.*)",

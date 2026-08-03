@@ -1,29 +1,35 @@
 import { NextResponse } from "next/server";
-import { requireActiveTenantContext } from "@/lib/tenant";
+
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { requireActiveTenantContext } from "@/lib/tenant";
 
 export async function GET() {
   const ctx = await requireActiveTenantContext();
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = getSupabaseAdmin();
-  const { data: row, error } = await supabase
-    .from("tenants")
-    .select("doc")
-    .eq("tenant_id", ctx.tenantId)
-    .maybeSingle();
+  const { data: row, error } = await supabase.from("tenants").select("doc").eq("tenant_id", ctx.tenantId).maybeSingle();
   if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
   if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   // `doc` jsonb is the original Mongo document → the field mapping below is unchanged.
   // biome-ignore lint/suspicious/noExplicitAny: doc is the raw Mongo shape
   const tenant = (row as { doc: Record<string, unknown> }).doc as any;
 
+  // Outstanding is derived from billing_ledger (v_tenant_outstanding), never
+  // stored/incremented on the tenant row — see 2026-08 billing v3 migration.
+  const { data: outstandingRow } = await supabase
+    .from("v_tenant_outstanding")
+    .select("outstanding_cents")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
+  const outstandingAmount = Number(outstandingRow?.outstanding_cents ?? 0) / 100;
+
   return NextResponse.json({
     tenant_id: tenant.tenant_id,
     company_name: tenant.company_name,
     plan_type: tenant.plan_type || "trial",
     // Routely Next Day pricing (set per tenant)
-    price_per_stop: tenant.price_per_stop ?? 16.00,
+    price_per_stop: tenant.price_per_stop ?? 16.0,
     price_per_mile: tenant.price_per_mile ?? 1.65,
     // Routely Xpress pricing (fixed platform-wide, overridable)
     xpress_base_fee: tenant.xpress_base_fee ?? 14.99,
@@ -31,9 +37,9 @@ export async function GET() {
     // Billing
     postpay_enabled: tenant.postpay_enabled ?? false,
     credit_limit: tenant.credit_limit ?? 0,
-    credit_period: tenant.credit_period ?? "monthly",       // monthly | weekly | biweekly
-    credit_reset_day: tenant.credit_reset_day ?? 1,         // day of month (1-28) or day of week (0=Sun)
-    outstanding_amount: tenant.outstanding_amount ?? 0,
+    credit_period: tenant.credit_period ?? "monthly", // monthly | weekly | biweekly
+    credit_reset_day: tenant.credit_reset_day ?? 1, // day of month (1-28) or day of week (0=Sun)
+    outstanding_amount: outstandingAmount,
     packages_this_month: tenant.packages_this_month || 0,
     miles_this_month: tenant.miles_this_month || 0,
     trial_ends_at: tenant.trial_ends_at,
@@ -56,9 +62,9 @@ export async function GET() {
               location_id: "default",
               name: tenant.company_name || tenant.name || "Default Location",
               street: tenant.address?.street || "",
-              city:   tenant.address?.city   || "",
-              state:  tenant.address?.state  || "FL",
-              zip:    tenant.address?.zip    || "",
+              city: tenant.address?.city || "",
+              state: tenant.address?.state || "FL",
+              zip: tenant.address?.zip || "",
               address: tenant.address?.street
                 ? `${tenant.address.street}, ${tenant.address.city || ""}, ${tenant.address.state || "FL"} ${tenant.address.zip || ""}`.trim()
                 : tenant.full_address || "",

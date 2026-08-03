@@ -60,11 +60,7 @@ export async function POST(request: Request) {
   } = body;
 
   const supabase = getSupabaseAdmin();
-  const { data: tenantRow } = await supabase
-    .from("tenants")
-    .select("*")
-    .eq("tenant_id", ctx.tenantId)
-    .maybeSingle();
+  const { data: tenantRow } = await supabase.from("tenants").select("*").eq("tenant_id", ctx.tenantId).maybeSingle();
   if (!tenantRow) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
   // Promoted columns fall back to the original nested `doc` values.

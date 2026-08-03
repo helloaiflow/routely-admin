@@ -5,27 +5,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useUser } from "@clerk/nextjs";
-import { Bell, CreditCard, FileText, Layers, MapPin, Plug, User, Users } from "lucide-react";
+import { Bell, Layers, MapPin, Plug, User, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { AccountTab } from "./account-tab";
-import { BillingTab } from "./billing-tab";
 import { IntegrationsTab } from "./integrations-tab";
-import { InvoicesTab } from "./invoices-tab";
 import { NotificationsTab } from "./notifications-tab";
 import { PickupTab } from "./pickup-tab";
 import { PlansTab } from "./plans-tab";
+import type { BillingData, SettingsTab } from "./settings-types";
 import { TeamSection } from "./team-section";
-import { type BillingData, type SettingsTab } from "./settings-types";
 
+// Billing + Invoices moved to the standalone /dashboard/billing module
+// (2026-08 billing v3) — no longer tabs here. ?tab=billing/?tab=invoices
+// redirect below for any old bookmarks/links.
 const TABS: Array<{ key: SettingsTab; label: string; icon: React.ElementType }> = [
   { key: "account", label: "Account", icon: User },
-  { key: "billing", label: "Billing", icon: CreditCard },
   { key: "notifications", label: "Notifications", icon: Bell },
   { key: "plans", label: "Plans", icon: Layers },
   { key: "pickup", label: "Pickup Locations", icon: MapPin },
-  { key: "invoices", label: "Invoices", icon: FileText },
   { key: "team", label: "Team", icon: Users },
   { key: "integrations", label: "Integrations", icon: Plug },
 ];
@@ -49,24 +48,31 @@ export function SettingsShell() {
   const initialTab: SettingsTab = urlTab && VALID_TABS.has(urlTab) ? urlTab : "account";
   const [tab, setTab] = useState<SettingsTab>(initialTab);
 
+  // Still fetched here for PlansTab's `plan` prop — billing UI itself moved out.
   const [billing, setBilling] = useState<BillingData | null>(null);
-  const [billingLoading, setBillingLoading] = useState(true);
 
   // Keep local state in sync when the URL ?tab= changes (sidebar deep links).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-syncs only on urlTab changes (adding `tab` would re-run this effect every time selectTab's own setTab fires)
   useEffect(() => {
     if (urlTab && VALID_TABS.has(urlTab) && urlTab !== tab) setTab(urlTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlTab]);
 
+  // Billing + Invoices moved to /dashboard/billing (2026-08 billing v3) — any
+  // old link/bookmark to ?tab=billing or ?tab=invoices lands there instead.
   useEffect(() => {
-    setBillingLoading(true);
+    if (urlTab === "billing") router.replace("/dashboard/billing");
+    else if (urlTab === "invoices") router.replace("/dashboard/billing?tab=invoices");
+  }, [urlTab, router]);
+
+  useEffect(() => {
     fetch("/api/billing")
       .then((r) => r.json())
       .then((d) => {
         if (!d.error) setBilling(d);
       })
-      .catch(() => {})
-      .finally(() => setBillingLoading(false));
+      .catch(() => {
+        /* best-effort — PlansTab falls back to Clerk publicMetadata.plan */
+      });
   }, []);
 
   const selectTab = useCallback(
@@ -113,7 +119,9 @@ export function SettingsShell() {
           <span className="type-label text-primary">Workspace</span>
           <h1 className="type-page-title">Settings</h1>
           <p className="max-w-xl text-muted-foreground text-sm">
-            {companyName ? `Manage ${companyName}'s account, billing, pickups and team.` : "Manage your account, billing, pickups and team."}
+            {companyName
+              ? `Manage ${companyName}'s account, billing, pickups and team.`
+              : "Manage your account, billing, pickups and team."}
           </p>
         </div>
       </div>
@@ -126,11 +134,7 @@ export function SettingsShell() {
       >
         <TabsList className="w-max">
           {visibleTabs.map(({ key, label, icon: Icon }) => (
-            <TabsTrigger
-              key={key}
-              value={key}
-              className="group shrink-0 gap-1.5 px-2.5 text-13 sm:px-3 sm:text-sm"
-            >
+            <TabsTrigger key={key} value={key} className="group shrink-0 gap-1.5 px-2.5 text-13 sm:px-3 sm:text-sm">
               <Icon className="size-3.5 sm:size-4" aria-hidden="true" />
               <span className="whitespace-nowrap">{label}</span>
             </TabsTrigger>
@@ -141,13 +145,9 @@ export function SettingsShell() {
       {/* ── Active tab ── */}
       <div className="min-h-[400px]">
         {activeTab === "account" && <AccountTab />}
-        {activeTab === "billing" && (
-          <BillingTab billing={billing} billingLoading={billingLoading} plan={billing?.plan ?? plan} />
-        )}
         {activeTab === "notifications" && <NotificationsTab />}
         {activeTab === "plans" && <PlansTab plan={billing?.plan ?? plan} />}
         {activeTab === "pickup" && <PickupTab />}
-        {activeTab === "invoices" && <InvoicesTab />}
         {activeTab === "team" && !isMember && <TeamSection />}
         {activeTab === "integrations" && !isMember && <IntegrationsTab />}
       </div>

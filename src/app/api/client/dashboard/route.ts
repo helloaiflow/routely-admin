@@ -90,9 +90,7 @@ export async function GET(request: Request) {
   // in-range/trend/missing-field semantics below run UNCHANGED in JS.
   const lowYmd = rangeStartYmd < ymd(sevenDaysAgo) ? rangeStartYmd : ymd(sevenDaysAgo);
   const highYmd = rangeEndYmd > today ? rangeEndYmd : today;
-  const lowCreatedIso = new Date(
-    Math.min(rangeStart.getTime(), sevenDaysAgo.getTime()) - 86_400_000,
-  ).toISOString();
+  const lowCreatedIso = new Date(Math.min(rangeStart.getTime(), sevenDaysAgo.getTime()) - 86_400_000).toISOString();
   let stopsQuery = supabase.from("stops").select("doc");
   if (!scopeAll) stopsQuery = stopsQuery.eq("tenant_id", tenantId);
   const { data: stopRows, error: stopErr } = await stopsQuery
@@ -145,9 +143,7 @@ export async function GET(request: Request) {
   // Not period-filtered — drafts exist outside the scheduled-date world.
   let draftQuery = supabase.from("draft_stops").select("doc");
   if (!scopeAll) draftQuery = draftQuery.eq("tenant_id", tenantId);
-  const { data: draftRows } = await draftQuery
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const { data: draftRows } = await draftQuery.order("created_at", { ascending: false }).limit(200);
 
   const draftStops = (draftRows ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -159,22 +155,19 @@ export async function GET(request: Request) {
   const periodStops = realStops;
   const yesterdayReal = realStops.filter((s) => effectiveDate(s) === yesterday);
 
-  // ── Tenant (outstanding balance) ───────────────────────────────────────────
+  // ── Tenant (outstanding balance) — derived from billing_ledger, never
+  // stored/incremented on the tenant row (see 2026-08 billing v3 migration). ──
   let outstanding = 0;
   if (scopeAll) {
-    // Aggregate outstanding across every tenant.
-    const { data: tRows } = await supabase.from("tenants").select("outstanding_amount");
-    outstanding = (tRows ?? []).reduce(
-      (a, t) => a + Number((t as { outstanding_amount?: number }).outstanding_amount ?? 0),
-      0,
-    );
+    const { data: oRows } = await supabase.from("v_tenant_outstanding").select("outstanding_cents");
+    outstanding = (oRows ?? []).reduce((a, r) => a + Number(r.outstanding_cents ?? 0), 0) / 100;
   } else {
-    const { data: tenantRow } = await supabase
-      .from("tenants")
-      .select("outstanding_amount")
+    const { data: oRow } = await supabase
+      .from("v_tenant_outstanding")
+      .select("outstanding_cents")
       .eq("tenant_id", tenantId)
       .maybeSingle();
-    outstanding = Number(tenantRow?.outstanding_amount ?? 0);
+    outstanding = Number(oRow?.outstanding_cents ?? 0) / 100;
   }
 
   // ── Month total (billing-period count) ──────────────────────────────────
@@ -294,9 +287,7 @@ export async function GET(request: Request) {
 
   // ── COD & Cold ────────────────────────────────────────────────────────────
   const codQueue = periodStops.filter((s) => s.collect_cod && !isDelivered(s)).slice(0, 20);
-  const coldPackages = periodStops
-    .filter((s) => s.package_type === "cold" && !isDelivered(s))
-    .slice(0, 20);
+  const coldPackages = periodStops.filter((s) => s.package_type === "cold" && !isDelivered(s)).slice(0, 20);
 
   // ── Upcoming / Live Stops (sorted by ETA) ──────────────────────────────────
   // The Live Stop Monitor shows only the in-flight/dispatched set (isInMotion):

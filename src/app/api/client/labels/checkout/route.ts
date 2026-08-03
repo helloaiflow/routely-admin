@@ -17,28 +17,18 @@ export async function POST(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => null);
-  const { from_address, to_address, parcel, rate_id, payment_type, package_type } = body ?? {};
+  const { from_address, to_address, parcel, rate_id, package_type } = body ?? {};
 
   if (!rate_id || !from_address?.street1 || !to_address?.street1) {
     return NextResponse.json({ error: "rate_id, from_address and to_address required" }, { status: 400 });
   }
-  if (payment_type !== "card" && payment_type !== "postpay") {
-    return NextResponse.json({ error: "payment_type must be card|postpay" }, { status: 400 });
-  }
 
   const tenantId = String(ctx.tenantId ?? "1");
 
-  // Postpay is a privilege — verify against the tenant row, never the client.
-  if (payment_type === "postpay") {
-    const { data: tenant } = await getSupabaseAdmin()
-      .from("tenants")
-      .select("postpay_enabled, credit_limit, outstanding_amount")
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
-    if (!tenant?.postpay_enabled) {
-      return NextResponse.json({ error: "Postpay is not enabled for this account" }, { status: 403 });
-    }
-  }
+  // Labels are always paid at purchase — Routely fronts cash to the carrier,
+  // so there is no credit path for labels regardless of the tenant's postpay
+  // setting for delivery charges. `payment_type` is always "card" here.
+  const payment_type = "card" as const;
 
   try {
     // Server-side price: re-fetch the rate so a tampered client can't change it.

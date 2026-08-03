@@ -9,7 +9,6 @@ import {
   Building2,
   CheckCircle2,
   ChevronDown,
-  CreditCard,
   Download,
   ExternalLink,
   Gift,
@@ -29,7 +28,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -165,11 +163,6 @@ function ReviewRow({
     </div>
   );
 }
-
-/* Radio-cards for the payment method (only rendered when Postpay exists). */
-const radioCardCls =
-  "flex cursor-pointer items-center gap-2.5 rounded-lg border border-border/60 px-3 py-2.5 transition-colors hover:border-border has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40";
-const radioCardActive = "border-primary bg-primary/5 text-primary";
 
 /* ── Google Places autocomplete (same pattern as the courier flow) ────────── */
 type Prediction = { description: string; place_id: string; main_text: string; secondary_text: string };
@@ -475,9 +468,8 @@ export default function BuyLabelPage() {
   // the carrier holding the overall-cheapest rate starts open.
   const [openCarriers, setOpenCarriers] = useState<Record<string, boolean> | null>(null);
 
-  // Payment
-  const [postpay, setPostpay] = useState<{ enabled: boolean; available: number }>({ enabled: false, available: 0 });
-  const [paymentType, setPaymentType] = useState<"card" | "postpay">("card");
+  // Payment — labels are always paid at purchase (Routely fronts cash to the
+  // carrier; there is no credit path for labels, unlike delivery charges).
   const [orderId, setOrderId] = useState("");
   const [amountCents, setAmountCents] = useState(0);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -541,9 +533,6 @@ export default function BuyLabelPage() {
         } else if (d.company_name) {
           setFrom((f) => ({ ...f, name: d.company_name, phone: f.phone || senderPhone }));
         }
-        const limit = Number(d.credit_limit ?? 0);
-        const outstanding = Number(d.outstanding_amount ?? 0);
-        setPostpay({ enabled: Boolean(d.postpay_enabled), available: Math.max(0, limit - outstanding) });
       } catch {
         /* tenant fetch is best-effort — fields stay editable */
       }
@@ -671,7 +660,7 @@ export default function BuyLabelPage() {
   }
 
   /* ── Step 2 → 3: create the order (server re-validates price) ── */
-  async function checkout(type: "card" | "postpay") {
+  async function checkout() {
     if (!selectedRate) return;
     setError("");
     setCheckingOut(true);
@@ -691,7 +680,7 @@ export default function BuyLabelPage() {
             massUnit: "oz",
           },
           rate_id: selectedRate.rate_id,
-          payment_type: type,
+          payment_type: "card",
           package_type: packageType,
         }),
       });
@@ -726,7 +715,9 @@ export default function BuyLabelPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order_ids: [oid] }),
-        }).catch(() => {});
+        }).catch(() => {
+          /* fire-and-forget confirmation email — never blocks the purchase */
+        });
       }
       if (!r.ok) throw new Error(d.error ?? "Label purchase failed");
       setResult({
@@ -748,23 +739,17 @@ export default function BuyLabelPage() {
     }
   }
 
-  async function handlePostpayConfirm() {
-    const oid = orderId || (await checkout("postpay"));
-    if (oid) await purchase(oid);
-  }
-
   // ── Unified pay flow: checkout fires automatically on entering Review & Pay
-  // (and again after a payment-type switch or a failed purchase, both of which
-  // reset orderId) — no extra "Continue to payment" click. Money order is
-  // untouched: checkout → charge → purchase.
+  // (and again after a failed purchase, which resets orderId) — no extra
+  // "Continue to payment" click. Money order is untouched: checkout → charge → purchase.
   // `error` in the guard stops an infinite retry loop when checkout itself
   // fails (rate expired etc.) — the payment area then offers a manual retry
   // that clears the error, which re-arms this effect.
   // biome-ignore lint/correctness/useExhaustiveDependencies: checkout is a stable page-level fn; deps are the actual triggers
   useEffect(() => {
     if (step !== "payment" || orderId || checkingOut || purchasing || error || !selectedRate) return;
-    checkout(paymentType);
-  }, [step, orderId, paymentType, checkingOut, purchasing, error, selectedRate]);
+    checkout();
+  }, [step, orderId, checkingOut, purchasing, error, selectedRate]);
 
   function printLabel() {
     if (!result?.label_url) return;
@@ -784,11 +769,8 @@ export default function BuyLabelPage() {
     setOrderId("");
     setAmountCents(0);
     setResult(null);
-    setPaymentType("card");
     setTo({ name: "", street1: "", street2: "", city: "", state: "FL", zip: "", phone: "" });
   }
-
-  const postpayUsable = postpay.enabled && selectedRate != null && postpay.available >= selectedRate.client_price;
 
   // ── ADMIN god-view guard ─────────────────────────────────────────────────
   // "All tenants" is the admin's cross-tenant FILTER scope, not a real client.
@@ -803,9 +785,8 @@ export default function BuyLabelPage() {
         </div>
         <p className="type-body-sm font-bold text-foreground">You&apos;re viewing All tenants</p>
         <p className="type-caption mt-1.5 max-w-[300px] leading-relaxed">
-          Buy a Label creates a real order for one client, so it needs a specific
-          tenant scope. Switch tenants using the selector in the top-right corner,
-          then come back here.
+          Buy a Label creates a real order for one client, so it needs a specific tenant scope. Switch tenants using the
+          selector in the top-right corner, then come back here.
         </p>
       </div>
     );
@@ -1358,55 +1339,55 @@ export default function BuyLabelPage() {
                           {/* Rate rows — visible when the group is expanded */}
                           {open && (
                             <div className="space-y-1.5 border-border/60 border-t p-2">
-                            {group.map((r) => {
-                              const selected = selectedRateId === r.rate_id;
-                              const fastest = r.rate_id === fastestId;
-                              return (
-                                <button
-                                  key={r.rate_id}
-                                  type="button"
-                                  onClick={() => setSelectedRateId(r.rate_id)}
-                                  className={cn(
-                                    "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
-                                    selected
-                                      ? "border-primary bg-primary/5"
-                                      : "border-border/60 hover:border-border hover:bg-muted/30",
-                                  )}
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      <span className="font-semibold text-13">{r.service}</span>
-                                      {r.rate_id === cheapestId && (
-                                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-10 text-emerald-600">
-                                          Cheapest
-                                        </span>
-                                      )}
-                                      {fastest && (
-                                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-10 text-amber-700 dark:text-amber-400">
-                                          Fastest
-                                        </span>
-                                      )}
+                              {group.map((r) => {
+                                const selected = selectedRateId === r.rate_id;
+                                const fastest = r.rate_id === fastestId;
+                                return (
+                                  <button
+                                    key={r.rate_id}
+                                    type="button"
+                                    onClick={() => setSelectedRateId(r.rate_id)}
+                                    className={cn(
+                                      "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all",
+                                      selected
+                                        ? "border-primary bg-primary/5"
+                                        : "border-border/60 hover:border-border hover:bg-muted/30",
+                                    )}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="font-semibold text-13">{r.service}</span>
+                                        {r.rate_id === cheapestId && (
+                                          <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-10 text-emerald-600">
+                                            Cheapest
+                                          </span>
+                                        )}
+                                        {fastest && (
+                                          <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-semibold text-10 text-amber-700 dark:text-amber-400">
+                                            Fastest
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-0.5 text-11 text-muted-foreground">
+                                        {r.days != null
+                                          ? `${r.days} business day${r.days === 1 ? "" : "s"}`
+                                          : "Transit time varies"}
+                                      </p>
                                     </div>
-                                    <p className="mt-0.5 text-11 text-muted-foreground">
-                                      {r.days != null
-                                        ? `${r.days} business day${r.days === 1 ? "" : "s"}`
-                                        : "Transit time varies"}
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 items-center gap-2">
-                                    <p className="font-bold text-13 tabular-nums">${r.client_price.toFixed(2)}</p>
-                                    <div
-                                      className={cn(
-                                        "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                                        selected ? "border-primary bg-primary" : "border-muted-foreground/30",
-                                      )}
-                                    >
-                                      {selected && <div className="size-2 rounded-full bg-primary-foreground" />}
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <p className="font-bold text-13 tabular-nums">${r.client_price.toFixed(2)}</p>
+                                      <div
+                                        className={cn(
+                                          "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                                          selected ? "border-primary bg-primary" : "border-muted-foreground/30",
+                                        )}
+                                      >
+                                        {selected && <div className="size-2 rounded-full bg-primary-foreground" />}
+                                      </div>
                                     </div>
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1471,46 +1452,9 @@ export default function BuyLabelPage() {
             </div>
           </section>
 
-          {/* Payment — checkout fires automatically on entry; ONE final button */}
+          {/* Payment — checkout fires automatically on entry; ONE final button.
+              Labels are always paid by card at purchase — no postpay option. */}
           <section className={cardCls}>
-            {postpay.enabled && (
-              <RadioGroup
-                value={paymentType}
-                onValueChange={(v) => {
-                  setPaymentType(v as "card" | "postpay");
-                  setOrderId("");
-                  setAmountCents(0);
-                }}
-                className="mb-4 grid grid-cols-2 gap-2"
-              >
-                <label htmlFor="lf-pay-card" className={cn(radioCardCls, paymentType === "card" && radioCardActive)}>
-                  <RadioGroupItem id="lf-pay-card" value="card" className="sr-only" />
-                  <CreditCard className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-xs">Card</span>
-                    <span className="block text-11 text-muted-foreground">Pay now</span>
-                  </span>
-                </label>
-                <label
-                  htmlFor="lf-pay-postpay"
-                  className={cn(
-                    radioCardCls,
-                    paymentType === "postpay" && radioCardActive,
-                    !postpayUsable && "cursor-not-allowed opacity-40",
-                  )}
-                >
-                  <RadioGroupItem id="lf-pay-postpay" value="postpay" disabled={!postpayUsable} className="sr-only" />
-                  <ReceiptText className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0">
-                    <span className="block font-semibold text-xs">Invoice</span>
-                    <span className="block truncate text-11 text-muted-foreground">
-                      {postpayUsable ? `$${postpay.available.toFixed(2)} available` : "Over credit limit"}
-                    </span>
-                  </span>
-                </label>
-              </RadioGroup>
-            )}
-
             {checkingOut || (!orderId && !error) ? (
               <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground" aria-live="polite">
                 <Loader2 className="size-4 animate-spin text-primary" />
@@ -1519,11 +1463,15 @@ export default function BuyLabelPage() {
             ) : !orderId && error ? (
               /* checkout failed (e.g. rate expired) — clearing the error re-arms
                  the auto-checkout effect for a clean retry */
-              <Button variant="outline" onClick={() => setError("")} className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl">
+              <Button
+                variant="outline"
+                onClick={() => setError("")}
+                className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl"
+              >
                 <RotateCcw className="size-4" />
                 Try Again
               </Button>
-            ) : paymentType === "card" ? (
+            ) : (
               <StripePaymentElement
                 stopId={orderId}
                 amountCents={amountCents}
@@ -1533,23 +1481,9 @@ export default function BuyLabelPage() {
                 onBack={() => setStep("service")}
                 onSuccess={(paymentIntentId) => purchase(orderId, paymentIntentId)}
               />
-            ) : (
-              <div className="space-y-3">
-                <p className="text-muted-foreground text-xs">
-                  This label will be added to your account balance and invoiced later.
-                </p>
-                <Button
-                  onClick={handlePostpayConfirm}
-                  disabled={checkingOut || purchasing}
-                  className="h-(--spacing-control-h) w-full gap-1.5 rounded-xl bg-primary font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {purchasing ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  Confirm & Pay ${selectedRate.client_price.toFixed(2)}
-                </Button>
-              </div>
             )}
 
-            {purchasing && paymentType === "card" && (
+            {purchasing && (
               <div
                 className="mt-3 flex items-center justify-center gap-2 text-muted-foreground text-13"
                 aria-live="polite"
@@ -1622,7 +1556,11 @@ export default function BuyLabelPage() {
                   Download PNG
                 </a>
               </Button>
-              <Button variant="ghost" onClick={resetAll} className="h-(--spacing-control-h) gap-1.5 text-muted-foreground">
+              <Button
+                variant="ghost"
+                onClick={resetAll}
+                className="h-(--spacing-control-h) gap-1.5 text-muted-foreground"
+              >
                 <RotateCcw className="size-4" />
                 Buy Another
               </Button>
@@ -1645,7 +1583,11 @@ export default function BuyLabelPage() {
           )}
           {step === "service" && (
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep("details")} className="h-(--spacing-control-h) gap-1.5 bg-background">
+              <Button
+                variant="outline"
+                onClick={() => setStep("details")}
+                className="h-(--spacing-control-h) gap-1.5 bg-background"
+              >
                 <ArrowLeft className="size-4" />
                 Back
               </Button>

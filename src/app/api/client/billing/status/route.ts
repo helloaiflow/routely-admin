@@ -1,22 +1,25 @@
 import { NextResponse } from "next/server";
 
-import { requirePagePermission } from "@/lib/tenant";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { requirePagePermission } from "@/lib/tenant";
 
 export async function GET() {
   const ctx = await requirePagePermission("billing");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = getSupabaseAdmin();
-  const { data: row } = await supabase
-    .from("tenants")
-    .select("*")
-    .eq("tenant_id", ctx.tenantId)
-    .maybeSingle();
+  const { data: row } = await supabase.from("tenants").select("*").eq("tenant_id", ctx.tenantId).maybeSingle();
 
   if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
   const t = (row.doc ?? {}) as Record<string, any>;
+
+  // Outstanding is derived from billing_ledger, never stored on the tenant row.
+  const { data: outstandingRow } = await supabase
+    .from("v_tenant_outstanding")
+    .select("outstanding_cents")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
 
   const tenant = {
     plan_type: row.plan_type ?? t.plan_type,
@@ -31,7 +34,7 @@ export async function GET() {
     trial_ends_at: t.trial_ends_at,
     packages_this_month: t.packages_this_month,
     outstanding_routes_count: t.outstanding_routes_count,
-    outstanding_amount: row.outstanding_amount ?? t.outstanding_amount,
+    outstanding_amount: Number(outstandingRow?.outstanding_cents ?? 0) / 100,
     past_due_since: t.past_due_since,
   };
 

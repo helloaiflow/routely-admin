@@ -1,14 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
+
 import { Webhook } from "svix";
+
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 // ── POST /api/webhooks/clerk ──────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const CLERK_WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET ?? "";
-  const CLERK_SECRET_KEY     = process.env.CLERK_SECRET_KEY ?? "";
+  const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY ?? "";
 
-  const svix_id        = req.headers.get("svix-id");
+  const svix_id = req.headers.get("svix-id");
   const svix_timestamp = req.headers.get("svix-timestamp");
   const svix_signature = req.headers.get("svix-signature");
 
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
     try {
       const wh = new Webhook(CLERK_WEBHOOK_SECRET);
       wh.verify(body, {
-        "svix-id":        svix_id,
+        "svix-id": svix_id,
         "svix-timestamp": svix_timestamp,
         "svix-signature": svix_signature,
       });
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const email  = data.email_addresses?.[0]?.email_address?.toLowerCase() ?? "";
+    const email = data.email_addresses?.[0]?.email_address?.toLowerCase() ?? "";
     const nowIso = new Date().toISOString();
 
     // ── Invitation-born MEMBER (member-system Phase 3, 2026-06-11) ──────────
@@ -51,26 +53,22 @@ export async function POST(req: NextRequest) {
       const memberName = `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
 
       // users row — insert only if this clerk_user_id doesn't exist yet.
-      const { data: uExisting } = await supabase
-        .from("users")
-        .select("id")
-        .eq("clerk_user_id", data.id)
-        .maybeSingle();
+      const { data: uExisting } = await supabase.from("users").select("id").eq("clerk_user_id", data.id).maybeSingle();
       if (!uExisting) {
         await supabase.from("users").insert({
           clerk_user_id: data.id,
           email,
-          name:          memberName,
-          system_role:   "tenant_user",
-          created_from:  "member_invite",
-          created_at:    nowIso,
+          name: memberName,
+          system_role: "tenant_user",
+          created_from: "member_invite",
+          created_at: nowIso,
           doc: {
             clerk_user_id: data.id,
             email,
-            name:          memberName,
-            system_role:   "tenant_user",
-            created_at:    nowIso,
-            created_from:  "member_invite",
+            name: memberName,
+            system_role: "tenant_user",
+            created_at: nowIso,
+            created_from: "member_invite",
           },
         });
       }
@@ -80,11 +78,11 @@ export async function POST(req: NextRequest) {
       const { data: flipped } = await supabase
         .from("tenant_members")
         .update({
-          clerk_user_id:     data.id,
-          active:            true,
+          clerk_user_id: data.id,
+          active: true,
           invitation_status: "accepted",
-          accepted_at:       nowIso,
-          updated_at:        nowIso,
+          accepted_at: nowIso,
+          updated_at: nowIso,
         })
         .eq("tenant_id", memberTenantId)
         .eq("email", email)
@@ -103,19 +101,21 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
         if (!fbExisting) {
           await supabase.from("tenant_members").insert({
-            tenant_id:         memberTenantId,
-            clerk_user_id:     data.id,
+            tenant_id: memberTenantId,
+            clerk_user_id: data.id,
             email,
-            role:              "member",
-            active:            true,
-            invited_by:        null,
+            role: "member",
+            active: true,
+            invited_by: null,
             invitation_status: "accepted",
-            page_permissions:  { orders: true, billing: false, reports: false, settings: false },
-            created_at:        nowIso,
-            updated_at:        nowIso,
+            page_permissions: { orders: true, billing: false, reports: false, settings: false },
+            created_at: nowIso,
+            updated_at: nowIso,
           });
         }
-        notifyTelegram(`⚠️ <b>MEMBER ACCEPTED WITHOUT PENDING ROW</b>\n📧 ${email}\n🏢 Tenant ${memberTenantId}\nCreated fallback row (orders-only perms) — review in settings.`);
+        notifyTelegram(
+          `⚠️ <b>MEMBER ACCEPTED WITHOUT PENDING ROW</b>\n📧 ${email}\n🏢 Tenant ${memberTenantId}\nCreated fallback row (orders-only perms) — review in settings.`,
+        );
       } else {
         notifyTelegram(`👥 <b>MEMBER JOINED</b>\n👤 ${memberName || "N/A"}\n📧 ${email}\n🏢 Tenant ${memberTenantId}`);
       }
@@ -152,73 +152,77 @@ export async function POST(req: NextRequest) {
     // Minted atomically from the Postgres sequence via the next_tenant_id() RPC.
     const { data: tid, error: tidErr } = await supabase.rpc("next_tenant_id");
     if (tidErr || tid == null || !Number.isFinite(Number(tid))) {
-      console.error("[clerk-webhook] tenant_id sequence read failed — aborting provisioning", { email, clerk_user_id: data.id, tidErr });
-      notifyTelegram(`🚨 <b>TENANT PROVISIONING FAILED</b>\n📧 ${email}\nSequence read returned no id — signup aborted, Clerk will retry.`);
+      console.error("[clerk-webhook] tenant_id sequence read failed — aborting provisioning", {
+        email,
+        clerk_user_id: data.id,
+        tidErr,
+      });
+      notifyTelegram(
+        `🚨 <b>TENANT PROVISIONING FAILED</b>\n📧 ${email}\nSequence read returned no id — signup aborted, Clerk will retry.`,
+      );
       return NextResponse.json({ error: "tenant_id sequence unavailable" }, { status: 503 });
     }
     const tenant_id = Number(tid);
 
-    const trialEndsAt   = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    const contactName   = `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const contactName = `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim();
 
     // Full original tenant document → stored verbatim in `doc`; promoted scalar
     // columns are duplicated onto the row for querying.
     const tenantDoc = {
       tenant_id,
-      company_name:        "",
-      contact_name:        contactName,
+      company_name: "",
+      contact_name: contactName,
       email,
-      phone:               data.phone_numbers?.[0]?.phone_number ?? "",
-      clerk_user_id:       data.id,
+      phone: data.phone_numbers?.[0]?.phone_number ?? "",
+      clerk_user_id: data.id,
       owner_clerk_user_id: data.id,
-      price_per_stop:      16.00,
-      price_per_mile:      1.65,
-      xpress_base_fee:     14.99,
-      xpress_per_mile:     1.38,
-      postpay_enabled:     false,
-      credit_limit:        0,
-      outstanding_amount:  0,
+      price_per_stop: 16.0,
+      price_per_mile: 1.65,
+      xpress_base_fee: 14.99,
+      xpress_per_mile: 1.38,
+      postpay_enabled: false,
+      credit_limit: 0,
       packages_this_month: 0,
-      plan_type:           "free_trial",
-      trial_ends_at:       trialEndsAt,
-      stripe_customer_id:  null,
-      status:              "pending_setup",
-      active:              true,
-      address:             {},
-      pickup_locations:    [],
-      notification_prefs:  { label_email: true, daily_digest: false },
-      created_at:          nowIso,
-      updated_at:          nowIso,
+      plan_type: "free_trial",
+      trial_ends_at: trialEndsAt,
+      stripe_customer_id: null,
+      status: "pending_setup",
+      active: true,
+      address: {},
+      pickup_locations: [],
+      notification_prefs: { label_email: true, daily_digest: false },
+      created_at: nowIso,
+      updated_at: nowIso,
     };
 
     await supabase.from("tenants").insert({
       tenant_id,
-      company_name:        "",
-      plan_type:           "free_trial",
-      stripe_customer_id:  null,
-      outstanding_amount:  0,
+      company_name: "",
+      plan_type: "free_trial",
+      stripe_customer_id: null,
       owner_clerk_user_id: data.id,
-      credit_limit:        0,
-      status:              "pending_setup",
-      active:              true,
-      postpay_enabled:     false,
-      clerk_user_id:       data.id,
+      credit_limit: 0,
+      status: "pending_setup",
+      active: true,
+      postpay_enabled: false,
+      clerk_user_id: data.id,
       email,
-      created_at:          nowIso,
-      updated_at:          nowIso,
-      doc:                 tenantDoc,
+      created_at: nowIso,
+      updated_at: nowIso,
+      doc: tenantDoc,
     });
 
     await supabase.from("tenant_members").insert({
       tenant_id,
       clerk_user_id: data.id,
       email,
-      role:          "owner",
-      active:        true,
-      invited_by:    null,
+      role: "owner",
+      active: true,
+      invited_by: null,
       page_permissions: { orders: true, billing: true, reports: true, settings: true },
-      created_at:    nowIso,
-      updated_at:    nowIso,
+      created_at: nowIso,
+      updated_at: nowIso,
     });
 
     // ── Stripe customer (lazy init; test/live follows the env key). Non-fatal:
@@ -250,32 +254,28 @@ export async function POST(req: NextRequest) {
     });
 
     // users row (member-system Phase 2+): every Clerk user gets a users doc.
-    const { data: uOwner } = await supabase
-      .from("users")
-      .select("id")
-      .eq("clerk_user_id", data.id)
-      .maybeSingle();
+    const { data: uOwner } = await supabase.from("users").select("id").eq("clerk_user_id", data.id).maybeSingle();
     if (!uOwner) {
       await supabase.from("users").insert({
         clerk_user_id: data.id,
         email,
-        name:          contactName,
-        system_role:   "tenant_user",
-        created_from:  "clerk_webhook",
-        created_at:    nowIso,
+        name: contactName,
+        system_role: "tenant_user",
+        created_from: "clerk_webhook",
+        created_at: nowIso,
         doc: {
           clerk_user_id: data.id,
           email,
-          name:          contactName,
-          system_role:   "tenant_user",
-          created_at:    nowIso,
-          created_from:  "clerk_webhook",
+          name: contactName,
+          system_role: "tenant_user",
+          created_at: nowIso,
+          created_from: "clerk_webhook",
         },
       });
     }
 
     await setClerkMetadata(CLERK_SECRET_KEY, data.id, {
-      role:        "tenant_user",
+      role: "tenant_user",
       tenant_id,
       tenant_role: "owner",
     });
@@ -285,7 +285,6 @@ export async function POST(req: NextRequest) {
     notifyTelegram(msg);
 
     return NextResponse.json({ success: true, tenant_id }, { status: 201 });
-
   } catch (err) {
     console.error("[clerk-webhook]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -295,7 +294,7 @@ export async function POST(req: NextRequest) {
 // Fire-and-forget Telegram notification. Missing credentials must never break
 // tenant provisioning — log and skip, no hardcoded fallback.
 function notifyTelegram(text: string) {
-  const token  = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) {
     console.error("[clerk-webhook] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not set — skipping Telegram notification");
@@ -315,7 +314,7 @@ async function setClerkMetadata(secretKey: string, userId: string, metadata: Rec
   try {
     await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
       method: "PATCH",
-      headers: { "Authorization": `Bearer ${secretKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ public_metadata: metadata }),
     });
   } catch (err) {

@@ -9,10 +9,11 @@ import { requirePagePermission } from "@/lib/tenant";
 /** Buys the Shippo label for an order created by /labels/checkout.
  *
  *  MONEY-SAFETY ORDER (never violated):
- *    card    → verify the PaymentIntent is SUCCEEDED for the exact amount
- *              BEFORE buying; if Shippo then fails, AUTO-REFUND the intent.
- *    postpay → re-verify the tenant privilege, buy, then accrue the client
- *              price to tenants.outstanding_amount (same rule as stops).   */
+ *    card → verify the PaymentIntent is SUCCEEDED for the exact amount
+ *           BEFORE buying; if Shippo then fails, AUTO-REFUND the intent.
+ *  Labels are always paid at purchase — no postpay/credit path exists for
+ *  labels, regardless of the tenant's postpay setting for delivery charges
+ *  (Routely fronts cash to the carrier; that can never be extended on credit). */
 export async function POST(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,35 +57,25 @@ export async function POST(request: Request) {
     // ── 1 · Verify payment ────────────────────────────────────────────────
     let cardBrand: string | null = null;
     let cardLast4: string | null = null;
-    if (paymentType === "card") {
-      if (!payment_intent_id) {
-        return NextResponse.json({ error: "payment_intent_id required for card orders" }, { status: 400 });
-      }
-      const pi = await getStripe().paymentIntents.retrieve(payment_intent_id, { expand: ["payment_method"] });
-      const piOk =
-        pi.status === "succeeded" &&
-        pi.amount === amountCents &&
-        (pi.metadata?.stop_id === order_id || pi.metadata?.tenant_id === tenantId);
-      if (!piOk) {
-        return NextResponse.json({ error: "Payment not verified — label not purchased" }, { status: 402 });
-      }
-      // Card display metadata (last4/brand are non-sensitive) for the labels UI.
-      const pm = pi.payment_method;
-      if (typeof pm === "object" && pm?.card) {
-        cardBrand = pm.card.brand ?? null;
-        cardLast4 = pm.card.last4 ?? null;
-      }
-    } else if (paymentType === "postpay") {
-      const { data: tenant } = await getSupabaseAdmin()
-        .from("tenants")
-        .select("postpay_enabled, outstanding_amount")
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-      if (!tenant?.postpay_enabled) {
-        return NextResponse.json({ error: "Postpay is not enabled for this account" }, { status: 403 });
-      }
-    } else {
-      return NextResponse.json({ error: "Unknown payment type" }, { status: 400 });
+    if (paymentType !== "card") {
+      return NextResponse.json({ error: "Unknown payment type — labels are always paid by card" }, { status: 400 });
+    }
+    if (!payment_intent_id) {
+      return NextResponse.json({ error: "payment_intent_id required for card orders" }, { status: 400 });
+    }
+    const pi = await getStripe().paymentIntents.retrieve(payment_intent_id, { expand: ["payment_method"] });
+    const piOk =
+      pi.status === "succeeded" &&
+      pi.amount === amountCents &&
+      (pi.metadata?.stop_id === order_id || pi.metadata?.tenant_id === tenantId);
+    if (!piOk) {
+      return NextResponse.json({ error: "Payment not verified — label not purchased" }, { status: 402 });
+    }
+    // Card display metadata (last4/brand are non-sensitive) for the labels UI.
+    const pm = pi.payment_method;
+    if (typeof pm === "object" && pm?.card) {
+      cardBrand = pm.card.brand ?? null;
+      cardLast4 = pm.card.last4 ?? null;
     }
 
     // ── 2 · Buy the label ─────────────────────────────────────────────────
@@ -110,7 +101,7 @@ export async function POST(request: Request) {
           console.error("[labels/purchase] REFUND FAILED — manual action needed", order_id, e);
         }
       }
-      const failStatus = paymentType === "card" ? (refund_id ? "refunded" : "refund_failed") : "failed";
+      const failStatus = refund_id ? "refunded" : "refund_failed";
       order.status = failStatus;
       order.error = msg;
       order.payment = { ...order.payment, refund_id };
@@ -157,27 +148,7 @@ export async function POST(request: Request) {
       })
       .eq("order_id", order_id);
 
-    // ── 4 · Postpay accrues to the tenant's outstanding balance ──────────
-    if (paymentType === "postpay") {
-      try {
-        const supabase = getSupabaseAdmin();
-        const { data: tRow } = await supabase
-          .from("tenants")
-          .select("outstanding_amount")
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-        const current = Number(tRow?.outstanding_amount ?? 0);
-        const clientPrice = Number(order.rate?.client_price ?? amountCents / 100);
-        await supabase
-          .from("tenants")
-          .update({ outstanding_amount: current + clientPrice })
-          .eq("tenant_id", tenantId);
-      } catch (e) {
-        console.error("[labels/purchase] postpay accrual failed", order_id, e);
-      }
-    }
-
-    // ── 5 · Notify the recipient (best-effort — never blocks the purchase) ──
+    // ── 4 · Notify the recipient (best-effort — never blocks the purchase) ──
     const resendKey = process.env.RESEND_API_KEY;
     const recipientEmail = String(order.to_address?.email ?? "").trim();
     if (resendKey && recipientEmail) {

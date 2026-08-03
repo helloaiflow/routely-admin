@@ -1,6 +1,6 @@
-import { BRAND_PRIMARY } from "@/lib/brand";
 import { NextResponse } from "next/server";
 
+import { BRAND_PRIMARY } from "@/lib/brand";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
@@ -418,23 +418,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, error: "Database error" }, { status: 500 });
   }
 
-  // ── Side effect: postpay approval accrues to tenant outstanding balance ──
-  if (updates.status === "approved" && updates.payment_type === "postpay") {
-    const tp = Number(updates.total_price ?? 0);
-    if (tp > 0) {
-      try {
-        const { data: tRow } = await supabase
-          .from("tenants")
-          .select("outstanding_amount")
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-        const current = Number(tRow?.outstanding_amount ?? 0);
-        await supabase.from("tenants").update({ outstanding_amount: current + tp }).eq("tenant_id", tenantId);
-      } catch (e) {
-        console.error("[tenant outstanding]", e);
-      }
-    }
-  }
+  // NOTE: postpay approvals no longer accrue to a stored tenant balance —
+  // "outstanding" is derived from billing_ledger (v_tenant_outstanding),
+  // which is populated by routely-api's record_attempt() at the actual
+  // delivery-attempt stage. Accruing here too (on legacy total_price, at
+  // draft-approval time) double-counted the same charge — removed in the
+  // 2026-08 billing v3 migration.
 
   // ── Side effect: on submit (tracking_id set) copy photos + notes, email client ──
   if (updates.tracking_id) {

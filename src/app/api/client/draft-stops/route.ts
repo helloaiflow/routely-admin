@@ -4,6 +4,9 @@ import { BRAND_PRIMARY } from "@/lib/brand";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
+const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
+const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
+
 // jsonb stores Mongo Dates as ISO strings. Older docs migrated via ETL may also
 // carry real Date objects in memory. isoOf normalizes both to an ISO string and
 // never silently substitutes `now` for an existing value.
@@ -406,6 +409,41 @@ export async function PATCH(request: Request) {
   }
 
   doc.updated_at = nowIso;
+
+  // Reserve/Charge/Release (billing v4): this IS the draft→stop transition —
+  // tracking_id being set means the draft is about to become a real,
+  // dispatched stop. Check BEFORE persisting the draft update, so an
+  // insufficient-funds tenant never ends up with a half-submitted draft
+  // (tracking_id set but no reservation) that's awkward to retry.
+  if (updates.tracking_id) {
+    const stopId = String(updates.tracking_id);
+    const reserveDoc = {
+      stop_type: doc.delivery_info?.is_same_day ? "same_day" : "delivery",
+      service: { type: doc.service_info?.service_type },
+      package: { type: doc.service_info?.package_type ?? doc.package_type },
+      estimated_miles: doc.delivery_info?.estimated_miles ?? doc.estimated_miles,
+    };
+    let reserveResp: Response;
+    try {
+      reserveResp = await fetch(`${FASTAPI_BASE}/v1/billing/reservations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+        body: JSON.stringify({ tenant_id: tenantId, stop_id: stopId, doc: reserveDoc }),
+      });
+    } catch {
+      return NextResponse.json({ ok: false, error: "Billing service unreachable" }, { status: 502 });
+    }
+    if (reserveResp.status === 402) {
+      const err = await reserveResp.json().catch(() => ({}));
+      return NextResponse.json(
+        { ok: false, error: "insufficient_funds", detail: err.detail ?? err, fund: err },
+        { status: 402 },
+      );
+    }
+    if (!reserveResp.ok) {
+      return NextResponse.json({ ok: false, error: "Reservation failed" }, { status: 502 });
+    }
+  }
 
   // Persist the mutated doc + promoted columns the app filters on.
   const { error: updErr } = await supabase

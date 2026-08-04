@@ -21,6 +21,9 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 type Supa = ReturnType<typeof getSupabaseAdmin>;
 
+const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
+const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
+
 async function patchTenantByCustomer(supabase: Supa, customer: unknown, changes: Record<string, unknown>) {
   if (!customer) return;
   const { data: row } = await supabase
@@ -133,7 +136,20 @@ export async function POST(req: Request) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
       const tenantId = Number.parseInt(pi.metadata?.tenant_id || "0", 10);
-      if (tenantId) {
+      if (tenantId && pi.metadata?.purpose === "wallet_topup") {
+        // Balance & credit engine (billing v4): webhook-only confirmation —
+        // the wallet is credited HERE, never on the synchronous /wallet/topup
+        // response. Idempotent on the PaymentIntent id inside top_up_wallet().
+        try {
+          await fetch(`${FASTAPI_BASE}/v1/billing/wallet/topup/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+            body: JSON.stringify({ tenant_id: tenantId, amount_cents: pi.amount, stripe_payment_intent_id: pi.id }),
+          });
+        } catch (err) {
+          console.error("[webhook] wallet top-up confirm failed:", err);
+        }
+      } else if (tenantId) {
         const stops = Number.parseInt(pi.metadata?.stops || "0", 10);
         await patchTenantDoc(supabase, tenantId, (doc) => {
           doc.packages_this_month = (Number(doc.packages_this_month) || 0) + stops;

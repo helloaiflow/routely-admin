@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
+import { FundPanel } from "./fund-panel";
 
 type Overview = {
   tenant_id: number;
@@ -107,6 +108,7 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
 
   return (
     <div className="space-y-4">
+      <FundPanel />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Card className="ring-1 ring-primary/15">
           <CardHeader className="pb-1.5">

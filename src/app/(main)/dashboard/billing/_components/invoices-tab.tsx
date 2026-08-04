@@ -31,6 +31,9 @@ type DocDetail = DocRow & {
   snapshot: {
     items?: Array<{ description?: string; type?: string; units?: number; amount_cents: number }>;
     statement_note?: string;
+    period_note?: string | null;
+    is_first_close?: boolean;
+    prior_period_cents?: number;
   };
   ledger_lines: Array<{ id: number; stop_id: string; resolved_type: string; amount_cents: number }>;
   adjustments: Array<{ id: number; adjustment_type: string; amount_cents: number; reason: string; created_at: string }>;
@@ -171,10 +174,21 @@ export function InvoicesTab() {
                 </span>
               </div>
 
+              {detail.cycle_start && (
+                <p className="text-11 text-muted-foreground">
+                  Billing period: {new Date(detail.cycle_start).toLocaleDateString()} –{" "}
+                  {detail.cycle_end ? new Date(detail.cycle_end).toLocaleDateString() : "—"}
+                </p>
+              )}
+
               {detail.snapshot?.statement_note && (
                 <p className="rounded-lg bg-success/10 px-3 py-2 text-13 text-success">
                   {detail.snapshot.statement_note}
                 </p>
+              )}
+
+              {detail.snapshot?.period_note && (
+                <p className="rounded-lg bg-warning/10 px-3 py-2 text-13 text-warning">{detail.snapshot.period_note}</p>
               )}
 
               <div className="space-y-1">

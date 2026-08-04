@@ -37,23 +37,107 @@ import {
 type NavItem = { group: string; icon: LucideIcon; label: string; href: string; keywords?: string };
 
 const NAV: NavItem[] = [
-  { group: "Overview", icon: LayoutDashboard, label: "Dashboard", href: "/dashboard/default", keywords: "home stops today route" },
+  {
+    group: "Overview",
+    icon: LayoutDashboard,
+    label: "Dashboard",
+    href: "/dashboard/default",
+    keywords: "home stops today route",
+  },
 
-  { group: "Operations", icon: Search, label: "Search stops & orders", href: "/dashboard/search", keywords: "find lookup recipient tracking phone" },
-  { group: "Operations", icon: Package, label: "Stops", href: "/dashboard/stops", keywords: "deliveries orders shipments" },
-  { group: "Operations", icon: PlusCircle, label: "Buy a Label / New Order", href: "/dashboard/orders/new", keywords: "create shippo usps ups fedex" },
-  { group: "Operations", icon: Tag, label: "Shipping Labels", href: "/dashboard/labels", keywords: "usps ups fedex purchased refund" },
+  {
+    group: "Operations",
+    icon: Search,
+    label: "Search stops & orders",
+    href: "/dashboard/search",
+    keywords: "find lookup recipient tracking phone",
+  },
+  {
+    group: "Operations",
+    icon: Package,
+    label: "Stops",
+    href: "/dashboard/stops",
+    keywords: "deliveries orders shipments",
+  },
+  {
+    group: "Operations",
+    icon: PlusCircle,
+    label: "Buy a Label / New Order",
+    href: "/dashboard/orders/new",
+    keywords: "create shippo usps ups fedex",
+  },
+  {
+    group: "Operations",
+    icon: Tag,
+    label: "Shipping Labels",
+    href: "/dashboard/labels",
+    keywords: "usps ups fedex purchased refund",
+  },
 
-  { group: "Dev Tools", icon: ScanText, label: "OCR Scan", href: "/dashboard/ocr-monitor", keywords: "qwen vision extraction latency" },
-  { group: "Dev Tools", icon: ScanLine, label: "IVY Scan", href: "/dashboard/ivy-monitor", keywords: "ivy telegram dataentry pipeline failed" },
+  {
+    group: "Dev Tools",
+    icon: ScanText,
+    label: "OCR Scan",
+    href: "/dashboard/ocr-monitor",
+    keywords: "qwen vision extraction latency",
+  },
+  {
+    group: "Dev Tools",
+    icon: ScanLine,
+    label: "IVY Scan",
+    href: "/dashboard/ivy-monitor",
+    keywords: "ivy telegram dataentry pipeline failed",
+  },
 
-  { group: "Account", icon: CircleUser, label: "Account Settings", href: "/dashboard/settings", keywords: "profile avatar preferences" },
-  { group: "Account", icon: CreditCard, label: "Billing", href: "/dashboard/settings?tab=billing", keywords: "payment invoice card charges" },
-  { group: "Account", icon: Sparkles, label: "Plans", href: "/dashboard/settings?tab=plans", keywords: "upgrade subscription pricing" },
-  { group: "Account", icon: MessageSquareDot, label: "Notifications", href: "/dashboard/settings?tab=notifications", keywords: "alerts email telegram" },
-  { group: "Account", icon: MapPin, label: "Pickup Locations", href: "/dashboard/settings?tab=pickup", keywords: "pharmacy origin address" },
-  { group: "Account", icon: FileText, label: "Invoices", href: "/dashboard/settings?tab=invoices", keywords: "receipt billing history" },
-  { group: "Account", icon: Users, label: "Team", href: "/dashboard/settings?tab=team", keywords: "members invite users roles" },
+  {
+    group: "Account",
+    icon: CircleUser,
+    label: "Account Settings",
+    href: "/dashboard/settings",
+    keywords: "profile avatar preferences",
+  },
+  {
+    group: "Account",
+    icon: CreditCard,
+    label: "Billing",
+    href: "/dashboard/billing",
+    keywords: "payment invoice card charges",
+  },
+  {
+    group: "Account",
+    icon: Sparkles,
+    label: "Plans",
+    href: "/dashboard/settings?tab=plans",
+    keywords: "upgrade subscription pricing",
+  },
+  {
+    group: "Account",
+    icon: MessageSquareDot,
+    label: "Notifications",
+    href: "/dashboard/settings?tab=notifications",
+    keywords: "alerts email telegram",
+  },
+  {
+    group: "Account",
+    icon: MapPin,
+    label: "Pickup Locations",
+    href: "/dashboard/settings?tab=pickup",
+    keywords: "pharmacy origin address",
+  },
+  {
+    group: "Account",
+    icon: FileText,
+    label: "Invoices",
+    href: "/dashboard/billing?tab=invoices",
+    keywords: "receipt billing history",
+  },
+  {
+    group: "Account",
+    icon: Users,
+    label: "Team",
+    href: "/dashboard/settings?tab=team",
+    keywords: "members invite users roles",
+  },
 ];
 
 export function SearchDialog() {

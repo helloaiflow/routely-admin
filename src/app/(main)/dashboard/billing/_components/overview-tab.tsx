@@ -35,7 +35,15 @@ type Overview = {
     created_at: string;
   } | null;
   pending_approvals: number;
+  wallet_debit_failures: number;
   error?: string;
+};
+
+type DebitFailure = {
+  id: number;
+  stop_id: string;
+  occurred_at: string;
+  payload: { ledger_id: number; amount_cents: number; error: string };
 };
 
 const centsToUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
@@ -51,12 +59,24 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
   const [loading, setLoading] = useState(true);
   const [recent, setRecent] = useState<ChargeRow[]>([]);
   const [selected, setSelected] = useState<ChargeRow | null>(null);
+  const [debitFailures, setDebitFailures] = useState<DebitFailure[]>([]);
+  const [showFailures, setShowFailures] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     fetch("/api/client/billing/overview")
       .then((r) => r.json())
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        if (d?.wallet_debit_failures > 0) {
+          fetch("/api/client/billing/wallet-debit-failures")
+            .then((r) => r.json())
+            .then((f) => setDebitFailures(f.rows ?? []))
+            .catch(() => {
+              /* best-effort — count still shows even if detail fetch fails */
+            });
+        }
+      })
       .catch(() => {
         /* best-effort — the !data check below renders the error state */
       })
@@ -108,6 +128,31 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
 
   return (
     <div className="space-y-4">
+      {data.wallet_debit_failures > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="space-y-2 py-3">
+            <button
+              type="button"
+              onClick={() => setShowFailures((v) => !v)}
+              className="flex w-full items-center gap-1.5 text-13 text-destructive"
+            >
+              <AlertCircle className="size-3.5 shrink-0" />
+              {data.wallet_debit_failures} wallet debit{data.wallet_debit_failures === 1 ? "" : "s"} failed — charge
+              {data.wallet_debit_failures === 1 ? " was" : "s were"} recorded but the balance was never adjusted.
+            </button>
+            {showFailures && (
+              <div className="space-y-1 border-destructive/20 border-t pt-2">
+                {debitFailures.map((f) => (
+                  <div key={f.id} className="text-11 text-muted-foreground">
+                    <span className="font-mono">{f.stop_id}</span> — {centsToUsd(f.payload?.amount_cents ?? 0)} —{" "}
+                    {new Date(f.occurred_at).toLocaleString()} — {f.payload?.error}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <FundPanel />
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Card className="ring-1 ring-primary/15">

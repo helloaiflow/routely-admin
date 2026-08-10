@@ -11,34 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Reservation = {
-  id: number;
-  stop_id: string;
-  resolved_type: string;
-  reserved_cents: number;
-  reserved_units: number | null;
-  created_at: string;
-};
-
-type Fund =
-  | {
-      fund_type: "prepaid";
-      balance_cents: number;
-      held_cents: number;
-      available_cents: number;
-      low_balance_threshold_cents: number;
-      active_reservations: Reservation[];
-    }
-  | {
-      fund_type: "postpaid";
-      credit_limit_cents: number;
-      buffer_cents: number;
-      reserved_cents: number;
-      unpaid_ledger_cents: number;
-      available_cents: number;
-      alert_threshold_pct: number;
-      active_reservations: Reservation[];
-    };
+import type { Fund } from "./billing-radial";
 
 type Suggestion = {
   id: number;

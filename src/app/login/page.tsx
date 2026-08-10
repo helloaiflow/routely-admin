@@ -16,12 +16,21 @@ import { Label } from "@/components/ui/label";
 
 import { LogisticsWorld } from "./_components/logistics-world";
 
+// Mirrors middleware.ts's safeRedirectPath — only a same-origin relative path
+// is trusted as a post-login destination, never "//evil.com" or an absolute
+// URL smuggled through the query string (open-redirect prevention).
+function safeRedirectTarget(raw: string | null): string {
+  if (!raw?.startsWith("/") || raw.startsWith("//")) return "/dashboard/default";
+  return raw;
+}
+
 function LoginContent() {
   const { isSignedIn } = useAuth();
   const { isLoaded, signIn, setActive } = useSignIn();
   const { signOut } = useClerk();
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
+  const redirectTarget = safeRedirectTarget(searchParams.get("redirect_url"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,9 +45,9 @@ function LoginContent() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      window.location.replace("/dashboard/default");
+      window.location.replace(redirectTarget);
     }
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, redirectTarget]);
 
   if (!isLoaded) {
     return (
@@ -49,7 +58,7 @@ function LoginContent() {
   }
 
   if (isSignedIn) {
-    window.location.replace("/dashboard/default");
+    window.location.replace(redirectTarget);
     return null;
   }
 
@@ -82,7 +91,7 @@ function LoginContent() {
       });
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        window.location.replace("/dashboard/default");
+        window.location.replace(redirectTarget);
       } else {
         setVerifyError("Verification incomplete. Please try again.");
       }
@@ -113,7 +122,7 @@ function LoginContent() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        window.location.replace("/dashboard/default");
+        window.location.replace(redirectTarget);
       } else {
         setError(`Sign in incomplete. (status:${result.status})`);
       }
@@ -127,7 +136,7 @@ function LoginContent() {
           const result = await attemptSignIn(email, password);
           if (result.status === "complete") {
             await setActive({ session: result.createdSessionId });
-            window.location.replace("/dashboard/default");
+            window.location.replace(redirectTarget);
             return;
           }
         } catch (retryErr) {

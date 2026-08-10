@@ -34,19 +34,36 @@ const isPublicRoute = createRouteMatcher([
   "/api/client/place-details(.*)",
 ]);
 
+// A deep link's destination is only ever trusted if it's a same-origin
+// relative path — "/foo" is fine, "//evil.com" and "https://evil.com" are
+// browser-recognized ways to smuggle an absolute redirect through a
+// same-looking string and must be rejected (open-redirect prevention).
+function safeRedirectPath(raw: string | null): string | null {
+  if (!raw?.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
   const path = req.nextUrl.pathname;
 
   if (userId && path === "/login") {
-    return NextResponse.redirect(new URL("/dashboard/default", req.url));
+    const dest = safeRedirectPath(req.nextUrl.searchParams.get("redirect_url"));
+    return NextResponse.redirect(new URL(dest ?? "/dashboard/default", req.url));
   }
 
   if (isPublicRoute(req)) return;
 
   if (!userId) {
     if (path.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    return NextResponse.redirect(new URL("/login", req.url));
+    // Preserve the originally requested URL (path + query) so login can
+    // return the user to it instead of always landing on /dashboard/default —
+    // otherwise every deep link (bookmarked stops, emailed invoice links)
+    // loses its destination on an expired session.
+    const loginUrl = new URL("/login", req.url);
+    const dest = path + req.nextUrl.search;
+    if (dest !== "/") loginUrl.searchParams.set("redirect_url", dest);
+    return NextResponse.redirect(loginUrl);
   }
 
   // CEO safety net: allowlisted ids bypass ALL role gating.

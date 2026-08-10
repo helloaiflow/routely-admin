@@ -234,11 +234,16 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
               onClick={() => setSelected(c)}
               className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50"
             >
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2" title={c.charge_label}>
                 <span
                   className={`size-1.5 shrink-0 rounded-full ${c.outcome === "delivered" ? "bg-success" : "bg-destructive"}`}
                 />
                 <span className="truncate font-mono text-12">{c.stop_id}</span>
+                {c.attempt_seq != null && (
+                  <Badge variant="secondary" className="shrink-0 text-10">
+                    Attempt {c.attempt_seq}
+                  </Badge>
+                )}
                 <Badge variant="outline" className="shrink-0 text-10">
                   {TYPE_LABEL[c.resolved_type] ?? c.resolved_type}
                 </Badge>

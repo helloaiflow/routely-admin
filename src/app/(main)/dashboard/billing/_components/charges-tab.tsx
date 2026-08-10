@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
 
@@ -20,7 +21,15 @@ const TYPE_LABEL: Record<string, string> = {
   on_demand: "On-Demand",
   prepaid_label: "Label",
 };
+const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
 const centsToUsd = (c: number | null) => `$${((c ?? 0) / 100).toFixed(2)}`;
+// Strips the leading "STOP_ID — " routely-api's attempt_label() already
+// prefixes onto charge_label — the Stop column already shows the ID, so
+// repeating it here would be redundant; everything after that prefix
+// ("Attempt 2 — Failed: no one home") is exactly the per-attempt context
+// this table needs (billing v4 Part C — never two undifferentiated rows).
+const attemptContext = (label: string, stopId: string) =>
+  label.startsWith(`${stopId} — `) ? label.slice(stopId.length + 3) : label;
 
 export function ChargesTab() {
   const [rows, setRows] = useState<ChargeRow[]>([]);
@@ -141,7 +150,20 @@ export function ChargesTab() {
                         <td className="px-4 py-2 text-muted-foreground">
                           {new Date(r.attempted_at).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-2 font-mono text-12">{r.stop_id}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-mono text-12">{r.stop_id}</span>
+                            <span className="flex items-center gap-1 text-10 text-muted-foreground">
+                              <span
+                                className={cn(
+                                  "size-1.5 shrink-0 rounded-full",
+                                  OUTCOME_DOT[r.outcome] ?? "bg-muted-foreground",
+                                )}
+                              />
+                              {attemptContext(r.charge_label, r.stop_id)}
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-4 py-2">
                           <Badge variant="outline" className="text-10">
                             {TYPE_LABEL[r.resolved_type] ?? r.resolved_type}
@@ -171,6 +193,15 @@ export function ChargesTab() {
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-12">{r.stop_id}</span>
                       <span className="font-medium tabular-nums">{centsToUsd(r.amount_cents)}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-11 text-muted-foreground">
+                      <span
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          OUTCOME_DOT[r.outcome] ?? "bg-muted-foreground",
+                        )}
+                      />
+                      {attemptContext(r.charge_label, r.stop_id)}
                     </div>
                     <div className="flex items-center gap-2 text-11 text-muted-foreground">
                       <span>{new Date(r.attempted_at).toLocaleDateString()}</span>

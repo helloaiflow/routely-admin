@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const params = new URLSearchParams({ tenant_id: String(ctx.tenantId) });
-  for (const key of ["limit", "offset", "resolved_type", "status", "date_from", "date_to", "search"]) {
+  for (const key of ["limit", "offset", "resolved_type", "status", "date_from", "date_to", "search", "stop_id"]) {
     const v = sp.get(key);
     if (v) params.set(key, v);
   }

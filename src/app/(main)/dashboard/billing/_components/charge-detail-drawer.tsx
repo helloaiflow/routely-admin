@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 export type ChargeRow = {
   id: number;
@@ -10,6 +11,12 @@ export type ChargeRow = {
   resolved_via: string;
   outcome: string;
   disposition: string | null;
+  attempt_seq: number | null;
+  /** "RTL-1785789728 — Attempt 2 — Failed: no one home" — computed once by
+   * routely-api's attempt_label() and reused verbatim everywhere a charge is
+   * shown (this drawer, the Charges grid, Recent Activity, the invoice/PDF)
+   * so the wording can never drift between surfaces (billing v4 Part C). */
+  charge_label: string;
   units: number | null;
   amount_cents: number | null;
   routely_cents: number | null;
@@ -29,6 +36,7 @@ const TYPE_LABEL: Record<string, string> = {
   on_demand: "On-Demand",
   prepaid_label: "Label",
 };
+const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
 const centsToUsd = (c: number | null | undefined) => `$${((c ?? 0) / 100).toFixed(2)}`;
 
 /* Single detail drawer, shared by the Overview activity feed and the Charges
@@ -50,15 +58,24 @@ export function ChargeDetailDrawer({
         </SheetHeader>
         {charge && (
           <div className="space-y-4 px-4 pb-6">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn("size-2 shrink-0 rounded-full", OUTCOME_DOT[charge.outcome] ?? "bg-muted-foreground")}
+              />
+              <p className="min-w-0 flex-1 font-medium text-13">{charge.charge_label}</p>
+              <span className="shrink-0 font-bold text-lg tabular-nums">{centsToUsd(charge.amount_cents)}</span>
+            </div>
             <div className="flex items-center justify-between">
               <Badge variant="outline">{TYPE_LABEL[charge.resolved_type] ?? charge.resolved_type}</Badge>
-              <span className="font-bold text-lg tabular-nums">{centsToUsd(charge.amount_cents)}</span>
+              {charge.attempt_seq != null && (
+                <Badge variant="secondary" className="text-10">
+                  Attempt {charge.attempt_seq}
+                </Badge>
+              )}
             </div>
 
             <Row label="Stop" value={<span className="font-mono text-12">{charge.stop_id}</span>} />
             <Row label="Attempted" value={new Date(charge.attempted_at).toLocaleString()} />
-            <Row label="Outcome" value={charge.outcome} />
-            {charge.disposition && <Row label="Disposition" value={charge.disposition} />}
             <Row label="Resolved via" value={charge.resolved_via} />
             {charge.units != null && (
               <Row

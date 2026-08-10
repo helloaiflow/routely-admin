@@ -714,7 +714,7 @@ type BillingLine = {
   units: number | null;
   amount_cents: number | null;
   flag: string | null;
-  invoiced_at: string | null;
+  documented_at: string | null;
 };
 
 // 2026-07-31 collapse: outcome is just delivered|failed now — the dot still
@@ -758,11 +758,13 @@ function StopBillingLines({
   const showAttemptCounter = failedCount > 0 && disposition !== "returned_to_hub" && status !== "delivered";
 
   // Billing status (2026-08-01) — derived from what OUR ledger actually
-  // knows: invoiced_at set or not. We deliberately do NOT claim "Paid" —
+  // knows: documented_at set or not (billing v3 renamed this from
+  // invoiced_at; this component drifted onto the old name until fixed
+  // alongside billing v4 Part C). We deliberately do NOT claim "Paid" —
   // that requires a live Stripe invoice-status check this panel doesn't
   // make; "Invoiced" is the most specific truthful state available here.
   const totalCents = lines.reduce((s, l) => s + (l.amount_cents ?? 0), 0);
-  const allInvoiced = lines.length > 0 && lines.every((l) => l.invoiced_at);
+  const allInvoiced = lines.length > 0 && lines.every((l) => l.documented_at);
   const billingStatus: { label: string; cls: string } =
     lines.length === 0
       ? { label: "Not billable", cls: "bg-muted text-muted-foreground" }
@@ -833,10 +835,10 @@ function StopBillingLines({
                   <span
                     className={cn(
                       "rounded-full px-1.5 py-0.5 text-10",
-                      l.invoiced_at ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
+                      l.documented_at ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
                     )}
                   >
-                    {l.invoiced_at ? "Invoiced" : "Pending"}
+                    {l.documented_at ? "Invoiced" : "Pending"}
                   </span>
                 </div>
               </div>

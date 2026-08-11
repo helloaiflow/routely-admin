@@ -71,17 +71,16 @@ export async function PATCH(req: NextRequest) {
     }
     patch.billing_rules = body.billing_rules;
   }
-  // Postpay/prepay + credit terms (2026-08-01) — structured + API-writable
-  // so the AI dispatcher/ops agent can set it too, not just direct DB access.
-  if (body.postpay_enabled !== undefined) {
-    if (typeof body.postpay_enabled !== "boolean")
-      return NextResponse.json({ error: "postpay_enabled must be a boolean" }, { status: 400 });
-    patch.postpay_enabled = body.postpay_enabled;
-  }
-  if (body.credit_limit !== undefined) {
-    if (typeof body.credit_limit !== "number" || body.credit_limit < 0)
-      return NextResponse.json({ error: "credit_limit must be a number ≥ 0" }, { status: 400 });
-    patch.credit_limit = body.credit_limit;
+  // postpay_enabled/credit_limit moved OFF this route (2026-08-11) — they
+  // used to write straight to Supabase here with no audit trail and no
+  // approval gate. That path is retired; POST /api/client/billing/billing-
+  // method is the only way to change either now (routed through routely-
+  // api's dual-approval-aware endpoint, which also enforces the debt rules).
+  if (body.postpay_enabled !== undefined || body.credit_limit !== undefined) {
+    return NextResponse.json(
+      { error: "postpay_enabled/credit_limit moved to POST /api/client/billing/billing-method" },
+      { status: 400 },
+    );
   }
   if (!Object.keys(patch).length) return NextResponse.json({ error: "nothing to update" }, { status: 400 });
 

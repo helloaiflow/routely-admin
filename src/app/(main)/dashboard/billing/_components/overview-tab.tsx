@@ -2,48 +2,27 @@
 
 import { useEffect, useState } from "react";
 
-import { AlertCircle, ArrowRight, CreditCard, ExternalLink, FileText, Wallet } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { AmountDueCard, type Overview } from "./amount-due-card";
+import type { Fund } from "./billing-radial";
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
-import { FundPanel } from "./fund-panel";
-
-type Overview = {
-  tenant_id: number;
-  billing_method: "prepaid" | "postpaid";
-  outstanding_cents: number;
-  credit_limit_cents: number;
-  has_payment_method: boolean;
-  cycle: {
-    cadence: string;
-    anchor_day: number;
-    timezone: string;
-    last_closed_at: string | null;
-    next_close_at: string | null;
-  } | null;
-  last_document: {
-    id: number;
-    document_number: string;
-    doc_type: string;
-    status: string;
-    amount_cents: number;
-    due_date: string | null;
-    created_at: string;
-  } | null;
-  pending_approvals: number;
-  wallet_debit_failures: number;
-  error?: string;
-};
+import { CreditSummaryCard } from "./credit-summary-card";
 
 type DebitFailure = {
   id: number;
   stop_id: string;
   occurred_at: string;
   payload: { ledger_id: number; amount_cents: number; error: string };
+};
+
+type Summary = {
+  delivery_this_month_cents: number;
+  delivery_last_month_cents: number;
 };
 
 const centsToUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
@@ -54,15 +33,35 @@ const TYPE_LABEL: Record<string, string> = {
   prepaid_label: "Label",
 };
 
+/* Radial's complementary stats (Section 5) — derived from the EXISTING
+ * /summary aggregate, never a second endpoint. currentUsage = this
+ * calendar month to date; monthlyAverage = simple 2-point average of this
+ * and last month; projectedEndOfCycle = a plain linear projection off the
+ * elapsed fraction of the month. All three are estimates stated as such,
+ * not exact — good enough for a "how am I trending" glance. */
+function radialStats(summary: Summary | null) {
+  if (!summary) return undefined;
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const currentUsageCents = summary.delivery_this_month_cents;
+  const monthlyAverageCents = Math.round((summary.delivery_this_month_cents + summary.delivery_last_month_cents) / 2);
+  const projectedEndOfCycleCents =
+    dayOfMonth > 0 ? Math.round((currentUsageCents / dayOfMonth) * daysInMonth) : currentUsageCents;
+  return { currentUsageCents, monthlyAverageCents, projectedEndOfCycleCents };
+}
+
 export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview" | "charges" | "invoices") => void }) {
   const [data, setData] = useState<Overview | null>(null);
+  const [fund, setFund] = useState<Fund | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [recent, setRecent] = useState<ChargeRow[]>([]);
   const [selected, setSelected] = useState<ChargeRow | null>(null);
   const [debitFailures, setDebitFailures] = useState<DebitFailure[]>([]);
   const [showFailures, setShowFailures] = useState(false);
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     fetch("/api/client/billing/overview")
       .then((r) => r.json())
@@ -81,49 +80,38 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
         /* best-effort — the !data check below renders the error state */
       })
       .finally(() => setLoading(false));
+    fetch("/api/client/billing/fund")
+      .then((r) => r.json())
+      .then(setFund)
+      .catch(() => {
+        /* best-effort — cards below degrade to their own skeleton/empty state */
+      });
+    fetch("/api/client/billing/summary")
+      .then((r) => r.json())
+      .then(setSummary)
+      .catch(() => {
+        /* best-effort — radial renders without the complementary stat row */
+      });
     fetch("/api/client/billing/ledger?limit=15")
       .then((r) => r.json())
       .then((d) => setRecent(d.rows ?? []))
       .catch(() => {
         /* best-effort — empty activity feed is an acceptable degrade */
       });
-  }, []);
+  }
+
+  useEffect(load, []);
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={`sk-${i}`} className="h-32 rounded-2xl" />
-        ))}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Skeleton className="h-96 rounded-2xl" />
+        <Skeleton className="h-96 rounded-2xl" />
       </div>
     );
   }
   if (!data || data.error) {
     return <p className="text-muted-foreground text-sm">Couldn't load billing overview.</p>;
-  }
-
-  const isPrepaid = data.billing_method === "prepaid";
-  const availableCredit = Math.max(0, data.credit_limit_cents - data.outstanding_cents);
-
-  // Contextual CTA — never "Pay now" without collectible debt.
-  let cta: { label: string; icon: React.ElementType; onClick: () => void; disabled?: boolean } | null = null;
-  if (!data.has_payment_method) {
-    cta = {
-      label: "Update payment method",
-      icon: CreditCard,
-      onClick: () => window.open("/api/stripe/billing-portal", "_blank"),
-    };
-  } else if (!isPrepaid && data.last_document?.status === "open") {
-    cta = { label: "View invoice", icon: FileText, onClick: () => onNavigateTab("invoices") };
-  } else if (isPrepaid) {
-    cta = { label: "Add funds", icon: Wallet, onClick: () => window.open("/api/stripe/billing-portal", "_blank") };
-  } else {
-    cta = {
-      label: "View invoice",
-      icon: FileText,
-      onClick: () => onNavigateTab("invoices"),
-      disabled: !data.last_document,
-    };
   }
 
   return (
@@ -153,80 +141,25 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
           </CardContent>
         </Card>
       )}
-      <FundPanel />
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <Card className="ring-1 ring-primary/15">
-          <CardHeader className="pb-1.5">
-            <CardTitle className="flex items-center gap-1.5 text-13 text-muted-foreground">
-              <Wallet className="size-3.5" /> {isPrepaid ? "Prepaid balance" : "Amount due"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <span className="font-bold text-2xl tabular-nums">{centsToUsd(data.outstanding_cents)}</span>
-            <p className="text-11 text-muted-foreground">
-              {isPrepaid ? "Covered by prepaid balance — no payment demand" : "Uninvoiced delivery charges this cycle"}
-            </p>
-            {cta && (
-              <Button size="sm" className="mt-auto gap-1.5" disabled={cta.disabled} onClick={cta.onClick}>
-                <cta.icon className="size-3.5" /> {cta.label}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="pb-1.5">
-            <CardTitle className="text-13 text-muted-foreground">Billing method</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={isPrepaid ? "secondary" : "outline"} className="capitalize">
-              {data.billing_method}
-            </Badge>
-            {!isPrepaid && (
-              <p className="mt-2 text-11 text-muted-foreground">Credit limit {centsToUsd(data.credit_limit_cents)}</p>
-            )}
-            {isPrepaid && (
-              <p className="mt-2 text-11 text-muted-foreground">Available credit {centsToUsd(availableCredit)}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-1.5">
-            <CardTitle className="text-13 text-muted-foreground">Current cycle</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <span className="font-semibold capitalize">{data.cycle?.cadence ?? "monthly"}</span>
-            <p className="mt-1 text-11 text-muted-foreground">
-              {data.cycle?.next_close_at
-                ? `Next close ${new Date(data.cycle.next_close_at).toLocaleDateString()}`
-                : "Closes at period end"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={data.pending_approvals > 0 ? "ring-1 ring-destructive/30" : ""}>
-          <CardHeader className="pb-1.5">
-            <CardTitle className="flex items-center gap-1.5 text-13 text-muted-foreground">
-              <AlertCircle className="size-3.5" /> Pending approvals
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <span className="font-bold text-2xl tabular-nums">{data.pending_approvals}</span>
-            <p className="mt-1 text-11 text-muted-foreground">Staff actions awaiting a second approver</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <AmountDueCard overview={data} fund={fund} onNavigateTab={onNavigateTab} onChanged={load} />
+        <CreditSummaryCard fund={fund} stats={radialStats(summary)} />
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm">Recent activity</CardTitle>
-          <Button variant="ghost" size="sm" className="gap-1 text-12" onClick={() => onNavigateTab("charges")}>
-            View all charges <ArrowRight className="size-3.5" />
-          </Button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab("charges")}
+            className="flex items-center gap-1 text-12 text-muted-foreground hover:text-foreground"
+          >
+            View all charges
+          </button>
         </CardHeader>
         <CardContent className="divide-y divide-border/60 p-0">
-          {recent.length === 0 && <p className="p-4 text-muted-foreground text-13">No charges yet.</p>}
+          {recent.length === 0 && <p className="p-4 text-13 text-muted-foreground">No charges yet.</p>}
           {recent.map((c) => (
             <button
               key={c.id}

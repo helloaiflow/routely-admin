@@ -65,13 +65,16 @@ export type FundClassification = {
 /* Pure classification — no fetch, no side effects — so every state can be
  * fed synthetic fixtures for verification without touching real tenant data.
  * Postpaid math is exactly compute_available_fund's formula (app/services/
- * fund.py): available_cents = credit_limit_cents - buffer_cents -
- * reserved_cents - unpaid_ledger_cents. Verified against tenant 1's live
- * numbers: credit_limit $1000, buffer $100, unpaid $1216 -> available -$316
- * (reconciles to the cent). That means available==0 lands at used==limit-
- * buffer (the practical safe ceiling); available in [-buffer, 0) is "in the
- * cushion" (used has passed that ceiling but not the nominal limit yet);
- * available < -buffer is genuinely past the nominal limit itself. */
+ * fund.py, corrected 2026-08-11): available_cents = credit_limit_cents -
+ * reserved_cents - unpaid_ledger_cents — relative to the PLAIN limit. The
+ * buffer is additional headroom BEYOND that limit, never a carve-out of it
+ * (the earlier version subtracted the buffer here too, which silently
+ * withheld 10% of the credit line a tenant was promised — a tenant with a
+ * $1000 limit could only actually spend $900 before being blocked at
+ * draft->stop time). So: available>=0 is healthy (at/under the limit);
+ * available in [-buffer, 0) is "in the cushion" (past the limit, buffer
+ * absorbing it, never blocking); available < -buffer is past the hard
+ * ceiling (limit + buffer) entirely. */
 export function classifyFund(fund: Fund): FundClassification {
   if (fund.fund_type === "postpaid") {
     const capacityCents = fund.credit_limit_cents;
@@ -89,7 +92,10 @@ export function classifyFund(fund: Fund): FundClassification {
       overCents = -fund.available_cents;
     } else {
       state = "over_limit";
-      overCents = usedCents - capacityCents;
+      // Past the HARD ceiling (limit + buffer), not just past the plain
+      // limit — the buffer's own amount has to come off too, or this would
+      // double-count the cushion as still-available when it's already gone.
+      overCents = usedCents - capacityCents - fund.buffer_cents;
     }
     return { state, ringPct: Math.min(100, usedPct), usedPct, capacityCents, usedCents, overCents };
   }

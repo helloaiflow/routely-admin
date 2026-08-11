@@ -35,7 +35,20 @@ export type Fund =
       active_reservations: Reservation[];
     };
 
-export type FundState = "healthy" | "healthy_watch" | "in_buffer" | "over_limit" | "zero_usage";
+// over_limit (postpaid) and overdrawn (prepaid) are deliberately DISTINCT
+// states, not the same state reused across fund types — they have different
+// causes and different remedies. over_limit means committed+unpaid exceeded
+// the credit line Routely extended (remedy: raise the limit, or collect via
+// invoice — the money is a receivable, tracked in billing_ledger/documents
+// regardless of method). overdrawn means the wallet itself — real money
+// Routely already holds — has gone negative (remedy: top up now; this can
+// happen post-Part-A since a charge always debits at settle time with no
+// gate there, only at reservation time, so a charge that lands without a
+// reservation, e.g. a legacy/manual path or one whose reservation's orphan-
+// expiry already fired, can overdraw the balance). Conflating them under one
+// label would tell a prepaid tenant to "raise their limit" when the actual
+// fix is "add funds," so the copy and the color both stay separate below.
+export type FundState = "healthy" | "healthy_watch" | "in_buffer" | "over_limit" | "overdrawn" | "zero_usage";
 
 export type FundClassification = {
   state: FundState;
@@ -45,11 +58,11 @@ export type FundClassification = {
   usedPct: number;
   capacityCents: number;
   usedCents: number;
-  /** Only set for in_buffer/over_limit — the amount past the healthy zero-point. */
+  /** Only set for in_buffer/over_limit/overdrawn — the amount past the healthy zero-point. */
   overCents: number;
 };
 
-/* Pure classification — no fetch, no side effects — so the 4 states can be
+/* Pure classification — no fetch, no side effects — so every state can be
  * fed synthetic fixtures for verification without touching real tenant data.
  * Postpaid math is exactly compute_available_fund's formula (app/services/
  * fund.py): available_cents = credit_limit_cents - buffer_cents -
@@ -85,23 +98,33 @@ export function classifyFund(fund: Fund): FundClassification {
   // be topped up further) — the ring instead gauges balance against a
   // comfortable reference point (4x the configured low-balance threshold),
   // which is always available on this same payload with no extra fetch.
+  //
+  // Classification runs off balance_cents alone, NOT available_cents
+  // (balance - held). held_cents is a soft, temporary earmark for in-flight
+  // reservations — real money nobody has taken yet — surfaced separately in
+  // the "Held" stat cell, but it does not make the wallet overdrawn on its
+  // own. Only balance_cents < 0 is an actual overdraft: real money already
+  // spent (settle_charge debits unconditionally at charge time — Part A) that
+  // the wallet didn't have. Gating on available_cents here would have flagged
+  // "over limit" the moment holds alone exceeded a perfectly solvent balance,
+  // which is a different, much milder situation than genuinely being negative.
   const capacityCents = Math.max(fund.low_balance_threshold_cents * 4, 1);
-  const usedCents = fund.balance_cents; // "used" here reads as "held", ring fill reads as balance below
+  const usedCents = fund.balance_cents;
   if (fund.balance_cents === 0 && fund.held_cents === 0) {
     return { state: "zero_usage", ringPct: 0, usedPct: 0, capacityCents, usedCents: 0, overCents: 0 };
   }
-  if (fund.available_cents < 0) {
+  if (fund.balance_cents < 0) {
     return {
-      state: "over_limit",
+      state: "overdrawn",
       ringPct: 100,
       usedPct: 100,
       capacityCents,
       usedCents,
-      overCents: -fund.available_cents,
+      overCents: -fund.balance_cents,
     };
   }
   const ringPct = Math.min(100, (fund.balance_cents / capacityCents) * 100);
-  const state: FundState = fund.available_cents <= fund.low_balance_threshold_cents ? "healthy_watch" : "healthy";
+  const state: FundState = fund.balance_cents <= fund.low_balance_threshold_cents ? "healthy_watch" : "healthy";
   return { state, ringPct, usedPct: ringPct, capacityCents, usedCents, overCents: 0 };
 }
 
@@ -110,18 +133,34 @@ const STATE_COLOR: Record<FundState, string> = {
   healthy_watch: "var(--warning)",
   in_buffer: "var(--warning)",
   over_limit: "var(--destructive)",
+  overdrawn: "var(--destructive)",
   zero_usage: "var(--muted-foreground)",
 };
 
-const STATE_BADGE: Record<FundState, { label: string; variant: "secondary" | "outline" | "destructive" } | null> = {
-  healthy: null,
-  healthy_watch: { label: "Approaching limit", variant: "secondary" },
-  in_buffer: { label: "In buffer — past safe limit", variant: "secondary" },
-  over_limit: { label: "Over limit", variant: "destructive" },
-  zero_usage: null,
-};
-
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+// One badge, always in NORMAL FLOW below the ring — never absolutely
+// positioned over it. An earlier version pinned the over_limit/in_buffer/
+// overdrawn badges to the ring's own bottom edge, which visually collided
+// with the ring's colored arc at exactly the percentages those states
+// produce (both are ~100% filled by construction) and made the badge text
+// unreadable. One consistent slot avoids that entirely.
+function stateBadge(c: FundClassification): { label: string; variant: "secondary" | "outline" | "destructive" } | null {
+  switch (c.state) {
+    case "healthy":
+      return null;
+    case "healthy_watch":
+      return { label: "Approaching limit", variant: "secondary" };
+    case "in_buffer":
+      return { label: `${usd(c.overCents)} into buffer — past the safe limit`, variant: "secondary" };
+    case "over_limit":
+      return { label: `${usd(c.overCents)} over limit`, variant: "destructive" };
+    case "overdrawn":
+      return { label: `${usd(c.overCents)} overdrawn — add funds`, variant: "destructive" };
+    case "zero_usage":
+      return null;
+  }
+}
 
 /* Single shared billing-summary ring — prepaid and postpaid both render
  * through here (Section 5). Center label is the tenant's OWN "available"
@@ -144,7 +183,7 @@ export function BillingRadial({
   const centerCents = isPrepaid ? fund.balance_cents : fund.available_cents;
   const centerLabel = isPrepaid ? "Prepaid balance" : "Available credit";
   const color = STATE_COLOR[c.state];
-  const badge = STATE_BADGE[c.state];
+  const badge = stateBadge(c);
   const chartData = [{ metric: "used", value: c.ringPct, fill: color }];
 
   return (
@@ -201,31 +240,17 @@ export function BillingRadial({
             </PolarRadiusAxis>
           </RadialBarChart>
         </ChartContainer>
-        {c.state === "over_limit" && (
-          <Badge variant="destructive" className="absolute bottom-0 left-1/2 -translate-x-1/2 text-10">
-            {usd(c.overCents)} over limit
-          </Badge>
-        )}
-        {c.state === "in_buffer" && (
-          <Badge
-            variant="secondary"
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 border-warning/40 text-10 text-warning"
-          >
-            {usd(c.overCents)} into buffer
-          </Badge>
-        )}
-        {c.state === "zero_usage" && (
-          <p className="absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-10 text-muted-foreground">
-            No activity yet this cycle
-          </p>
-        )}
       </div>
 
-      {badge && c.state !== "in_buffer" && c.state !== "over_limit" && (
-        <Badge variant={badge.variant} className="text-10">
+      {badge && (
+        <Badge
+          variant={badge.variant}
+          className={cn("text-10", badge.variant === "secondary" && "border-warning/40 text-warning")}
+        >
           {badge.label}
         </Badge>
       )}
+      {c.state === "zero_usage" && <p className="text-10 text-muted-foreground">No activity yet this cycle</p>}
 
       <div className="grid w-full grid-cols-2 gap-x-3 gap-y-1.5 text-11">
         <StatCell

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { CalendarDays, ChevronDown, Download, FileText, LayoutDashboard, Receipt } from "lucide-react";
+import { Activity, CalendarDays, ChevronDown, Download, FileText, LayoutDashboard, Receipt } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,7 @@ import { computeCyclePeriod, formatPeriodLabel } from "./billing-cycle";
 import { ChargesTab } from "./charges-tab";
 import { InvoicesTab } from "./invoices-tab";
 import { OverviewTab } from "./overview-tab";
+import { RecentActivityTab } from "./recent-activity-tab";
 
 type HeaderData = {
   cycle: {
@@ -26,11 +27,12 @@ type HeaderData = {
   last_document: { id: number } | null;
 };
 
-type BillingTabKey = "overview" | "charges" | "invoices";
+export type BillingTabKey = "overview" | "charges" | "invoices" | "recent_activity";
 const TABS: Array<{ key: BillingTabKey; label: string; icon: React.ElementType }> = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "charges", label: "Charges", icon: Receipt },
   { key: "invoices", label: "Invoices", icon: FileText },
+  { key: "recent_activity", label: "Recent Activity", icon: Activity },
 ];
 const VALID_TABS = new Set<BillingTabKey>(TABS.map((t) => t.key));
 
@@ -39,7 +41,6 @@ export function BillingShell() {
   const searchParams = useSearchParams();
   const [header, setHeader] = useState<HeaderData | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: one-time fetch for the header band, independent of tab state
   useEffect(() => {
     fetch("/api/client/billing/overview")
       .then((r) => r.json())
@@ -133,6 +134,7 @@ export function BillingShell() {
         {tab === "overview" && <OverviewTab onNavigateTab={selectTab} />}
         {tab === "charges" && <ChargesTab />}
         {tab === "invoices" && <InvoicesTab />}
+        {tab === "recent_activity" && <RecentActivityTab />}
       </div>
     </div>
   );

@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-import { Download, FileText } from "lucide-react";
+import { ArrowLeft, FileText, Search, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { type DateRange, DateRangePicker } from "@/components/ui/date-range-picker";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
+import { cn } from "@/lib/utils";
+
+import { InvoiceDetail } from "./invoice-detail";
 
 type DocRow = {
   id: number;
@@ -22,22 +26,7 @@ type DocRow = {
   amount_cents: number;
   amount_paid_cents: number;
   due_date: string | null;
-  stripe_invoice_id: string | null;
   created_at: string;
-  paid_at: string | null;
-  voided_at: string | null;
-};
-
-type DocDetail = DocRow & {
-  snapshot: {
-    items?: Array<{ description?: string; type?: string; units?: number; amount_cents: number }>;
-    statement_note?: string;
-    period_note?: string | null;
-    is_first_close?: boolean;
-    prior_period_cents?: number;
-  };
-  ledger_lines: Array<{ id: number; stop_id: string; resolved_type: string; amount_cents: number }>;
-  adjustments: Array<{ id: number; adjustment_type: string; amount_cents: number; reason: string; created_at: string }>;
 };
 
 const DOC_LABEL: Record<string, string> = { receipt: "Receipt", statement: "Statement", invoice: "Invoice" };
@@ -51,56 +40,106 @@ const STATUS_TONE: Record<string, string> = {
   pending: "bg-muted text-muted-foreground",
   draft: "bg-muted text-muted-foreground",
 };
+const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
+/* Invoices — two-column list+detail (Section 2). Kept independent from
+ * useBillingFilters/BillingFilterBar on purpose: document type/status
+ * vocabulary (receipt/statement/invoice, open/paid/past_due/…) is a
+ * different domain than charge type/status, and Charges + Recent Activity
+ * already intentionally SHARE their URL params across tab switches — reusing
+ * the same param names here would leak an unrelated filter value across
+ * tabs. Local component state instead; still backed by the same
+ * search/date_from/date_to/amount_min/amount_max params the backend added
+ * for get_documents. */
 export function InvoicesTab() {
+  const isMobile = useIsMobile();
   const [rows, setRows] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
+
+  const [search, setSearch] = useState("");
   const [docType, setDocType] = useState("all");
   const [status, setStatus] = useState("all");
-  const [detail, setDetail] = useState<DocDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setErrored(false);
     const params = new URLSearchParams({ limit: "50" });
     if (docType !== "all") params.set("doc_type", docType);
     if (status !== "all") params.set("status", status);
+    if (search.trim()) params.set("search", search.trim());
+    if (dateRange?.from) params.set("date_from", toISODate(dateRange.from));
+    if (dateRange?.to) params.set("date_to", toISODate(dateRange.to));
+    const minCents = Math.round(Number(amountMin) * 100);
+    const maxCents = Math.round(Number(amountMax) * 100);
+    if (amountMin && Number.isFinite(minCents)) params.set("amount_min", String(minCents));
+    if (amountMax && Number.isFinite(maxCents)) params.set("amount_max", String(maxCents));
     fetch(`/api/client/billing/documents?${params.toString()}`)
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => setRows(d.rows ?? []))
-      .catch(() => {
-        /* best-effort — empty list + no error state is an acceptable degrade */
-      })
+      .catch(() => setErrored(true))
       .finally(() => setLoading(false));
-  }, [docType, status]);
+  }, [docType, status, search, dateRange, amountMin, amountMax]);
 
-  async function openDetail(id: number) {
-    setDetailLoading(true);
-    try {
-      const r = await fetch(`/api/client/billing/documents/${id}`);
-      setDetail(await r.json());
-    } finally {
-      setDetailLoading(false);
-    }
+  // Payment status has no dedicated backend filter — it's derivable from
+  // amount_cents/amount_paid_cents on the already-fetched (capped) page, so
+  // it's filtered client-side rather than adding a redundant server param.
+  const visibleRows = rows.filter((d) => {
+    if (paymentStatus === "all") return true;
+    const balanceDue = Math.max(0, d.amount_cents - d.amount_paid_cents);
+    return paymentStatus === "balance_due" ? balanceDue > 0 : balanceDue === 0;
+  });
+
+  const isFiltered =
+    search !== "" ||
+    docType !== "all" ||
+    status !== "all" ||
+    paymentStatus !== "all" ||
+    !!dateRange ||
+    amountMin !== "" ||
+    amountMax !== "";
+  function clearFilters() {
+    setSearch("");
+    setDocType("all");
+    setStatus("all");
+    setPaymentStatus("all");
+    setDateRange(null);
+    setAmountMin("");
+    setAmountMax("");
   }
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-2 py-3">
+  const list = (
+    <Card className="flex h-full flex-col overflow-hidden">
+      <CardContent className="space-y-2 border-border/60 border-b py-3">
+        <div className="relative">
+          <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search document number"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 pl-8 text-13"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
           <Select value={docType} onValueChange={setDocType}>
-            <SelectTrigger className="h-8 w-[150px] text-13">
+            <SelectTrigger className="h-8 w-[128px] text-13">
               <SelectValue placeholder="Document type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All documents</SelectItem>
+              <SelectItem value="all">All types</SelectItem>
               <SelectItem value="receipt">Receipts</SelectItem>
               <SelectItem value="statement">Statements</SelectItem>
               <SelectItem value="invoice">Invoices</SelectItem>
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="h-8 w-[140px] text-13">
+            <SelectTrigger className="h-8 w-[120px] text-13">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -112,131 +151,133 @@ export function InvoicesTab() {
               <SelectItem value="refunded">Refunded</SelectItem>
             </SelectContent>
           </Select>
-        </CardContent>
-      </Card>
+          <Select value={paymentStatus} onValueChange={setPaymentStatus}>
+            <SelectTrigger className="h-8 w-[122px] text-13">
+              <SelectValue placeholder="Payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any payment</SelectItem>
+              <SelectItem value="balance_due">Balance due</SelectItem>
+              <SelectItem value="paid_in_full">Paid in full</SelectItem>
+            </SelectContent>
+          </Select>
+          <DateRangePicker
+            value={dateRange ?? { from: new Date(), to: new Date(), label: "Any date" }}
+            onChange={setDateRange}
+          />
+          <Input
+            placeholder="Min $"
+            inputMode="decimal"
+            value={amountMin}
+            onChange={(e) => setAmountMin(e.target.value)}
+            className="h-8 w-20 text-13"
+          />
+          <Input
+            placeholder="Max $"
+            inputMode="decimal"
+            value={amountMax}
+            onChange={(e) => setAmountMax(e.target.value)}
+            className="h-8 w-20 text-13"
+          />
+          {isFiltered && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1 text-11 text-muted-foreground"
+              onClick={clearFilters}
+            >
+              <X className="size-3" /> Clear
+            </Button>
+          )}
+        </div>
+      </CardContent>
 
-      <Card>
-        <CardContent className="divide-y divide-border/60 p-0">
-          {loading ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={`d-${i}`} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 p-8 text-center">
-              <FileText className="size-8 text-muted-foreground" />
-              <p className="text-muted-foreground text-13">
-                No documents yet — receipts appear after a label checkout, statements/invoices after a billing cycle
-                closes.
-              </p>
-            </div>
-          ) : (
-            rows.map((d) => (
+      <div className="flex-1 divide-y divide-border/60 overflow-y-auto">
+        {loading ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton count, list never reorders
+              <Skeleton key={`d-${i}`} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : errored ? (
+          <p className="p-6 text-center text-13 text-muted-foreground">Couldn't load documents.</p>
+        ) : visibleRows.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 p-8 text-center">
+            <FileText className="size-8 text-muted-foreground" />
+            <p className="text-13 text-muted-foreground">
+              {isFiltered
+                ? "No documents match these filters."
+                : "No documents yet — receipts appear after a label checkout, statements/invoices after a billing cycle closes."}
+            </p>
+          </div>
+        ) : (
+          visibleRows.map((d) => {
+            const balanceDue = Math.max(0, d.amount_cents - d.amount_paid_cents);
+            return (
               <button
                 key={d.id}
                 type="button"
-                onClick={() => openDetail(d.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                onClick={() => setSelectedId(d.id)}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
+                  selectedId === d.id && "bg-primary/5",
+                )}
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-medium text-13">{d.document_number}</span>
+                  <span className="flex items-center gap-1.5 font-medium text-13">
+                    {d.document_number}
+                    {selectedId === d.id && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
+                  </span>
                   <span className="text-11 text-muted-foreground">
-                    {DOC_LABEL[d.doc_type]} · {new Date(d.created_at).toLocaleDateString()}
-                    {d.due_date ? ` · Due ${new Date(d.due_date).toLocaleDateString()}` : ""}
+                    {DOC_LABEL[d.doc_type]}
+                    {d.cycle_start ? ` · ${new Date(d.cycle_start).toLocaleDateString()}` : ""}
                   </span>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-10 ${STATUS_TONE[d.status] ?? "bg-muted"}`}>
-                    {d.status.replace("_", " ")}
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className={cn("rounded-full px-2 py-0.5 text-10", STATUS_TONE[d.status] ?? "bg-muted")}>
+                    {d.status.replace(/_/g, " ")}
                   </span>
-                  <span className="w-16 text-right font-medium tabular-nums">{centsToUsd(d.amount_cents)}</span>
+                  <span className="text-right font-medium text-13 tabular-nums">{centsToUsd(d.amount_cents)}</span>
+                  {balanceDue > 0 && (
+                    <span className="text-10 text-warning tabular-nums">{centsToUsd(balanceDue)} due</span>
+                  )}
                 </div>
               </button>
-            ))
-          )}
-        </CardContent>
-      </Card>
+            );
+          })
+        )}
+      </div>
+    </Card>
+  );
 
-      <Sheet open={!!detail || detailLoading} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>{detail ? detail.document_number : "Loading…"}</SheetTitle>
-            <SheetDescription className="sr-only">Full document detail, line items, and PDF download</SheetDescription>
-          </SheetHeader>
-          {detailLoading && !detail && <Skeleton className="mx-4 h-40" />}
-          {detail && (
-            <div className="space-y-4 px-4 pb-6">
-              <div className="flex items-center justify-between">
-                <span className="text-13 text-muted-foreground">{DOC_LABEL[detail.doc_type]}</span>
-                <span className={`rounded-full px-2 py-0.5 text-10 ${STATUS_TONE[detail.status] ?? "bg-muted"}`}>
-                  {detail.status.replace("_", " ")}
-                </span>
-              </div>
+  const detail = selectedId ? (
+    <Card className="h-full overflow-y-auto">
+      <InvoiceDetail documentId={selectedId} />
+    </Card>
+  ) : (
+    <Card className="flex h-full items-center justify-center">
+      <p className="text-13 text-muted-foreground">Select a document to view its detail.</p>
+    </Card>
+  );
 
-              {detail.cycle_start && (
-                <p className="text-11 text-muted-foreground">
-                  Billing period: {new Date(detail.cycle_start).toLocaleDateString()} –{" "}
-                  {detail.cycle_end ? new Date(detail.cycle_end).toLocaleDateString() : "—"}
-                </p>
-              )}
+  if (isMobile) {
+    return selectedId ? (
+      <div className="space-y-2">
+        <Button size="sm" variant="ghost" className="gap-1.5 text-13" onClick={() => setSelectedId(null)}>
+          <ArrowLeft className="size-3.5" /> Back to documents
+        </Button>
+        {detail}
+      </div>
+    ) : (
+      list
+    );
+  }
 
-              {detail.snapshot?.statement_note && (
-                <p className="rounded-lg bg-success/10 px-3 py-2 text-13 text-success">
-                  {detail.snapshot.statement_note}
-                </p>
-              )}
-
-              {detail.snapshot?.period_note && (
-                <p className="rounded-lg bg-warning/10 px-3 py-2 text-13 text-warning">{detail.snapshot.period_note}</p>
-              )}
-
-              <div className="space-y-1">
-                {(detail.snapshot?.items ?? []).map((item, i) => (
-                  <div key={`item-${i}-${item.description}`} className="flex items-center justify-between text-13">
-                    <span className="text-muted-foreground">{item.description ?? item.type}</span>
-                    <span className="tabular-nums">{centsToUsd(item.amount_cents)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between border-border/60 border-t pt-2 font-semibold text-13">
-                  <span>Total</span>
-                  <span className="tabular-nums">{centsToUsd(detail.amount_cents)}</span>
-                </div>
-                {detail.amount_paid_cents > 0 && (
-                  <div className="flex items-center justify-between text-13 text-success">
-                    <span>Paid</span>
-                    <span className="tabular-nums">{centsToUsd(detail.amount_paid_cents)}</span>
-                  </div>
-                )}
-              </div>
-
-              {detail.adjustments.length > 0 && (
-                <div className="space-y-1 border-border/60 border-t pt-3">
-                  <p className="text-11 text-muted-foreground uppercase tracking-wide">Adjustments</p>
-                  {detail.adjustments.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between text-13">
-                      <span className="text-muted-foreground">
-                        {a.adjustment_type} — {a.reason}
-                      </span>
-                      <span className="tabular-nums">{centsToUsd(a.amount_cents)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {detail.stripe_invoice_id && (
-                <p className="text-11 text-muted-foreground">Stripe reference: {detail.stripe_invoice_id}</p>
-              )}
-
-              <Button asChild className="w-full gap-1.5">
-                <a href={`/api/client/billing/documents/${detail.id}/pdf`} target="_blank" rel="noreferrer">
-                  <Download className="size-3.5" /> Download PDF
-                </a>
-              </Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+  return (
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[380px_1fr]">
+      {list}
+      {detail}
     </div>
   );
 }

@@ -16,7 +16,12 @@ import { requirePagePermission } from "@/lib/tenant";
  * rows to the browser just to bucket them. */
 
 const RANGE_DAYS: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90 };
-const TYPES = ["package", "miles", "on_demand"] as const;
+// 2026-08-13: added prepaid_label ("Labels") for the Recent Activity daily
+// chart's 4-category breakdown (Packages · Mileage · Labels · Additional
+// services — "Additional services" maps to on_demand, the closest existing
+// resolved_type to a non-standard delivery service; there is no literal
+// "additional services" type in billing_ledger, see 2026-08-13 report).
+const TYPES = ["package", "miles", "on_demand", "prepaid_label"] as const;
 
 export async function GET(req: NextRequest) {
   const ctx = await requirePagePermission("billing");
@@ -24,18 +29,37 @@ export async function GET(req: NextRequest) {
   const tenantId = Number(ctx.tenantId);
 
   const rangeParam = req.nextUrl.searchParams.get("range") ?? "30d";
-  const days = RANGE_DAYS[rangeParam] ?? 30;
+  const dateFromParam = req.nextUrl.searchParams.get("date_from");
+  const dateToParam = req.nextUrl.searchParams.get("date_to");
 
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-  const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+
+  // Explicit date_from/date_to (2026-08-13) — the current-billing-cycle
+  // chart passes the tenant's REAL cycle boundaries (billing-cycle.ts'
+  // computeCyclePeriod) instead of a fixed day-count, so "current cycle"
+  // reconciles exactly with the cycle figures shown elsewhere on this page
+  // even for a mid-month or short/long custom cadence.
+  let since: Date;
+  let until: Date;
+  let days: number;
+  if (dateFromParam && dateToParam) {
+    since = new Date(`${dateFromParam}T00:00:00.000Z`);
+    until = new Date(`${dateToParam}T00:00:00.000Z`);
+    days = Math.max(1, Math.round((until.getTime() - since.getTime()) / 86400_000));
+  } else {
+    days = RANGE_DAYS[rangeParam] ?? 30;
+    since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+    until = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  }
 
   const { data: rows, error: rowsError } = await supabase
     .from("billing_ledger")
     .select("resolved_type, amount_cents, units, attempted_at, flag")
     .eq("tenant_id", tenantId)
     .gte("attempted_at", since.toISOString())
+    .lt("attempted_at", until.toISOString())
     .limit(5000);
   if (rowsError) {
     console.error("[billing/daily] ledger query failed", rowsError);
@@ -44,8 +68,8 @@ export async function GET(req: NextRequest) {
 
   type DayBucket = { date: string; values: Record<string, number> };
   const buckets = new Map<string, DayBucket>();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+  for (let i = 0; i < days; i++) {
+    const d = new Date(since.getFullYear(), since.getMonth(), since.getDate() + i);
     const k = dayKey(d);
     const bucket: DayBucket = { date: k, values: {} };
     for (const t of TYPES) {

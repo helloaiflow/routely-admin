@@ -106,7 +106,7 @@ export function AmountDueCard({
         {!isPrepaid &&
           (unpaidLedgerCents > 0 ? (
             <div className="space-y-2">
-              <div className="flex h-6 w-full overflow-hidden rounded-md text-10 font-medium">
+              <div className="flex h-6 w-full overflow-hidden rounded-md font-medium text-10">
                 <div
                   className="flex items-center justify-center bg-primary text-primary-foreground"
                   style={{ width: `${uninvoicedPct}%` }}

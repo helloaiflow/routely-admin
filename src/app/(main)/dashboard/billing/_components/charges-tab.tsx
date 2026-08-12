@@ -1,117 +1,130 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
+import { BillingFilterBar } from "./billing-filter-bar";
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
+import { ChargeDetailPanel, OUTCOME_DOT, TYPE_LABEL } from "./charge-detail-panel";
+import { exportChargesToCsv } from "./export-charges-csv";
+import { useBillingFilters } from "./use-billing-filters";
 
 const PAGE_SIZE = 25;
-const TYPE_LABEL: Record<string, string> = {
-  package: "Package",
-  miles: "Miles",
-  on_demand: "On-Demand",
-  prepaid_label: "Label",
-};
-const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
-// Strips the leading "STOP_ID — " routely-api's attempt_label() already
-// prefixes onto charge_label — the Stop column already shows the ID, so
-// repeating it here would be redundant; everything after that prefix
-// ("Attempt 2 — Failed: no one home") is exactly the per-attempt context
-// this table needs (billing v4 Part C — never two undifferentiated rows).
-const attemptContext = (label: string, stopId: string) =>
-  label.startsWith(`${stopId} — `) ? label.slice(stopId.length + 3) : label;
+const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
+type SortableColumn = { key: string; label: string; align?: "right" };
+const COLUMNS: SortableColumn[] = [
+  { key: "attempted_at", label: "Date" },
+  { key: "stop_id", label: "Stop" },
+  { key: "resolved_type", label: "Type" },
+  { key: "units", label: "Qty" },
+  { key: "amount_cents", label: "Amount", align: "right" },
+  { key: "document_number", label: "Document" },
+  { key: "status", label: "Status" },
+];
+
+/* Full Charges data grid (Section 1) — filter parity with Recent Activity
+ * via the shared useBillingFilters/BillingFilterBar (same URL-param
+ * contract), server-side sorting on every meaningful column, and inline row
+ * expansion on desktop (a Sheet on mobile, via useIsMobile) reusing the
+ * SAME ChargeDetailPanel every other billing surface uses. */
 export function ChargesTab() {
+  const filterState = useBillingFilters("attempted_at");
+  const { filters, setOffset } = filterState;
+  const isMobile = useIsMobile();
+
   const [rows, setRows] = useState<ChargeRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalAmountCents, setTotalAmountCents] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [offset, setOffset] = useState(0);
-  const [type, setType] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [errored, setErrored] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ChargeRow | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  function buildParams(includePagination: boolean) {
+    const p = new URLSearchParams();
+    if (includePagination) {
+      p.set("limit", String(PAGE_SIZE));
+      p.set("offset", String(filters.offset));
+    }
+    if (filters.type !== "all") p.set("resolved_type", filters.type);
+    if (filters.status !== "all") p.set("status", filters.status);
+    if (filters.search.trim()) p.set("search", filters.search.trim());
+    if (filters.dateFrom) p.set("date_from", toISODate(filters.dateFrom));
+    if (filters.dateTo) p.set("date_to", toISODate(filters.dateTo));
+    if (filters.sortBy) p.set("sort_by", filters.sortBy === "status" ? "status" : filters.sortBy);
+    p.set("sort_dir", filters.sortDir);
+    return p;
+  }
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-    if (type !== "all") params.set("resolved_type", type);
-    if (status !== "all") params.set("status", status);
-    if (search.trim()) params.set("search", search.trim());
-    fetch(`/api/client/billing/ledger?${params.toString()}`)
-      .then((r) => r.json())
+    setErrored(false);
+    fetch(`/api/client/billing/ledger?${buildParams(true).toString()}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
         setRows(d.rows ?? []);
         setTotal(d.total ?? 0);
+        setTotalAmountCents(d.total_amount_cents ?? 0);
       })
-      .catch(() => {
-        /* best-effort — empty grid + no error state is an acceptable degrade */
-      })
+      .catch(() => setErrored(true))
       .finally(() => setLoading(false));
-  }, [offset, type, status, search]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: buildParams closes over `filters`, already a dependency of this effect via the object below
+  }, [buildParams]);
 
-  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  async function handleExport() {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const { rows: n, truncated } = await exportChargesToCsv(buildParams(false));
+      setExportMsg(
+        truncated
+          ? `Exported first ${n.toLocaleString()} rows (filtered set is larger).`
+          : `Exported ${n.toLocaleString()} rows.`,
+      );
+    } catch {
+      setExportMsg("Export failed — nothing was downloaded.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function handleRowClick(row: ChargeRow) {
+    if (isMobile) {
+      setSelected(row);
+    } else {
+      setExpandedId((id) => (id === row.id ? null : row.id));
+    }
+  }
+
+  const page = Math.floor(filters.offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardContent className="flex flex-wrap items-center gap-2 py-3">
-          <div className="relative min-w-[180px] flex-1">
-            <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search by stop ID…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setOffset(0);
-              }}
-              className="h-8 pl-8 text-13"
-            />
+        <CardContent className="space-y-2 py-3">
+          <BillingFilterBar {...filterState} onExportCsv={handleExport} exporting={exporting} />
+          <div className="flex items-center justify-between text-11 text-muted-foreground">
+            {total > 0 && (
+              <span>
+                {total.toLocaleString()} charges · {centsToUsd(totalAmountCents)} total
+              </span>
+            )}
+            {exportMsg && <span>{exportMsg}</span>}
           </div>
-          <Select
-            value={type}
-            onValueChange={(v) => {
-              setType(v);
-              setOffset(0);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[130px] text-13">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="package">Package</SelectItem>
-              <SelectItem value="miles">Miles</SelectItem>
-              <SelectItem value="on_demand">On-Demand</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v);
-              setOffset(0);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[140px] text-13">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="unbilled">Unbilled</SelectItem>
-              <SelectItem value="documented">Documented</SelectItem>
-            </SelectContent>
-          </Select>
-          {total > 0 && <span className="ml-auto text-11 text-muted-foreground">{total.toLocaleString()} charges</span>}
         </CardContent>
       </Card>
 
@@ -120,102 +133,109 @@ export function ChargesTab() {
           {loading ? (
             <div className="space-y-2 p-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={`row-${i}`} className="h-10 w-full" />
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton count, list never reorders
+                <Skeleton key={`chg-${i}`} className="h-10 w-full" />
               ))}
             </div>
+          ) : errored ? (
+            <p className="p-6 text-center text-13 text-muted-foreground">Couldn't load charges.</p>
           ) : rows.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground text-13">No charges match these filters.</p>
+            <p className="p-6 text-center text-13 text-muted-foreground">No charges match these filters.</p>
           ) : (
-            <>
-              {/* Desktop table */}
-              <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full text-13">
-                  <thead>
-                    <tr className="border-border/60 border-b text-11 text-muted-foreground">
-                      <th className="px-4 py-2 text-left font-medium">Date</th>
-                      <th className="px-4 py-2 text-left font-medium">Stop</th>
-                      <th className="px-4 py-2 text-left font-medium">Type</th>
-                      <th className="px-4 py-2 text-left font-medium">Qty</th>
-                      <th className="px-4 py-2 text-right font-medium">Amount</th>
-                      <th className="px-4 py-2 text-left font-medium">Document</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr
-                        key={r.id}
-                        className="cursor-pointer border-border/40 border-b transition-colors last:border-0 hover:bg-muted/50"
-                        onClick={() => setSelected(r)}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-6" />
+                  {COLUMNS.map((col) => (
+                    <TableHead key={col.key} className={col.align === "right" ? "text-right" : undefined}>
+                      <button
+                        type="button"
+                        onClick={() => filterState.setSort(col.key)}
+                        className={cn(
+                          "flex items-center gap-1 text-11 hover:text-foreground",
+                          col.align === "right" && "ml-auto",
+                        )}
                       >
-                        <td className="px-4 py-2 text-muted-foreground">
+                        {col.label}
+                        {filters.sortBy === col.key &&
+                          (filters.sortDir === "asc" ? (
+                            <ChevronUp className="size-3" />
+                          ) : (
+                            <ChevronDown className="size-3" />
+                          ))}
+                      </button>
+                    </TableHead>
+                  ))}
+                  <TableHead className="w-6" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => {
+                  const isExpanded = expandedId === r.id;
+                  return (
+                    <Fragment key={r.id}>
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer"
+                        aria-expanded={isExpanded}
+                        onClick={() => handleRowClick(r)}
+                      >
+                        <TableCell>
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              OUTCOME_DOT[r.outcome] ?? "bg-muted-foreground",
+                            )}
+                          />
+                        </TableCell>
+                        <TableCell className="text-12 text-muted-foreground">
                           {new Date(r.attempted_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-2">
+                        </TableCell>
+                        <TableCell>
                           <div className="flex flex-col gap-0.5">
                             <span className="font-mono text-12">{r.stop_id}</span>
-                            <span className="flex items-center gap-1 text-10 text-muted-foreground">
-                              <span
-                                className={cn(
-                                  "size-1.5 shrink-0 rounded-full",
-                                  OUTCOME_DOT[r.outcome] ?? "bg-muted-foreground",
-                                )}
-                              />
-                              {attemptContext(r.charge_label, r.stop_id)}
-                            </span>
+                            {r.attempt_seq != null && (
+                              <span className="text-10 text-muted-foreground">Attempt {r.attempt_seq}</span>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-4 py-2">
+                        </TableCell>
+                        <TableCell>
                           <Badge variant="outline" className="text-10">
                             {TYPE_LABEL[r.resolved_type] ?? r.resolved_type}
                           </Badge>
-                        </td>
-                        <td className="px-4 py-2 tabular-nums">{r.units ?? "—"}</td>
-                        <td className="px-4 py-2 text-right font-medium tabular-nums">{centsToUsd(r.amount_cents)}</td>
-                        <td className="px-4 py-2">
+                        </TableCell>
+                        <TableCell className="tabular-nums">{r.units ?? "—"}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {centsToUsd(r.amount_cents)}
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={r.document_id ? "secondary" : "outline"} className="text-10">
                             {r.document_number ?? "Unbilled"}
                           </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Mobile cards */}
-              <div className="divide-y divide-border/60 sm:hidden">
-                {rows.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setSelected(r)}
-                    className="flex w-full flex-col gap-1 px-4 py-3 text-left"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-12">{r.stop_id}</span>
-                      <span className="font-medium tabular-nums">{centsToUsd(r.amount_cents)}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-11 text-muted-foreground">
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          OUTCOME_DOT[r.outcome] ?? "bg-muted-foreground",
-                        )}
-                      />
-                      {attemptContext(r.charge_label, r.stop_id)}
-                    </div>
-                    <div className="flex items-center gap-2 text-11 text-muted-foreground">
-                      <span>{new Date(r.attempted_at).toLocaleDateString()}</span>
-                      <Badge variant="outline" className="text-10">
-                        {TYPE_LABEL[r.resolved_type] ?? r.resolved_type}
-                      </Badge>
-                      <Badge variant={r.document_id ? "secondary" : "outline"} className="text-10">
-                        {r.document_id ? "Invoiced" : "Unbilled"}
-                      </Badge>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
+                        </TableCell>
+                        <TableCell className="text-11 text-muted-foreground">
+                          {r.document_id ? "Invoiced" : "Unbilled"}
+                        </TableCell>
+                        <TableCell>
+                          {isExpanded ? (
+                            <ChevronUp className="size-3.5 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="size-3.5 text-muted-foreground" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && !isMobile && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={COLUMNS.length + 2} className="whitespace-normal bg-muted/30 py-4">
+                            <ChargeDetailPanel charge={r} className="mx-auto max-w-2xl" />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
@@ -229,16 +249,16 @@ export function ChargesTab() {
             <Button
               size="sm"
               variant="outline"
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              disabled={filters.offset === 0}
+              onClick={() => setOffset(Math.max(0, filters.offset - PAGE_SIZE))}
             >
               <ChevronLeft className="size-3.5" /> Prev
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={offset + PAGE_SIZE >= total}
-              onClick={() => setOffset(offset + PAGE_SIZE)}
+              disabled={filters.offset + PAGE_SIZE >= total}
+              onClick={() => setOffset(filters.offset + PAGE_SIZE)}
             >
               Next <ChevronRight className="size-3.5" />
             </Button>

@@ -5,15 +5,13 @@ import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import type { DateRange } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 
 import { AmountDueCard, type Overview } from "./amount-due-card";
-import { computeCyclePeriod } from "./billing-cycle";
 import type { Fund } from "./billing-radial";
 import { CreditSummaryCard, type RadialStats } from "./credit-summary-card";
-import { RecentActivityTable } from "./recent-activity-table";
+import { RecentActivityTeaser } from "./recent-activity-teaser";
 
 type DebitFailure = {
   id: number;
@@ -53,7 +51,11 @@ function radialStats(summary: Summary | null): RadialStats | undefined {
   };
 }
 
-export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview" | "charges" | "invoices") => void }) {
+export function OverviewTab({
+  onNavigateTab,
+}: {
+  onNavigateTab: (tab: "overview" | "charges" | "invoices" | "recent_activity") => void;
+}) {
   const [data, setData] = useState<Overview | null>(null);
   const [fund, setFund] = useState<Fund | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -107,11 +109,6 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
     return <p className="text-muted-foreground text-sm">Couldn't load billing overview.</p>;
   }
 
-  const period = computeCyclePeriod(data.cycle);
-  const defaultRange: DateRange | null = period
-    ? { from: period.start, to: new Date(period.end.getTime() - 86400_000), label: "Custom" }
-    : null;
-
   return (
     <div className="space-y-4">
       {data.wallet_debit_failures > 0 && (
@@ -158,7 +155,7 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
         </div>
       </div>
 
-      <RecentActivityTable defaultRange={defaultRange} onViewAll={() => onNavigateTab("charges")} />
+      <RecentActivityTeaser onViewAll={() => onNavigateTab("recent_activity")} />
     </div>
   );
 }

@@ -160,7 +160,7 @@ function stateBadge(c: FundClassification): { label: string; variant: "secondary
     case "in_buffer":
       return { label: `${usd(c.overCents)} into buffer — past the safe limit`, variant: "secondary" };
     case "over_limit":
-      return { label: `${usd(c.overCents)} over limit`, variant: "destructive" };
+      return { label: `${usd(c.overCents)} past hard ceiling (limit + buffer)`, variant: "destructive" };
     case "overdrawn":
       return { label: `${usd(c.overCents)} overdrawn — add funds`, variant: "destructive" };
     case "zero_usage":
@@ -175,15 +175,7 @@ function stateBadge(c: FundClassification): { label: string; variant: "secondary
  * figures (current usage, monthly average, projected end of cycle, limit)
  * render as a compact row below, fed by the caller from /summary — this
  * component only needs the /fund payload for its own math. */
-export function BillingRadial({
-  fund,
-  stats,
-  className,
-}: {
-  fund: Fund;
-  stats?: { currentUsageCents?: number; monthlyAverageCents?: number; projectedEndOfCycleCents?: number };
-  className?: string;
-}) {
+export function BillingRadial({ fund, className }: { fund: Fund; className?: string }) {
   const c = classifyFund(fund);
   const isPrepaid = fund.fund_type === "prepaid";
   const centerCents = isPrepaid ? fund.balance_cents : fund.available_cents;
@@ -195,6 +187,14 @@ export function BillingRadial({
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
       <div className="relative mx-auto aspect-square w-full max-w-[220px]">
+        {/* Marker dot at the ring's start (12 o'clock, angle=0) — a fixed
+         * reference point on the track, independent of the fill's own
+         * percentage, so the ring reads as a real gauge with a start/end
+         * rather than an abstract arc. */}
+        <span
+          className="-translate-x-1/2 absolute top-0 left-1/2 z-10 size-2 rounded-full border-2 border-background"
+          style={{ backgroundColor: color }}
+        />
         <ChartContainer
           config={{ value: { label: centerLabel, color } }}
           className="mx-auto aspect-square max-h-[220px]"
@@ -257,31 +257,6 @@ export function BillingRadial({
         </Badge>
       )}
       {c.state === "zero_usage" && <p className="text-10 text-muted-foreground">No activity yet this cycle</p>}
-
-      <div className="grid w-full grid-cols-2 gap-x-3 gap-y-1.5 text-11">
-        <StatCell
-          label={isPrepaid ? "Held (reservations)" : "Credit limit"}
-          value={isPrepaid ? usd(fund.held_cents) : usd(fund.credit_limit_cents)}
-        />
-        <StatCell label="Current usage" value={stats?.currentUsageCents != null ? usd(stats.currentUsageCents) : "—"} />
-        <StatCell
-          label="Monthly average"
-          value={stats?.monthlyAverageCents != null ? usd(stats.monthlyAverageCents) : "—"}
-        />
-        <StatCell
-          label="Projected end of cycle"
-          value={stats?.projectedEndOfCycleCents != null ? usd(stats.projectedEndOfCycleCents) : "—"}
-        />
-      </div>
-    </div>
-  );
-}
-
-function StatCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-border/60 border-b pb-1">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
     </div>
   );
 }

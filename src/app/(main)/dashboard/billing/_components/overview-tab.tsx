@@ -5,13 +5,16 @@ import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import type { DateRange } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { AmountDueCard, type Overview } from "./amount-due-card";
+import { computeCyclePeriod } from "./billing-cycle";
 import type { Fund } from "./billing-radial";
-import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
+import { CreditRecommendationStrip } from "./credit-recommendation-strip";
 import { CreditSummaryCard } from "./credit-summary-card";
+import { RecentActivityTable } from "./recent-activity-table";
 
 type DebitFailure = {
   id: number;
@@ -26,12 +29,6 @@ type Summary = {
 };
 
 const centsToUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
-const TYPE_LABEL: Record<string, string> = {
-  package: "Package",
-  miles: "Miles",
-  on_demand: "On-Demand",
-  prepaid_label: "Label",
-};
 
 /* Radial's complementary stats (Section 5) — derived from the EXISTING
  * /summary aggregate, never a second endpoint. currentUsage = this
@@ -55,9 +52,8 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
   const [data, setData] = useState<Overview | null>(null);
   const [fund, setFund] = useState<Fund | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [summaryErrored, setSummaryErrored] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [recent, setRecent] = useState<ChargeRow[]>([]);
-  const [selected, setSelected] = useState<ChargeRow | null>(null);
   const [debitFailures, setDebitFailures] = useState<DebitFailure[]>([]);
   const [showFailures, setShowFailures] = useState(false);
 
@@ -87,32 +83,29 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
         /* best-effort — cards below degrade to their own skeleton/empty state */
       });
     fetch("/api/client/billing/summary")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setSummary)
-      .catch(() => {
-        /* best-effort — radial renders without the complementary stat row */
-      });
-    fetch("/api/client/billing/ledger?limit=15")
-      .then((r) => r.json())
-      .then((d) => setRecent(d.rows ?? []))
-      .catch(() => {
-        /* best-effort — empty activity feed is an acceptable degrade */
-      });
+      .catch(() => setSummaryErrored(true));
   }
 
   useEffect(load, []);
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-96 rounded-2xl" />
-        <Skeleton className="h-96 rounded-2xl" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <Skeleton className="h-96 rounded-2xl lg:col-span-5" />
+        <Skeleton className="h-96 rounded-2xl lg:col-span-7" />
       </div>
     );
   }
   if (!data || data.error) {
     return <p className="text-muted-foreground text-sm">Couldn't load billing overview.</p>;
   }
+
+  const period = computeCyclePeriod(data.cycle);
+  const defaultRange: DateRange | null = period
+    ? { from: period.start, to: new Date(period.end.getTime() - 86400_000), label: "Custom" }
+    : null;
 
   return (
     <div className="space-y-4">
@@ -142,57 +135,27 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
         </Card>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-        <AmountDueCard overview={data} fund={fund} onNavigateTab={onNavigateTab} onChanged={load} />
-        <CreditSummaryCard fund={fund} stats={radialStats(summary)} />
+      {summaryErrored && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="py-2.5 text-11 text-warning">
+            Usage trend (current usage / monthly average / projected end of cycle) couldn't load — the rest of this page
+            is unaffected.
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <AmountDueCard overview={data} fund={fund} onNavigateTab={onNavigateTab} onChanged={load} />
+        </div>
+        <div className="lg:col-span-7">
+          <CreditSummaryCard fund={fund} stats={radialStats(summary)} />
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm">Recent activity</CardTitle>
-          <button
-            type="button"
-            onClick={() => onNavigateTab("charges")}
-            className="flex items-center gap-1 text-12 text-muted-foreground hover:text-foreground"
-          >
-            View all charges
-          </button>
-        </CardHeader>
-        <CardContent className="divide-y divide-border/60 p-0">
-          {recent.length === 0 && <p className="p-4 text-13 text-muted-foreground">No charges yet.</p>}
-          {recent.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSelected(c)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50"
-            >
-              <div className="flex min-w-0 items-center gap-2" title={c.charge_label}>
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${c.outcome === "delivered" ? "bg-success" : "bg-destructive"}`}
-                />
-                <span className="truncate font-mono text-12">{c.stop_id}</span>
-                {c.attempt_seq != null && (
-                  <Badge variant="secondary" className="shrink-0 text-10">
-                    Attempt {c.attempt_seq}
-                  </Badge>
-                )}
-                <Badge variant="outline" className="shrink-0 text-10">
-                  {TYPE_LABEL[c.resolved_type] ?? c.resolved_type}
-                </Badge>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge variant={c.document_id ? "secondary" : "outline"} className="text-10">
-                  {c.document_id ? "Invoiced" : "Unbilled"}
-                </Badge>
-                <span className="w-16 text-right font-medium tabular-nums">{centsToUsd(c.amount_cents ?? 0)}</span>
-              </div>
-            </button>
-          ))}
-        </CardContent>
-      </Card>
+      <CreditRecommendationStrip />
 
-      <ChargeDetailDrawer charge={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <RecentActivityTable defaultRange={defaultRange} onViewAll={() => onNavigateTab("charges")} />
     </div>
   );
 }

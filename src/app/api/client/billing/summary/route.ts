@@ -32,11 +32,15 @@ export async function GET() {
   // /api/client/billing/usage exactly). Backs "amount due", the
   // charges-by-type breakdown, the failed-attempts caption, and the
   // "old uninvoiced" overdue signal. ──
-  const { data: uninvoicedRows } = await supabase
+  const { data: uninvoicedRows, error: uninvoicedError } = await supabase
     .from("billing_ledger")
     .select("resolved_type, outcome, amount_cents, units, attempted_at, flag")
     .eq("tenant_id", tenantId)
-    .is("invoiced_at", null);
+    .is("documented_at", null);
+  if (uninvoicedError) {
+    console.error("[billing/summary] uninvoiced ledger query failed", uninvoicedError);
+    return NextResponse.json({ error: "Failed to load billing summary" }, { status: 500 });
+  }
   const uninvoiced = uninvoicedRows ?? [];
 
   let amountDueCents = 0;
@@ -68,13 +72,17 @@ export async function GET() {
   // this-month/last-month delivery-charge deltas, the 30-day delivery-charge
   // chart, and the recent-charges table. ──
   const since = lastMonthStart.toISOString();
-  const { data: recentRows } = await supabase
+  const { data: recentRows, error: recentError } = await supabase
     .from("billing_ledger")
-    .select("id, stop_id, resolved_type, outcome, amount_cents, invoiced_at, attempted_at, flag")
+    .select("id, stop_id, resolved_type, outcome, amount_cents, documented_at, attempted_at, flag")
     .eq("tenant_id", tenantId)
     .gte("attempted_at", since)
     .order("attempted_at", { ascending: false })
     .limit(500);
+  if (recentError) {
+    console.error("[billing/summary] recent ledger query failed", recentError);
+    return NextResponse.json({ error: "Failed to load billing summary" }, { status: 500 });
+  }
   const recent = recentRows ?? [];
 
   // Like-for-like month-over-month: comparing the FULL previous month against
@@ -128,7 +136,7 @@ export async function GET() {
     resolved_type: l.resolved_type,
     outcome: l.outcome,
     amount_cents: l.amount_cents,
-    invoiced_at: l.invoiced_at,
+    invoiced_at: l.documented_at,
     flagged: Boolean(l.flag),
   }));
 

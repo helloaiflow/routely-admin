@@ -14,11 +14,15 @@ export async function GET() {
   const tenantId = Number(ctx.tenantId);
   const supabase = getSupabaseAdmin();
 
-  const { data: lines } = await supabase
+  const { data: lines, error: linesError } = await supabase
     .from("billing_ledger")
     .select("resolved_type, outcome, disposition, units, amount_cents, routely_cents, driver_cents, flag")
     .eq("tenant_id", tenantId)
-    .is("invoiced_at", null);
+    .is("documented_at", null);
+  if (linesError) {
+    console.error("[billing/usage] ledger query failed", linesError);
+    return NextResponse.json({ error: "Failed to load billing usage" }, { status: 500 });
+  }
 
   const byType: Record<
     string,

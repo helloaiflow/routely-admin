@@ -15,11 +15,12 @@ export async function GET() {
   const t = (row.doc ?? {}) as Record<string, any>;
 
   // Outstanding is derived from billing_ledger, never stored on the tenant row.
-  const { data: outstandingRow } = await supabase
+  const { data: outstandingRow, error: outstandingError } = await supabase
     .from("v_tenant_outstanding")
     .select("outstanding_cents")
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
+  if (outstandingError) console.error("[billing/status] v_tenant_outstanding query failed", outstandingError);
 
   const tenant = {
     plan_type: row.plan_type ?? t.plan_type,

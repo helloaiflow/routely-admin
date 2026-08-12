@@ -31,12 +31,16 @@ export async function GET(req: NextRequest) {
   const dayKey = (d: Date) => d.toISOString().slice(0, 10);
   const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsError } = await supabase
     .from("billing_ledger")
     .select("resolved_type, amount_cents, units, attempted_at, flag")
     .eq("tenant_id", tenantId)
     .gte("attempted_at", since.toISOString())
     .limit(5000);
+  if (rowsError) {
+    console.error("[billing/daily] ledger query failed", rowsError);
+    return NextResponse.json({ error: "Failed to load daily billing chart" }, { status: 500 });
+  }
 
   type DayBucket = { date: string; values: Record<string, number> };
   const buckets = new Map<string, DayBucket>();

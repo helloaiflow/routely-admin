@@ -17,11 +17,16 @@ export async function GET() {
 
   // Outstanding is derived from billing_ledger (v_tenant_outstanding), never
   // stored/incremented on the tenant row — see 2026-08 billing v3 migration.
-  const { data: outstandingRow } = await supabase
+  const { data: outstandingRow, error: outstandingError } = await supabase
     .from("v_tenant_outstanding")
     .select("outstanding_cents")
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
+  // Not hard-failed: this endpoint serves broader tenant context, not just
+  // billing. But a swallowed error here silently renders $0 outstanding —
+  // exactly the failure mode that made /billing/summary invisible for days
+  // after the 2026-08 rename. Loud server-side signal instead.
+  if (outstandingError) console.error("[tenant] v_tenant_outstanding query failed", outstandingError);
   const outstandingAmount = Number(outstandingRow?.outstanding_cents ?? 0) / 100;
 
   return NextResponse.json({

@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrencyCents as usd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
@@ -147,18 +148,45 @@ const STATE_COLOR: Record<FundState, string> = {
   zero_usage: "var(--muted-foreground)",
 };
 
-function stateBadge(c: FundClassification): { label: string; variant: "secondary" | "outline" | "destructive" } | null {
+type Badge_ = { label: string; full: string; variant: "secondary" | "outline" | "destructive" };
+
+/* Badge labels are deliberately short — the ring's inner safe area is a
+ * ~154px-diameter circle inscribed in a 220px card (measured: R=40,
+ * strokeWidth=10 in the 100-unit viewBox → inner radius 35 units → 77px at
+ * the ring's actual 220px rendered size, which is its size at EVERY
+ * required breakpoint including 390px, since the column it sits in is
+ * always wider than the ring's own max-w-[220px] cap). The full precise
+ * wording (which is what overflowed before — 2026-08-12) lives in `full`,
+ * shown via tooltip, and in the destructive alert below this component,
+ * which has real room for it. Verified with a real headless-browser
+ * measurement (Geist Medium, the actual font, at the actual 10px token
+ * size) against dollar amounts up to $123,456 — every state fits with a
+ * positive margin; the short label wraps to 2 lines via whitespace-normal
+ * as a safety net, never overflows past the ring's stroke. */
+function stateBadge(c: FundClassification): Badge_ | null {
   switch (c.state) {
     case "healthy":
       return null;
     case "healthy_watch":
-      return { label: "Approaching limit", variant: "secondary" };
+      return { label: "Approaching limit", full: "Approaching your credit limit", variant: "secondary" };
     case "in_buffer":
-      return { label: `${usd(c.overCents)} into buffer — past the safe limit`, variant: "secondary" };
+      return {
+        label: `${usd(c.overCents)} into buffer`,
+        full: `${usd(c.overCents)} into your buffer — past the plain credit limit, not yet blocking new work`,
+        variant: "secondary",
+      };
     case "over_limit":
-      return { label: `${usd(c.overCents)} past hard ceiling (limit + buffer)`, variant: "destructive" };
+      return {
+        label: `${usd(c.overCents)} over ceiling`,
+        full: `${usd(c.overCents)} past the hard ceiling (credit limit + buffer) — the buffer is fully consumed`,
+        variant: "destructive",
+      };
     case "overdrawn":
-      return { label: `${usd(c.overCents)} overdrawn — add funds`, variant: "destructive" };
+      return {
+        label: `${usd(c.overCents)} overdrawn`,
+        full: `Wallet is ${usd(c.overCents)} overdrawn — add funds to bring it back to zero`,
+        variant: "destructive",
+      };
     case "zero_usage":
       return null;
   }
@@ -275,15 +303,20 @@ export function BillingRadial({ fund, className }: { fund: Fund; className?: str
           </span>
           <span className="text-11 text-muted-foreground">{centerLabel}</span>
           {badge && (
-            <Badge
-              variant={badge.variant}
-              className={cn(
-                "!whitespace-normal h-auto max-w-full text-center text-10 leading-tight",
-                badge.variant === "secondary" && "border-warning/40 text-warning",
-              )}
-            >
-              {badge.label}
-            </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant={badge.variant}
+                  className={cn(
+                    "!whitespace-normal h-auto max-w-full text-center text-10 leading-tight",
+                    badge.variant === "secondary" && "border-warning/40 text-warning",
+                  )}
+                >
+                  {badge.label}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>{badge.full}</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>

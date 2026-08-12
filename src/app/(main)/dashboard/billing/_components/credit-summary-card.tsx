@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { AlertTriangle, Lock, Sparkles, Wallet } from "lucide-react";
+import { AlertTriangle, Sparkles, Wallet } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -215,8 +215,12 @@ function alertText(state: FundState, overCents: number, isPrepaid: boolean): str
   if (isPrepaid) {
     return state === "overdrawn" ? `Wallet overdrawn by ${usd(overCents)}` : null;
   }
-  if (state === "over_limit") return `Credit buffer exceeded by ${usd(overCents)}`;
-  if (state === "in_buffer") return `Past your credit limit — ${usd(overCents)} of your buffer used`;
+  if (state === "over_limit") {
+    return `Credit buffer exceeded by ${usd(overCents)} — past the hard ceiling (credit limit + buffer)`;
+  }
+  if (state === "in_buffer") {
+    return `Past your credit limit — ${usd(overCents)} of your buffer used (hard ceiling = credit limit + buffer)`;
+  }
   return null;
 }
 

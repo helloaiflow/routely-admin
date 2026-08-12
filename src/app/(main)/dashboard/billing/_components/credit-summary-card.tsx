@@ -2,17 +2,41 @@
 
 import { useEffect, useState } from "react";
 
-import { AlertTriangle, Sparkles, Wallet } from "lucide-react";
+import { AlertTriangle, Info, Sparkles, Wallet } from "lucide-react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrencyCents as usd } from "@/lib/ui/format";
 
 import { BillingRadial, classifyFund, type Fund, type FundState } from "./billing-radial";
 import { CreditLimitReviewCard, type Suggestion } from "./credit-limit-review";
+
+export type RadialStats = {
+  /** ALL of this calendar month's charges, invoiced or not — deliberately
+   * NOT the same figure as the left card's "Uninvoiced this cycle"
+   * (overview.outstanding_cents), which excludes whatever's already been
+   * invoiced. Reconciled explicitly below rather than shown as two
+   * same-sounding numbers with no stated relationship. */
+  currentUsageCents: number;
+  /** Trailing 2-month average (this month + last month) / 2 — a historical
+   * reference point, not a ceiling on currentUsageCents. Can legitimately
+   * be LOWER than current usage if this month is busier than last. */
+  monthlyAverageCents: number;
+  lastMonthCents: number;
+  monthName: string;
+  dayOfMonth: number;
+  daysInMonth: number;
+  /** Linear projection (currentUsage / dayOfMonth * daysInMonth) — null
+   * when suppressed. RULE: suppressed for the first 2 days of the cycle
+   * (dayOfMonth < 3) — extrapolating a full month from 1-2 days of signal
+   * isn't honest, so the card shows "not enough data yet" instead of a
+   * number that looks more authoritative than it is. */
+  projectedEndOfCycleCents: number | null;
+};
 
 /* RIGHT card — everything about credit (Section 5). Two internal columns:
  * LEFT = the radial + its active reservations (both keyed off the same
@@ -26,9 +50,15 @@ import { CreditLimitReviewCard, type Suggestion } from "./credit-limit-review";
 export function CreditSummaryCard({
   fund,
   stats,
+  outstandingCents,
 }: {
   fund: Fund | null;
-  stats?: { currentUsageCents?: number; monthlyAverageCents?: number; projectedEndOfCycleCents?: number };
+  stats?: RadialStats;
+  /** overview.outstanding_cents — the SAME figure the left card labels
+   * "Uninvoiced this cycle." Passed through so this card can state the
+   * relationship to its own "Charged this month" explicitly instead of
+   * showing two similar-but-different numbers with no stated link. */
+  outstandingCents?: number;
 }) {
   const [topUpAmount, setTopUpAmount] = useState("");
   const [toppingUp, setToppingUp] = useState(false);
@@ -87,6 +117,22 @@ export function CreditSummaryCard({
   const alertCopy = alertText(c.state, c.overCents, isPrepaid);
   const intelCopy = intelligenceText(c.state, c.overCents, isPrepaid);
 
+  // Unpaid ledger = uninvoiced (outstandingCents, same figure the left card
+  // shows as "Uninvoiced this cycle") + already-invoiced-but-unpaid — same
+  // split AmountDueCard's segmented bar uses, stated here in the tooltip so
+  // "why is this bigger than the left card's number" has an answer.
+  const invoicedUnpaidCents =
+    !isPrepaid && outstandingCents != null ? Math.max(0, fund.unpaid_ledger_cents - outstandingCents) : null;
+
+  // "Charged this month" vs the left card's "Uninvoiced this cycle" cover
+  // overlapping-but-different sets (this-month-total vs still-unbilled) —
+  // reconciled explicitly rather than left as two similar numbers that
+  // silently disagree. The approximation is real (both derive from the same
+  // ledger) but not cent-exact across the two windows, so it's worded as
+  // "already invoiced" rather than claimed to the cent.
+  const approxInvoicedThisMonthCents =
+    stats && outstandingCents != null ? Math.max(0, stats.currentUsageCents - outstandingCents) : null;
+
   return (
     <Card>
       <CardHeader className="pb-1.5">
@@ -121,33 +167,94 @@ export function CreditSummaryCard({
           <div className="space-y-4">
             {isPrepaid ? (
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-11">
-                <StatCell label="Prepaid balance" value={usd(fund.balance_cents)} />
-                <StatCell label="Held (reservations)" value={usd(fund.held_cents)} />
+                <StatCell
+                  label="Prepaid balance"
+                  value={usd(fund.balance_cents)}
+                  tooltip="Funds on hand right now, after everything held for in-flight deliveries."
+                />
+                <StatCell
+                  label="Held (reservations)"
+                  value={usd(fund.held_cents)}
+                  tooltip="Earmarked for deliveries in progress — a soft hold, not yet an actual charge."
+                />
                 <StatCell
                   label="Current usage"
                   value={stats?.currentUsageCents != null ? usd(stats.currentUsageCents) : "—"}
+                  tooltip={
+                    stats
+                      ? `All charges billed in ${stats.monthName} — debited from the wallet as each delivery completes.`
+                      : undefined
+                  }
                 />
                 <StatCell
                   label="Monthly average"
                   value={stats?.monthlyAverageCents != null ? usd(stats.monthlyAverageCents) : "—"}
+                  tooltip={
+                    stats
+                      ? `Average of ${stats.monthName} (${usd(stats.currentUsageCents)} so far) and last month (${usd(stats.lastMonthCents)}) — a trailing 2-month reference, not a cap.`
+                      : undefined
+                  }
                 />
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-11 sm:grid-cols-3">
-                <StatCell label="Credit limit" value={usd(fund.credit_limit_cents)} />
-                <StatCell label="Reserved (active)" value={usd(fund.reserved_cents)} />
-                <StatCell label="Unpaid ledger" value={usd(fund.unpaid_ledger_cents)} />
                 <StatCell
-                  label="Current usage"
+                  label="Credit limit"
+                  value={usd(fund.credit_limit_cents)}
+                  tooltip="The maximum credit extended to this tenant, before the buffer."
+                />
+                <StatCell
+                  label="Reserved (active)"
+                  value={usd(fund.reserved_cents)}
+                  tooltip="Earmarked for deliveries in progress — a soft hold against the limit, not yet an actual charge."
+                />
+                <StatCell
+                  label="Unpaid ledger"
+                  value={usd(fund.unpaid_ledger_cents)}
+                  tooltip={
+                    invoicedUnpaidCents != null
+                      ? `Everything currently owed: ${usd(outstandingCents ?? 0)} not yet invoiced + ${usd(invoicedUnpaidCents)} already invoiced but unpaid — this can include amounts from earlier cycles, not just this one. Same total as "Account balance" on the left.`
+                      : "Everything currently owed, across all cycles — uninvoiced charges plus already-invoiced-but-unpaid amounts."
+                  }
+                />
+                <StatCell
+                  label="Charged this month"
                   value={stats?.currentUsageCents != null ? usd(stats.currentUsageCents) : "—"}
+                  tooltip={
+                    stats
+                      ? `All delivery charges billed in ${stats.monthName}, whether invoiced yet or not.${
+                          approxInvoicedThisMonthCents && approxInvoicedThisMonthCents > 0
+                            ? ` ≈${usd(approxInvoicedThisMonthCents)} of this is already on an invoice — "Uninvoiced this cycle" on the left is what's still outstanding.`
+                            : ` None of this is on an invoice yet — matches "Uninvoiced this cycle" on the left.`
+                        }`
+                      : undefined
+                  }
                 />
                 <StatCell
                   label="Monthly average"
                   value={stats?.monthlyAverageCents != null ? usd(stats.monthlyAverageCents) : "—"}
+                  tooltip={
+                    stats
+                      ? `Average of ${stats.monthName} (${usd(stats.currentUsageCents)} so far) and last month (${usd(stats.lastMonthCents)}) — a trailing 2-month reference, not a cap. Can be lower than this month's own total if this month is busier than last.`
+                      : undefined
+                  }
                 />
                 <StatCell
                   label="Projected end of cycle"
-                  value={stats?.projectedEndOfCycleCents != null ? usd(stats.projectedEndOfCycleCents) : "—"}
+                  value={
+                    !stats
+                      ? "—"
+                      : stats.projectedEndOfCycleCents == null
+                        ? "—"
+                        : `~${usd(stats.projectedEndOfCycleCents)}`
+                  }
+                  tooltip={
+                    !stats
+                      ? undefined
+                      : stats.projectedEndOfCycleCents == null
+                        ? `Not enough of ${stats.monthName} has elapsed yet to project honestly (shows after day 2 of the cycle).`
+                        : `Estimated total USAGE for the cycle at the current run rate — ${usd(stats.currentUsageCents)} over ${stats.dayOfMonth} day${stats.dayOfMonth === 1 ? "" : "s"} × ${stats.daysInMonth} days in the cycle. Not a debt figure, and not a commitment — actual volume may not stay linear.`
+                  }
                 />
               </div>
             )}
@@ -237,10 +344,22 @@ function intelligenceText(state: FundState, overCents: number, isPrepaid: boolea
   return null;
 }
 
-function StatCell({ label, value }: { label: string; value: string }) {
+function StatCell({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
     <div className="border-border/60 border-b pb-1.5">
-      <p className="text-muted-foreground">{label}</p>
+      {tooltip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p className="flex w-fit items-center gap-1 text-muted-foreground decoration-dotted underline-offset-2 hover:underline">
+              {label}
+              <Info className="size-2.5 shrink-0" />
+            </p>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-64">{tooltip}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <p className="text-muted-foreground">{label}</p>
+      )}
       <p className="mt-0.5 font-medium tabular-nums">{value}</p>
     </div>
   );

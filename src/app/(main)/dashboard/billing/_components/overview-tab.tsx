@@ -12,7 +12,7 @@ import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { AmountDueCard, type Overview } from "./amount-due-card";
 import { computeCyclePeriod } from "./billing-cycle";
 import type { Fund } from "./billing-radial";
-import { CreditSummaryCard } from "./credit-summary-card";
+import { CreditSummaryCard, type RadialStats } from "./credit-summary-card";
 import { RecentActivityTable } from "./recent-activity-table";
 
 type DebitFailure = {
@@ -28,21 +28,29 @@ type Summary = {
 };
 
 /* Radial's complementary stats (Section 5) — derived from the EXISTING
- * /summary aggregate, never a second endpoint. currentUsage = this
- * calendar month to date; monthlyAverage = simple 2-point average of this
- * and last month; projectedEndOfCycle = a plain linear projection off the
- * elapsed fraction of the month. All three are estimates stated as such,
- * not exact — good enough for a "how am I trending" glance. */
-function radialStats(summary: Summary | null) {
+ * /summary aggregate, never a second endpoint. All figures here are
+ * estimates/aggregates whose exact meaning CreditSummaryCard states
+ * explicitly next to each one (2026-08-13 — terse unlabeled money figures
+ * were generating the exact "is this a bug?" confusion they're meant to
+ * prevent). */
+function radialStats(summary: Summary | null): RadialStats | undefined {
   if (!summary) return undefined;
   const now = new Date();
   const dayOfMonth = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthName = now.toLocaleDateString("en-US", { month: "long" });
   const currentUsageCents = summary.delivery_this_month_cents;
   const monthlyAverageCents = Math.round((summary.delivery_this_month_cents + summary.delivery_last_month_cents) / 2);
-  const projectedEndOfCycleCents =
-    dayOfMonth > 0 ? Math.round((currentUsageCents / dayOfMonth) * daysInMonth) : currentUsageCents;
-  return { currentUsageCents, monthlyAverageCents, projectedEndOfCycleCents };
+  const projectedEndOfCycleCents = dayOfMonth < 3 ? null : Math.round((currentUsageCents / dayOfMonth) * daysInMonth);
+  return {
+    currentUsageCents,
+    monthlyAverageCents,
+    lastMonthCents: summary.delivery_last_month_cents,
+    monthName,
+    dayOfMonth,
+    daysInMonth,
+    projectedEndOfCycleCents,
+  };
 }
 
 export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview" | "charges" | "invoices") => void }) {
@@ -146,7 +154,7 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
           <AmountDueCard overview={data} fund={fund} onNavigateTab={onNavigateTab} onChanged={load} />
         </div>
         <div className="lg:col-span-7">
-          <CreditSummaryCard fund={fund} stats={radialStats(summary)} />
+          <CreditSummaryCard fund={fund} stats={radialStats(summary)} outstandingCents={data.outstanding_cents} />
         </div>
       </div>
 

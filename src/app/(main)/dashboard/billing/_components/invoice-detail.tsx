@@ -51,6 +51,7 @@ export type DocDetail = {
   status: string;
   cycle_start: string | null;
   cycle_end: string | null;
+  charges_through: string | null;
   amount_cents: number;
   amount_paid_cents: number;
   due_date: string | null;
@@ -200,10 +201,11 @@ export function InvoiceDetail({ documentId, onPay }: { documentId: number; onPay
             {DOC_LABEL[detail.doc_type]} {detail.document_number}
           </p>
           <p className="text-11 text-muted-foreground">Issued {new Date(detail.created_at).toLocaleDateString()}</p>
-          {detail.cycle_start && (
+          {detail.cycle_end && (
             <p className="text-11 text-muted-foreground">
-              Period {new Date(detail.cycle_start).toLocaleDateString()} –{" "}
-              {detail.cycle_end ? new Date(detail.cycle_end).toLocaleDateString() : "—"}
+              Closed {new Date(detail.cycle_end).toLocaleDateString()}
+              {detail.charges_through &&
+                ` · covering charges through ${new Date(detail.charges_through).toLocaleDateString()}`}
             </p>
           )}
           {detail.due_date && (

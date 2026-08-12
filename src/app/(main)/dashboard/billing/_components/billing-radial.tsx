@@ -1,9 +1,7 @@
 "use client";
 
-import { Label, PolarAngleAxis, PolarGrid, PolarRadiusAxis, RadialBar, RadialBarChart } from "recharts";
-
 import { Badge } from "@/components/ui/badge";
-import { ChartContainer } from "@/components/ui/chart";
+import { formatCurrencyCents as usd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
 export type Reservation = {
@@ -52,7 +50,7 @@ export type FundState = "healthy" | "healthy_watch" | "in_buffer" | "over_limit"
 
 export type FundClassification = {
   state: FundState;
-  /** 0-100, clamped — what the ring itself renders. */
+  /** 0-100, clamped — legacy single-value fill kept for callers that only need a scalar. */
   ringPct: number;
   /** Unclamped usage as a fraction of capacity — can exceed 100 for postpaid over-limit. */
   usedPct: number;
@@ -74,7 +72,13 @@ export type FundClassification = {
  * draft->stop time). So: available>=0 is healthy (at/under the limit);
  * available in [-buffer, 0) is "in the cushion" (past the limit, buffer
  * absorbing it, never blocking); available < -buffer is past the hard
- * ceiling (limit + buffer) entirely. */
+ * ceiling (limit + buffer) entirely.
+ *
+ * UNCHANGED by the 2026-08-12 radial rework below — that rework only
+ * changes how BillingRadial RENDERS this classification (two-tone arc
+ * instead of a single saturating ring), never the state/overCents math
+ * itself, which the alert text, badge copy, and gate logic elsewhere all
+ * depend on staying exactly as-is. */
 export function classifyFund(fund: Fund): FundClassification {
   if (fund.fund_type === "postpaid") {
     const capacityCents = fund.credit_limit_cents;
@@ -143,14 +147,6 @@ const STATE_COLOR: Record<FundState, string> = {
   zero_usage: "var(--muted-foreground)",
 };
 
-const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-
-// One badge, always in NORMAL FLOW below the ring — never absolutely
-// positioned over it. An earlier version pinned the over_limit/in_buffer/
-// overdrawn badges to the ring's own bottom edge, which visually collided
-// with the ring's colored arc at exactly the percentages those states
-// produce (both are ~100% filled by construction) and made the badge text
-// unreadable. One consistent slot avoids that entirely.
 function stateBadge(c: FundClassification): { label: string; variant: "secondary" | "outline" | "destructive" } | null {
   switch (c.state) {
     case "healthy":
@@ -168,13 +164,82 @@ function stateBadge(c: FundClassification): { label: string; variant: "secondary
   }
 }
 
+/** What the ring itself draws — two stacked arc segments over a track,
+ * never a single value. Kept separate from classifyFund (which stays pure
+ * money-state math) because this is purely a rendering concern: how the
+ * classification maps onto pixels. */
+type RingSegments = {
+  /** 0-100 — the "within your granted limit" segment, colored by severity. */
+  limitPct: number;
+  /** 0-100 — the "inside the buffer cushion" segment, always amber. Only
+   * ever non-zero for postpaid in_buffer/over_limit. */
+  bufferPct: number;
+};
+
+function ringSegments(fund: Fund, c: FundClassification): RingSegments {
+  if (c.state === "zero_usage") return { limitPct: 0, bufferPct: 0 };
+  if (fund.fund_type === "prepaid") {
+    // No buffer concept for a wallet — c.ringPct is already correctly
+    // capped (100 for overdrawn, proportional to the 4x-threshold reference
+    // otherwise), so the whole used portion is just the "limit" segment.
+    return { limitPct: c.ringPct, bufferPct: 0 };
+  }
+  // Postpaid: the ring's 100% is the HARD CEILING (limit + buffer), not the
+  // plain limit — that's what leaves visible room on the ring for the
+  // buffer band at all times, and is what keeps over_limit from saturating
+  // into one undifferentiated red circle. A tenant who's blown through the
+  // entire buffer shows the limit segment fully filled AND the buffer
+  // segment fully filled (two-tone, still legible), never a single flat 100%.
+  const ringTotal = fund.credit_limit_cents + fund.buffer_cents;
+  if (ringTotal <= 0) return { limitPct: 0, bufferPct: 0 };
+  const usedForRing = Math.min(c.usedCents, ringTotal);
+  const limitCents = Math.min(usedForRing, fund.credit_limit_cents);
+  const bufferCents = Math.max(0, usedForRing - fund.credit_limit_cents);
+  return {
+    limitPct: (limitCents / ringTotal) * 100,
+    bufferPct: (bufferCents / ringTotal) * 100,
+  };
+}
+
+const R = 40;
+const STROKE_WIDTH = 10;
+const CIRCUMFERENCE = 2 * Math.PI * R;
+
+/** One stroke-dasharray/dashoffset arc segment, `startPct` through the
+ * circle to `startPct + lengthPct`. Uses the standard SVG stacked-ring
+ * technique: dasharray = [segment, gap], dashoffset = -(everything before
+ * this segment) so segments abut cleanly with no rounded-cap overlap. */
+function ArcSegment({ startPct, lengthPct, color }: { startPct: number; lengthPct: number; color: string }) {
+  if (lengthPct <= 0) return null;
+  const len = (lengthPct / 100) * CIRCUMFERENCE;
+  const offset = -(startPct / 100) * CIRCUMFERENCE;
+  return (
+    <circle
+      cx={50}
+      cy={50}
+      r={R}
+      fill="none"
+      stroke={color}
+      strokeWidth={STROKE_WIDTH}
+      strokeDasharray={`${len} ${CIRCUMFERENCE - len}`}
+      strokeDashoffset={offset}
+      transform="rotate(-90 50 50)"
+    />
+  );
+}
+
 /* Single shared billing-summary ring — prepaid and postpaid both render
- * through here (Section 5). Center label is the tenant's OWN "available"
- * figure (available credit for postpaid, balance for prepaid) since that's
- * the number the ring's fullness/emptiness directly represents; complementary
- * figures (current usage, monthly average, projected end of cycle, limit)
- * render as a compact row below, fed by the caller from /summary — this
- * component only needs the /fund payload for its own math. */
+ * through here (Section 5). Hand-built SVG rather than a chart library:
+ * a stacked two-tone ring (limit segment + buffer segment) isn't expressible
+ * as one RadialBar value, and the prior Recharts implementation's
+ * `background` track relied on the library's own internal default fill
+ * (an un-tokenized gray, invisible only because a saturated single-color
+ * arc covered it) — full control here means every stroke is a real token,
+ * checkable by the design-token gate. Center label is the tenant's OWN
+ * "available" figure; the state badge now lives INSIDE the center stack,
+ * directly under the label, never floating below the ring. Complementary
+ * figures (current usage, monthly average, etc.) render in the caller's own
+ * stat grid, not here — this component only needs the /fund payload. */
 export function BillingRadial({ fund, className }: { fund: Fund; className?: string }) {
   const c = classifyFund(fund);
   const isPrepaid = fund.fund_type === "prepaid";
@@ -182,80 +247,47 @@ export function BillingRadial({ fund, className }: { fund: Fund; className?: str
   const centerLabel = isPrepaid ? "Prepaid balance" : "Available credit";
   const color = STATE_COLOR[c.state];
   const badge = stateBadge(c);
-  const chartData = [{ metric: "used", value: c.ringPct, fill: color }];
+  const seg = ringSegments(fund, c);
+  const markerColor = c.state === "zero_usage" ? "var(--border)" : color;
 
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
       <div className="relative mx-auto aspect-square w-full max-w-[220px]">
-        {/* Marker dot at the ring's start (12 o'clock, angle=0) — a fixed
-         * reference point on the track, independent of the fill's own
-         * percentage, so the ring reads as a real gauge with a start/end
-         * rather than an abstract arc. */}
-        <span
-          className="-translate-x-1/2 absolute top-0 left-1/2 z-10 size-2 rounded-full border-2 border-background"
-          style={{ backgroundColor: color }}
-        />
-        <ChartContainer
-          config={{ value: { label: centerLabel, color } }}
-          className="mx-auto aspect-square max-h-[220px]"
-        >
-          <RadialBarChart data={chartData} startAngle={90} endAngle={-270} innerRadius={78} outerRadius={100}>
-            {/* RadialBarChart's implicit angle axis defaults its domain to
-             * [0, max(value)] across the dataset — with a single row that
-             * max IS the row's own value, so every non-zero fill would
-             * render as a full circle regardless of the real percentage.
-             * Locking the domain to a fixed 0-100 makes the sweep actually
-             * proportional. */}
-            <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} />
-            <PolarGrid
-              gridType="circle"
-              radialLines={false}
-              stroke="none"
-              className="fill-muted first:fill-muted last:fill-transparent"
-              polarRadius={[86, 74]}
-            />
-            <RadialBar
-              dataKey="value"
-              background
-              cornerRadius={c.ringPct > 0 && c.ringPct < 100 ? 6 : 0}
-              fill={color}
-            />
-            <PolarRadiusAxis tick={false} tickLine={false} axisLine={false} domain={[0, 100]}>
-              <Label
-                content={({ viewBox }) => {
-                  if (!viewBox || !("cx" in viewBox) || !("cy" in viewBox)) return null;
-                  const cx = viewBox.cx ?? 0;
-                  const cy = viewBox.cy ?? 0;
-                  return (
-                    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle">
-                      <tspan
-                        x={cx}
-                        y={(cy ?? 0) - 6}
-                        className="font-bold text-2xl tabular-nums"
-                        style={{ fill: c.state === "zero_usage" ? "var(--muted-foreground)" : "var(--foreground)" }}
-                      >
-                        {centerCents < 0 ? `-${usd(Math.abs(centerCents))}` : usd(centerCents)}
-                      </tspan>
-                      <tspan x={cx} y={(cy ?? 0) + 16} className="fill-muted-foreground text-11">
-                        {centerLabel}
-                      </tspan>
-                    </text>
-                  );
-                }}
-              />
-            </PolarRadiusAxis>
-          </RadialBarChart>
-        </ChartContainer>
+        <svg viewBox="0 0 100 100" className="size-full">
+          <title>{centerLabel}</title>
+          {/* Base track — a real token, not a chart library's baked-in default. */}
+          <circle cx={50} cy={50} r={R} fill="none" stroke="var(--muted)" strokeWidth={STROKE_WIDTH} />
+          <ArcSegment startPct={0} lengthPct={seg.limitPct} color={color} />
+          <ArcSegment startPct={seg.limitPct} lengthPct={seg.bufferPct} color="var(--warning)" />
+          {/* Marker dot at the ring's start (12 o'clock, angle=0) — a fixed
+           * reference point on the track, independent of the fill's own
+           * percentage, so the ring reads as a real gauge with a start/end
+           * rather than an abstract arc. */}
+          <circle cx={50} cy={50 - R} r={2.5} fill={markerColor} stroke="var(--background)" strokeWidth={1} />
+        </svg>
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-5 text-center">
+          <span
+            className="font-bold text-2xl tabular-nums"
+            style={{ color: c.state === "zero_usage" ? "var(--muted-foreground)" : "var(--foreground)" }}
+          >
+            {centerCents < 0 ? `-${usd(Math.abs(centerCents))}` : usd(centerCents)}
+          </span>
+          <span className="text-11 text-muted-foreground">{centerLabel}</span>
+          {badge && (
+            <Badge
+              variant={badge.variant}
+              className={cn(
+                "!whitespace-normal h-auto max-w-full text-center text-10 leading-tight",
+                badge.variant === "secondary" && "border-warning/40 text-warning",
+              )}
+            >
+              {badge.label}
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {badge && (
-        <Badge
-          variant={badge.variant}
-          className={cn("text-10", badge.variant === "secondary" && "border-warning/40 text-warning")}
-        >
-          {badge.label}
-        </Badge>
-      )}
       {c.state === "zero_usage" && <p className="text-10 text-muted-foreground">No activity yet this cycle</p>}
     </div>
   );

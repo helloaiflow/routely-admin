@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 
 import { AlertCircle } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { DateRange } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 
 import { AmountDueCard, type Overview } from "./amount-due-card";
 import { computeCyclePeriod } from "./billing-cycle";
 import type { Fund } from "./billing-radial";
-import { CreditRecommendationStrip } from "./credit-recommendation-strip";
 import { CreditSummaryCard } from "./credit-summary-card";
 import { RecentActivityTable } from "./recent-activity-table";
 
@@ -27,8 +26,6 @@ type Summary = {
   delivery_this_month_cents: number;
   delivery_last_month_cents: number;
 };
-
-const centsToUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
 
 /* Radial's complementary stats (Section 5) — derived from the EXISTING
  * /summary aggregate, never a second endpoint. currentUsage = this
@@ -152,8 +149,6 @@ export function OverviewTab({ onNavigateTab }: { onNavigateTab: (tab: "overview"
           <CreditSummaryCard fund={fund} stats={radialStats(summary)} />
         </div>
       </div>
-
-      <CreditRecommendationStrip />
 
       <RecentActivityTable defaultRange={defaultRange} onViewAll={() => onNavigateTab("charges")} />
     </div>

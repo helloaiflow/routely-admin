@@ -5,6 +5,7 @@ import { CreditCard, FileText, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatCurrencyCents as usd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
 import { computeCyclePeriod, fmtDay } from "./billing-cycle";
@@ -38,7 +39,6 @@ export type Overview = {
   error?: string;
 };
 
-const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const sod = (d: Date) => {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);
@@ -161,7 +161,7 @@ export function AmountDueCard({
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-x-3 gap-y-2.5 border-border/60 border-t pt-3 text-11">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-border/60 border-t pt-3 text-11 sm:grid-cols-3">
           <StatCell label="Billing method">
             <div className="flex items-center gap-1">
               <BillingMethodEditor
@@ -259,13 +259,16 @@ function BillingCycleTimeline({ cycle, dueDate }: { cycle: Overview["cycle"]; du
           className="absolute top-[7px] left-0 h-px bg-primary transition-all"
           style={{ width: `${lineFillPct}%` }}
         />
-        <div className="relative flex justify-between">
+        <div className="relative flex justify-between gap-1">
           {nodes.map((n, i) => {
             const isToday = i === todayIndex;
             const isDue = n.kind === "due" && !isToday;
             const isCompleted = !isToday && i < todayIndex;
             return (
-              <div key={`${n.kind}-${n.date.toISOString()}`} className="flex flex-col items-center gap-1.5">
+              <div
+                key={`${n.kind}-${n.date.toISOString()}`}
+                className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+              >
                 <span
                   className={cn(
                     "size-3.5 shrink-0 rounded-full",
@@ -276,7 +279,7 @@ function BillingCycleTimeline({ cycle, dueDate }: { cycle: Overview["cycle"]; du
                   )}
                 />
                 <span className="font-medium text-11 tabular-nums">{fmtDay(n.date)}</span>
-                <span className="whitespace-nowrap text-10 text-muted-foreground">{n.label}</span>
+                <span className="text-center text-10 text-muted-foreground leading-tight">{n.label}</span>
               </div>
             );
           })}

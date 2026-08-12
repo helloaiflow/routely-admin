@@ -48,3 +48,12 @@ export function formatCurrency(n: number | null | undefined): string {
   if (n == null) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
+
+// Every money value in the billing module is stored/transmitted in integer
+// cents (FastAPI owns the calculation); this is the ONE place that divides
+// by 100 for display, so a `$1963.00`-style missing-thousands-separator bug
+// can't recur in one surface while another correctly uses formatCurrency.
+export function formatCurrencyCents(cents: number | null | undefined): string {
+  if (cents == null) return "—";
+  return formatCurrency(cents / 100);
+}

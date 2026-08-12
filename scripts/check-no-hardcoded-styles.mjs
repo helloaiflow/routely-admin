@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // ── Design-token enforcement gate (portable, no external deps) ─────────────
 // Fails the build on hardcoded styles that break theming, dark mode, or the
 // one-blue / one-hue-per-meaning rules. Node-based so it runs everywhere —
@@ -49,6 +50,20 @@ const PX_EXEMPT_PATHS = /^src\/app\/login/;
 /* Rule 5 — non-neutral colors in style-object color props */
 const STYLE_COLOR =
   /(?:backgroundColor|borderColor|boxShadow|textShadow|backgroundImage|(?<![a-zA-Z-])background|(?<![a-zA-Z-])color|stopColor|fill|stroke)\s*:\s*["'`][^"'`\n]*(?:#[0-9a-fA-F]{3,8}|rgba?\()/;
+
+/* Rule 5b — the same class of bug via direct SVG/JSX attributes instead of a
+ * style object: `<circle stroke="#eee" fill="#eee" />`. Added 2026-08-12
+ * after `stroke="#eee"` shipped invisibly in a radial gauge (only hidden
+ * because a saturated arc happened to cover the track) — Rule 5's
+ * colon-property regex never matched JSX's `attr="value"` (equals, not
+ * colon) syntax, so the gate silently missed it.
+ * Negative lookbehind excludes `[stroke='#ccc']`-style CSS attribute
+ * selectors inside Tailwind arbitrary variants (e.g.
+ * `[&_.recharts-dot[stroke='#fff']]:stroke-transparent` in chart.tsx,
+ * which TARGETS Recharts' own internal hardcoded colors to override them —
+ * the opposite of introducing one). */
+const SVG_ATTR_COLOR = /(?<!\[)\b(?:stroke|fill|stopColor)=["'](?:#[0-9a-fA-F]{3,8}|rgba?\()/;
+
 const NEUTRAL_ONLY =
   /^(?:(?!#[0-9a-fA-F]|rgba?\().)*?(?:#f{3,8}\b|#0{3,6}\b|#fff(?:fff)?\b|#000(?:000)?\b|rgba?\(\s*(?:255\s*,\s*255\s*,\s*255|0\s*,\s*0\s*,\s*0)[^)]*\))/i;
 // Files allowed to carry literal colors in style props — each with a reason.
@@ -119,6 +134,8 @@ for (const file of walk(SRC)) {
     }
     // Rule 5 — style-object colors (non-neutral, non-allowlisted)
     if (!STYLE_COLOR_ALLOW.has(rel) && STYLE_COLOR.test(line) && !NEUTRAL_ONLY.test(line)) at("style-color");
+    // Rule 5b — same, via direct SVG/JSX attributes (stroke=/fill=/stopColor=)
+    if (!STYLE_COLOR_ALLOW.has(rel) && SVG_ATTR_COLOR.test(line) && !NEUTRAL_ONLY.test(line)) at("svg-attr-color");
   });
 }
 

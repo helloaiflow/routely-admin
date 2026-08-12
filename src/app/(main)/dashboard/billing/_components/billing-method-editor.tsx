@@ -20,10 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { formatCurrencyCents as usd } from "@/lib/ui/format";
 
 import type { Fund } from "./billing-radial";
-
-const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 
 type Suggestion = { suggested_limit_cents: number };
 

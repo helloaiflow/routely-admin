@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
 export type ChargeRow = {
@@ -37,7 +38,6 @@ const TYPE_LABEL: Record<string, string> = {
   prepaid_label: "Label",
 };
 const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
-const centsToUsd = (c: number | null | undefined) => `$${((c ?? 0) / 100).toFixed(2)}`;
 
 /* Single detail drawer, shared by the Overview activity feed and the Charges
  * grid — clicking a charge anywhere in the app opens THIS component, never a

@@ -19,7 +19,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     upstream = await fetch(`${FASTAPI_BASE}/v1/billing/credit-suggestions/${encodeURIComponent(id)}/decide`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
-      body: JSON.stringify({ approve: Boolean(body?.approve), decided_by: ctx.user?.id ?? "unknown" }),
+      body: JSON.stringify({
+        approve: Boolean(body?.approve),
+        decided_by: ctx.user?.id ?? "unknown",
+        note: typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 250) : undefined,
+      }),
     });
   } catch {
     return NextResponse.json({ error: "Billing service unreachable" }, { status: 502 });

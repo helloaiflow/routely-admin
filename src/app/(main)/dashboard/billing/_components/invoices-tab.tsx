@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 
 type DocRow = {
   id: number;
@@ -50,7 +51,6 @@ const STATUS_TONE: Record<string, string> = {
   pending: "bg-muted text-muted-foreground",
   draft: "bg-muted text-muted-foreground",
 };
-const centsToUsd = (c: number) => `$${(c / 100).toFixed(2)}`;
 
 export function InvoicesTab() {
   const [rows, setRows] = useState<DocRow[]>([]);

@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
@@ -29,7 +30,6 @@ const TYPE_LABEL: Record<string, string> = {
   prepaid_label: "Label",
 };
 const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
-const centsToUsd = (c: number | null) => `$${((c ?? 0) / 100).toFixed(2)}`;
 const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
 /* Row 3 (Section 9) — the full data grid, distinct from Overview's old

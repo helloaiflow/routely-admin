@@ -9,20 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrencyCents as usd } from "@/lib/ui/format";
 
 import { BillingRadial, classifyFund, type Fund, type FundState } from "./billing-radial";
-
-const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+import { CreditLimitReviewCard, type Suggestion } from "./credit-limit-review";
 
 /* RIGHT card — everything about credit (Section 5). Two internal columns:
  * LEFT = the radial + its active reservations (both keyed off the same
  * ring/fund math); RIGHT = the 3x2 breakdown grid + the buffer-exceeded
- * alert + the billing-intelligence callout. The credit-limit suggestion
- * used to live inline here — it's now its own full-width strip below both
- * panels (Section 8), so it doesn't compete for space with the numbers a
- * staff member needs first. Buffer math corrected 2026-08-11 — see
- * billing-radial.tsx and app/services/fund.py: the buffer is headroom
- * BEYOND the limit, not a carve-out of it. */
+ * alert + the billing-intelligence callout + the credit-limit review card
+ * (2026-08-12: moved in from its old full-width strip, right beneath the
+ * intelligence callout, so it's compact instead of a half-empty row most
+ * of the time). Buffer math corrected 2026-08-11 — see billing-radial.tsx
+ * and app/services/fund.py: the buffer is headroom BEYOND the limit, not a
+ * carve-out of it. */
 export function CreditSummaryCard({
   fund,
   stats,
@@ -33,6 +33,30 @@ export function CreditSummaryCard({
   const [topUpAmount, setTopUpAmount] = useState("");
   const [toppingUp, setToppingUp] = useState(false);
   const [topUpMsg, setTopUpMsg] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const [computing, setComputing] = useState(false);
+
+  function loadSuggestions() {
+    fetch("/api/client/billing/credit-suggestions")
+      .then((r) => r.json())
+      .then((d) => setSuggestions(d.rows ?? []))
+      .catch(() => {
+        /* best-effort — card degrades to the empty/compute state */
+      })
+      .finally(() => setSuggestionsLoaded(true));
+  }
+  useEffect(loadSuggestions, []);
+
+  async function computeSuggestion() {
+    setComputing(true);
+    try {
+      await fetch("/api/client/billing/credit-suggestions", { method: "POST" });
+      loadSuggestions();
+    } finally {
+      setComputing(false);
+    }
+  }
 
   async function submitTopUp() {
     const cents = Math.round(Number.parseFloat(topUpAmount || "0") * 100);
@@ -109,7 +133,7 @@ export function CreditSummaryCard({
                 />
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-x-3 gap-y-2.5 text-11">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-11 sm:grid-cols-3">
                 <StatCell label="Credit limit" value={usd(fund.credit_limit_cents)} />
                 <StatCell label="Reserved (active)" value={usd(fund.reserved_cents)} />
                 <StatCell label="Unpaid ledger" value={usd(fund.unpaid_ledger_cents)} />
@@ -170,6 +194,15 @@ export function CreditSummaryCard({
                   Review payment
                 </Button>
               </div>
+            )}
+
+            {suggestionsLoaded && (
+              <CreditLimitReviewCard
+                suggestion={suggestions[0] ?? null}
+                onComputeSuggestion={computeSuggestion}
+                computing={computing}
+                onDecided={loadSuggestions}
+              />
             )}
           </div>
         </div>

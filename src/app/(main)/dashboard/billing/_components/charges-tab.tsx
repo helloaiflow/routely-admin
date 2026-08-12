@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
@@ -22,7 +23,6 @@ const TYPE_LABEL: Record<string, string> = {
   prepaid_label: "Label",
 };
 const OUTCOME_DOT: Record<string, string> = { delivered: "bg-success", failed: "bg-destructive" };
-const centsToUsd = (c: number | null) => `$${((c ?? 0) / 100).toFixed(2)}`;
 // Strips the leading "STOP_ID — " routely-api's attempt_label() already
 // prefixes onto charge_label — the Stop column already shows the ID, so
 // repeating it here would be redundant; everything after that prefix

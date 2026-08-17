@@ -9,8 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 
 import { AmountDueCard, type Overview } from "./amount-due-card";
+import { computeCyclePeriod } from "./billing-cycle";
 import type { Fund } from "./billing-radial";
 import { CreditSummaryCard, type RadialStats } from "./credit-summary-card";
+import { DailyChargesChart } from "./daily-charges-chart";
 import { RecentActivityTeaser } from "./recent-activity-teaser";
 
 type DebitFailure = {
@@ -154,6 +156,11 @@ export function OverviewTab({
           <CreditSummaryCard fund={fund} stats={radialStats(summary)} outstandingCents={data.outstanding_cents} />
         </div>
       </div>
+
+      <DailyChargesChart
+        cycleStart={computeCyclePeriod(data.cycle)?.start ?? null}
+        cycleEnd={computeCyclePeriod(data.cycle)?.end ?? null}
+      />
 
       <RecentActivityTeaser onViewAll={() => onNavigateTab("recent_activity")} />
     </div>

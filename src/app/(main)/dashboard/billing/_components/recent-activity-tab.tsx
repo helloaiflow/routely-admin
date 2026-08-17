@@ -17,40 +17,32 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
 import { cn } from "@/lib/utils";
 
-import { computeCyclePeriod } from "./billing-cycle";
 import { BillingFilterBar } from "./billing-filter-bar";
 import { ChargeDetailDrawer, type ChargeRow } from "./charge-detail-drawer";
 import { OUTCOME_DOT, TYPE_LABEL } from "./charge-detail-panel";
-import { DailyChargesChart } from "./daily-charges-chart";
 import { useBillingFilters } from "./use-billing-filters";
 
 const PAGE_SIZE = 15;
 const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
-/* Recent Activity — its own tab (Section 3), moved out of Overview.
- * Richer than the old embedded snippet: the daily chart, the SAME shared
- * filter bar/URL contract Charges uses, and the full list (not a 8-row
- * teaser). Reuses ChargeDetailDrawer — clicking a row here opens the exact
- * same detail surface Charges does. */
+/* Recent Activity — its own tab (Section 3), moved out of Overview. The SAME
+ * shared filter bar/URL contract Charges uses, and the full list (not an
+ * 8-row teaser). Reuses ChargeDetailDrawer — clicking a row here opens the
+ * exact same detail surface Charges does.
+ *
+ * The daily chart that used to open this tab MOVED to Overview (Mission item
+ * 5b, 2026-08-17) — full-width below the two cards there, in the new
+ * interactive-selector shape. It's not duplicated here: one chart, one tab,
+ * not two answering the same "how are my charges trending" question. */
 export function RecentActivityTab() {
   const filterState = useBillingFilters("attempted_at");
   const { filters, setOffset } = filterState;
 
-  const [cyclePeriod, setCyclePeriod] = useState<{ start: Date; end: Date } | null>(null);
   const [rows, setRows] = useState<ChargeRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
   const [selected, setSelected] = useState<ChargeRow | null>(null);
-
-  useEffect(() => {
-    fetch("/api/client/billing/overview")
-      .then((r) => r.json())
-      .then((d) => setCyclePeriod(computeCyclePeriod(d.cycle)))
-      .catch(() => {
-        /* best-effort — chart just shows its own error state */
-      });
-  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -80,8 +72,6 @@ export function RecentActivityTab() {
 
   return (
     <div className="space-y-4">
-      <DailyChargesChart cycleStart={cyclePeriod?.start ?? null} cycleEnd={cyclePeriod?.end ?? null} />
-
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Recent activity</CardTitle>

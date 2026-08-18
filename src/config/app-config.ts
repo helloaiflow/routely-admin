@@ -7,7 +7,7 @@ export const APP_CONFIG = {
   version: packageJson.version,
   copyright: `© ${currentYear}, Routely LLC.`,
   meta: {
-    title: "Routely — Client Portal",
-    description: "Routely client portal for managing medical courier deliveries, orders, and routes.",
+    title: "Routely — Admin Console",
+    description: "Routely staff console for operating medical courier stops, routes, tenants, and billing.",
   },
 };

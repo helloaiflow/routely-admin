@@ -9,7 +9,11 @@ export function getStripe(): Stripe {
     }
     _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: "2026-03-25.dahlia",
-      appInfo: { name: "Routely Client Portal", version: "1.0.0" },
+      // Identifies THIS app in Stripe's request logs. Must stay distinct from
+      // routely-client's own appInfo — otherwise a charge originating in the
+      // staff console is indistinguishable from a tenant-initiated one when
+      // auditing Stripe's dashboard.
+      appInfo: { name: "Routely Admin Console", version: "1.0.0" },
     });
   }
   return _stripe;

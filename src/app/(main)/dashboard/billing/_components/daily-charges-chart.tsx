@@ -82,6 +82,24 @@ export function DailyChargesChart({ cycleStart, cycleEnd }: { cycleStart: Date |
     );
   }
 
+  // No billing cycle has started yet (e.g. a brand-new trial with zero
+  // activity) — cycleStart/cycleEnd stay null forever, so without this the
+  // chart below would sit in its loading skeleton indefinitely instead of
+  // honestly saying there's nothing to chart yet.
+  if (!cycleStart || !cycleEnd) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Daily charges this cycle</CardTitle>
+        </CardHeader>
+        <CardContent className="flex h-[220px] flex-col items-center justify-center gap-1 text-center">
+          <p className="text-13 text-muted-foreground">No billing cycle yet.</p>
+          <p className="text-11 text-muted-foreground">This chart appears once your first cycle starts.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!data) {
     return (
       <Card>

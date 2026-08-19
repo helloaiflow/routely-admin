@@ -3,14 +3,6 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
-const PLAN_PRICES: Record<string, { stop: number; mile: number }> = {
-  trial: { stop: 0, mile: 0 },
-  free: { stop: 0, mile: 0 },
-  starter: { stop: 16.0, mile: 1.65 },
-  professional: { stop: 14.0, mile: 1.5 },
-  enterprise: { stop: 12.0, mile: 1.35 },
-};
-
 const SAME_DAY_FEE = 49.99;
 
 export async function POST(request: Request) {
@@ -27,7 +19,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data: row } = await supabase
     .from("tenants")
-    .select("plan_type, doc")
+    .select("plan_type, doc, billing_rates")
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
 
@@ -35,9 +27,13 @@ export async function POST(request: Request) {
 
   const tenant = (row.doc ?? {}) as Record<string, number | string | undefined>;
   const planKey = (row.plan_type ?? tenant.plan_type ?? "trial") as string;
-  const prices = PLAN_PRICES[planKey] || PLAN_PRICES.trial;
-  const pricePerStop = Number(tenant.price_per_stop) > 0 ? Number(tenant.price_per_stop) : prices.stop;
-  const pricePerMile = Number(tenant.price_per_mile) > 0 ? Number(tenant.price_per_mile) : prices.mile;
+  // Same source record_attempt() bills from — tenants.billing_rates, integer
+  // cents (package/per_mile). Previously read the legacy doc.price_per_stop/
+  // price_per_mile fields, which quoted a different number than what the
+  // ledger actually charged.
+  const rates = (row.billing_rates ?? {}) as Record<string, number>;
+  const pricePerStop = (Number(rates.package) || 0) / 100;
+  const pricePerMile = (Number(rates.per_mile) || 0) / 100;
 
   const stopsCost = stops * pricePerStop;
   const milesCost = miles * pricePerMile;

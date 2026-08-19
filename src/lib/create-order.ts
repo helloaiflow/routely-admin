@@ -1,6 +1,7 @@
 import type { Db, ObjectId } from "mongodb";
 
 import { logExternalCall } from "@/lib/api-log";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb } from "@/lib/tenant";
 
 // ─────────────────────────────────────────────────────────
@@ -250,18 +251,19 @@ export async function createOrder(tenantId: number, body: OrderBody): Promise<Cr
     updated_at: now,
   });
 
-  // 3. usage_events
-  const PLAN_PRICES: Record<string, { stop: number; mile: number }> = {
-    trial: { stop: 0, mile: 0 },
-    free: { stop: 0, mile: 0 },
-    starter: { stop: 16, mile: 1.65 },
-    professional: { stop: 14, mile: 1.5 },
-    enterprise: { stop: 12, mile: 1.35 },
-  };
+  // 3. usage_events — same source record_attempt() bills from
+  // (tenants.billing_rates, Postgres/Supabase, integer cents). `tenant`
+  // above is the legacy Mongo tenants mirror, which was never extended
+  // with billing_rates when it was introduced — fetched separately here.
   const planKey = String(tenant.plan_type || "trial");
-  const prices = PLAN_PRICES[planKey] ?? PLAN_PRICES.trial;
-  const pricePerStop = (tenant.price_per_stop as number) > 0 ? (tenant.price_per_stop as number) : prices.stop;
-  const pricePerMile = (tenant.price_per_mile as number) > 0 ? (tenant.price_per_mile as number) : prices.mile;
+  const { data: rateRow } = await getSupabaseAdmin()
+    .from("tenants")
+    .select("billing_rates")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const rates = (rateRow?.billing_rates ?? {}) as Record<string, number>;
+  const pricePerStop = (Number(rates.package) || 0) / 100;
+  const pricePerMile = (Number(rates.per_mile) || 0) / 100;
   const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const billed = String(tenant.billing_method || "prepaid") === "prepaid";
 
@@ -673,19 +675,17 @@ export async function repostStopToSpoke(
     return { status: "spoke_error" };
   } catch (err) {
     console.error("[repost] exception:", err);
-    await db
-      .collection("stops")
-      .updateOne(
-        { stop_id: stopId, tenant_id: tenantId },
-        {
-          $set: {
-            status: "draft",
-            submit_error: { at: new Date(), reason: String(err).slice(0, 300), spoke_status: null, attempt_count: 1 },
-            dispatch_status: "spoke_error",
-            updated_at: new Date(),
-          },
+    await db.collection("stops").updateOne(
+      { stop_id: stopId, tenant_id: tenantId },
+      {
+        $set: {
+          status: "draft",
+          submit_error: { at: new Date(), reason: String(err).slice(0, 300), spoke_status: null, attempt_count: 1 },
+          dispatch_status: "spoke_error",
+          updated_at: new Date(),
         },
-      );
+      },
+    );
     return { status: "spoke_error" };
   }
 }

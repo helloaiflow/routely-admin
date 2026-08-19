@@ -73,31 +73,6 @@ export const defaultOrderValues: OrderFormValues = {
   delivery_lng: undefined,
 };
 
-export const PLAN_PRICES: Record<string, { stop: number; mile: number }> = {
-  trial: { stop: 0, mile: 0 },
-  free: { stop: 0, mile: 0 },
-  starter: { stop: 16.0, mile: 1.65 },
-  professional: { stop: 14.0, mile: 1.5 },
-  enterprise: { stop: 12.0, mile: 1.35 },
-};
-
-export function computePricing(plan: string, miles: number, sameDay: boolean, stops = 2) {
-  const prices = PLAN_PRICES[plan] ?? PLAN_PRICES.trial;
-  const stopTotal = stops * prices.stop;
-  const mileTotal = miles * prices.mile;
-  const sameDayFee = sameDay ? 49.99 : 0;
-  const subtotal = stopTotal + mileTotal + sameDayFee;
-  return {
-    pricePerStop: prices.stop,
-    pricePerMile: prices.mile,
-    stops,
-    stopTotal,
-    mileTotal,
-    sameDayFee,
-    subtotal: Math.round(subtotal * 100) / 100,
-  };
-}
-
 export function estimateEta(miles: number): number {
   if (miles <= 0) return 0;
   return Math.max(15, Math.round(miles * 2.5 + 10));

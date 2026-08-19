@@ -4,7 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Activity, CalendarDays, ChevronDown, Download, FileText, LayoutDashboard, Receipt } from "lucide-react";
+import {
+  Activity,
+  CalendarDays,
+  ChevronDown,
+  Download,
+  FileText,
+  LayoutDashboard,
+  Receipt,
+  Settings,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +24,7 @@ import { ChargesTab } from "./charges-tab";
 import { InvoicesTab } from "./invoices-tab";
 import { OverviewTab } from "./overview-tab";
 import { RecentActivityTab } from "./recent-activity-tab";
+import { SettingsTab } from "./settings-tab";
 
 type HeaderData = {
   cycle: {
@@ -27,12 +37,13 @@ type HeaderData = {
   last_document: { id: number } | null;
 };
 
-export type BillingTabKey = "overview" | "charges" | "invoices" | "recent_activity";
+export type BillingTabKey = "overview" | "charges" | "invoices" | "recent_activity" | "settings";
 const TABS: Array<{ key: BillingTabKey; label: string; icon: React.ElementType }> = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "charges", label: "Charges", icon: Receipt },
   { key: "invoices", label: "Invoices", icon: FileText },
   { key: "recent_activity", label: "Recent Activity", icon: Activity },
+  { key: "settings", label: "Settings", icon: Settings },
 ];
 const VALID_TABS = new Set<BillingTabKey>(TABS.map((t) => t.key));
 
@@ -135,6 +146,7 @@ export function BillingShell() {
         {tab === "charges" && <ChargesTab />}
         {tab === "invoices" && <InvoicesTab />}
         {tab === "recent_activity" && <RecentActivityTab />}
+        {tab === "settings" && <SettingsTab />}
       </div>
     </div>
   );

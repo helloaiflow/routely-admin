@@ -7,11 +7,15 @@
  * Idempotent (insert-only by rtscan_id → safe to re-run). Mongo is READ-only
  * here and left fully intact.
  *
- * Internal / no auth (same tier as /api/data/package-scans).
+ * Internal (same tier as /api/data/package-scans) — auth: shared secret in
+ * `x-routely-internal-secret` (see @/lib/internal-auth). Previously had no
+ * auth check at all: anyone on the internet could trigger a full Mongo
+ * collection scan + Supabase upsert on demand.
  */
 
 import { NextResponse } from "next/server";
 
+import { requireInternalSecret } from "@/lib/internal-auth";
 import clientPromise from "@/lib/mongodb";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -22,6 +26,8 @@ const iso = (v: unknown) => {
 };
 
 export async function POST(req: Request) {
+  const denied = requireInternalSecret(req);
+  if (denied) return denied;
   try {
     // Optional `?since=<ISO>` cutoff: only migrate scans created on/after this
     // instant. Used after a "start from 0" reset so old test data in the Mongo

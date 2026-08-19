@@ -1,7 +1,9 @@
 /**
  * /api/data/package-scans
  *
- * Internal API used by the IVY n8n workflow (no auth — internal only).
+ * Internal API used by the IVY n8n workflow. Auth: shared secret in
+ * `x-routely-internal-secret` (see @/lib/internal-auth) — the n8n workflow
+ * must send this header on every call now; it previously had none at all.
  * MIGRATED: now writes/reads Supabase `public.ivy_scans` (was Mongo
  * `package_scans`). Same URL + response contract so the n8n workflow is
  * UNCHANGED. The old Mongo collection is left intact as a backup and is copied
@@ -17,6 +19,7 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 
+import { requireInternalSecret } from "@/lib/internal-auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 const TABLE = "ivy_scans";
@@ -59,6 +62,8 @@ function promoted(body: Record<string, unknown>): Record<string, unknown> {
 
 // ── POST — initial insert from IVY (insert-only, mirrors Mongo $setOnInsert) ──
 export async function POST(req: NextRequest) {
+  const denied = requireInternalSecret(req);
+  if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
     if (!body.rtscan_id) {
@@ -91,6 +96,8 @@ export async function POST(req: NextRequest) {
 
 // ── PATCH — update lifecycle fields by rtscan_id (merges into doc) ────────────
 export async function PATCH(req: NextRequest) {
+  const denied = requireInternalSecret(req);
+  if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const { rtscan_id, ...updates } = body;
@@ -145,6 +152,8 @@ export async function PATCH(req: NextRequest) {
 
 // ── GET — basic query for internal use ───────────────────────────────────────
 export async function GET(req: NextRequest) {
+  const denied = requireInternalSecret(req);
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const tenantId = Number(searchParams.get("tenant_id") ?? "1");

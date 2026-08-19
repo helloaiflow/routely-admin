@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 export interface DateRange {
@@ -60,7 +61,7 @@ function MiniCal({ viewYear, viewMonth, range, selecting, onDayClick, onPrev, on
   const today = sod(new Date());
 
   return (
-    <div className="w-[280px] select-none">
+    <div className="w-full select-none sm:w-[280px]">
       {/* Month nav */}
       <div className="mb-3 flex items-center justify-between px-1">
         <button type="button" onClick={onPrev} className="rounded-md p-1 hover:bg-muted transition-colors">
@@ -147,18 +148,8 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [selecting, setSelecting] = useState<"from" | "to" | null>(null);
   const [draft, setDraft]         = useState<DateRange>(value);
-  const ref = useRef<HTMLDivElement>(null);
 
   const presets = buildPresets();
-
-  // Close on outside click
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, []);
 
   function handleDayClick(d: Date) {
     if (selecting === null || selecting === "from") {
@@ -193,82 +184,80 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
     else setViewMonth(m => m + 1);
   }
 
-  const label = value.label === "Custom"
+  const label = value.label === "All time" || value.label === "Any date"
+    ? value.label
+    : value.label === "Custom"
     ? `${formatShort(value.from)} – ${formatShort(value.to)}`
     : value.label === "Today"
     ? `Today · ${formatShort(value.from)}`
     : `${formatShort(value.from)} – ${formatShort(value.to)}`;
 
   return (
-    <div ref={ref} className="relative">
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8 gap-1.5 text-xs font-medium"
-        onClick={() => setOpen(o => !o)}
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setDraft(value);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
+          <CalendarRange className="size-3.5" />
+          {label}
+        </Button>
+      </PopoverTrigger>
+      {/* Rendered via Radix's own Portal (see @/components/ui/popover), so it's
+       * mounted at document.body — escapes any ancestor's overflow-hidden
+       * (every Card in this app clips overflow by default) instead of being
+       * silently clipped by it regardless of this content's own width. The
+       * previous version rendered inline with a hand-rolled max-width, which
+       * fixed a real but secondary bug (a dead mobile-only max-width leaking
+       * into the desktop layout) without addressing the actual clipping
+       * cause: the Card ancestor's overflow-hidden. Stacked (flex-col) below
+       * sm so the ~433px combined width of the presets column + calendar
+       * never has to fit inside a 390px viewport. */}
+      <PopoverContent
+        align="end"
+        className="z-50 flex w-auto max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl p-0 sm:max-w-none sm:flex-row"
       >
-        <CalendarRange className="size-3.5" />
-        {label}
-      </Button>
-
-      {open && (
-        <>
-          {/* Mobile: full-screen overlay backdrop */}
-          <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
-
-          {/* Popover — centered fixed on mobile, absolute right-0 on sm+ */}
-          <div className={cn(
-            "z-50 flex overflow-hidden rounded-xl border border-border bg-popover shadow-lg ring-1 ring-black/5",
-            // Mobile: fixed, centered horizontally, capped so it doesn't span
-            // an absurdly wide viewport in portrait.
-            "fixed left-1/2 -translate-x-1/2 top-[60px] w-[calc(100vw-24px)] max-w-[420px]",
-            // sm+: absolute, aligned to right of trigger, sized to its own
-            // content (presets column + calendar together run ~433px —
-            // the mobile max-w-[420px] above was clipping them via the
-            // overflow-hidden on this same element; drop the cap entirely
-            // here instead of raising it by a guessed amount).
-            "sm:absolute sm:right-0 sm:top-10 sm:w-auto sm:max-w-none sm:translate-x-0 sm:left-auto",
-          )}>
-            {/* Presets */}
-            <div className="flex w-32 flex-col gap-0.5 border-r border-border bg-muted/20 p-2">
-              {presets.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => applyPreset(p)}
-                  className={cn(
-                    "rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted",
-                    value.label === p.label
-                      ? "bg-muted font-semibold text-foreground"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Calendar */}
-            <div className="p-3">
-              <MiniCal
-                viewYear={viewYear}
-                viewMonth={viewMonth}
-                range={draft}
-                selecting={selecting}
-                onDayClick={handleDayClick}
-                onPrev={prevMonth}
-                onNext={nextMonth}
-              />
-              {selecting === "to" && (
-                <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Now select the end date
-                </p>
+        {/* Presets */}
+        <div className="flex w-full flex-col gap-0.5 border-b border-border bg-muted/20 p-2 sm:w-32 sm:border-r sm:border-b-0">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => applyPreset(p)}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted",
+                value.label === p.label
+                  ? "bg-muted font-semibold text-foreground"
+                  : "text-muted-foreground",
               )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Calendar */}
+        <div className="p-3">
+          <MiniCal
+            viewYear={viewYear}
+            viewMonth={viewMonth}
+            range={draft}
+            selecting={selecting}
+            onDayClick={handleDayClick}
+            onPrev={prevMonth}
+            onNext={nextMonth}
+          />
+          {selecting === "to" && (
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Now select the end date
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -79,10 +79,20 @@ export function BillingFilterBar({
         </SelectContent>
       </Select>
       <DateRangePicker
+        // Was labeling this "Today" whenever no date filter was set at all —
+        // filters.dateFrom/dateTo stayed null, so buildParams (charges-tab.tsx)
+        // never actually added date_from/date_to to the request: the button
+        // claimed "Today" while the query and its totals were genuinely
+        // unfiltered/all-time. Found live: the table showed rows from
+        // yesterday, the header showed all-time totals, and only a request
+        // for "Today" that a user explicitly re-clicks returns the (correct)
+        // zero rows — three different results all sitting under one label.
+        // "All time" here is honest about what's actually being queried
+        // until the user picks a real range.
         value={{
           from: filters.dateFrom ?? new Date(),
           to: filters.dateTo ?? new Date(),
-          label: filters.dateFrom || filters.dateTo ? "Custom" : "Today",
+          label: filters.dateFrom || filters.dateTo ? "Custom" : "All time",
         }}
         onChange={(r) => setDateRange(r)}
       />

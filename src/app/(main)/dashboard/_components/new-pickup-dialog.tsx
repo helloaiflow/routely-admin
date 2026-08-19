@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatPhoneInput } from "@/lib/format";
 
 import {
   ArrowRight,
@@ -32,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { formatPhoneInput } from "@/lib/format";
 
 type Step = "form" | "price" | "payment" | "success";
 
@@ -76,10 +76,12 @@ type OrderResult = {
 const PACKAGE_TYPES = [
   { id: "rx", label: "\u{1F48A} Prescription" },
   { id: "specimen", label: "\u{1F9EA} Lab Specimen" },
+  { id: "blood", label: "\u{1FA78} Blood" },
   { id: "medical", label: "\u{1F3E5} Medical Supply" },
   { id: "cold", label: "\u2744\uFE0F Cold Package" },
   { id: "urgent", label: "\u26A1 Urgent" },
   { id: "document", label: "\u{1F4CB} Document" },
+  { id: "internal", label: "\u{1F3E2} Internal" },
 ];
 
 function nextBusinessDay(from: Date): Date {
@@ -329,6 +331,20 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
   };
 
   const pkgLabel = PACKAGE_TYPES.find((t) => t.id === form.package_type)?.label ?? form.package_type;
+  const deliveryTypeLabel =
+    form.delivery_type === "same_day"
+      ? "Same Day"
+      : form.delivery_type === "next_day"
+        ? "Next Day"
+        : form.delivery_type === "on_demand"
+          ? "On-Demand"
+          : "Custom";
+  const deliveryDayLabel =
+    form.delivery_type === "same_day" || form.delivery_type === "on_demand"
+      ? "Today"
+      : form.delivery_type === "next_day"
+        ? "Tomorrow"
+        : form.delivery_date;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -549,7 +565,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                   <Label className="text-xs">
                     Delivery date <span className="text-destructive">*</span>
                   </Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <button
                       type="button"
                       disabled={!sameDayAvailable}
@@ -585,6 +601,18 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                       <span className="font-semibold text-xs">Custom</span>
                       <span className="text-10 text-muted-foreground">Pick a date</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set("delivery_type", "on_demand");
+                        set("delivery_date", fmtDate(nowET));
+                      }}
+                      className={`flex flex-col items-center gap-0.5 rounded-lg border p-2.5 text-center transition-all ${form.delivery_type === "on_demand" ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500 dark:bg-blue-950/40" : "hover:border-muted-foreground/40 hover:bg-accent"}`}
+                    >
+                      <span className="text-base">{"\u{1F3CE}\uFE0F"}</span>
+                      <span className="font-semibold text-xs">On-Demand</span>
+                      <span className="text-10 text-muted-foreground">Per mile</span>
+                    </button>
                   </div>
                   {form.delivery_type === "custom" && (
                     <Input
@@ -603,11 +631,10 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                   )}
                   {form.delivery_date && form.delivery_type !== "custom" && (
                     <p className="pl-1 text-11 text-muted-foreground">
-                      {"\u{1F4C6}"} {form.delivery_type === "same_day" ? "Today" : "Tomorrow"} &middot;{" "}
-                      {form.delivery_date}
+                      {"\u{1F4C6}"} {deliveryDayLabel} &middot; {form.delivery_date}
                     </p>
                   )}
-                  {form.delivery_type !== "same_day" && sameDayAvailable && (
+                  {form.delivery_type !== "same_day" && form.delivery_type !== "on_demand" && sameDayAvailable && (
                     <p className="pl-1 text-10 text-amber-600">{"\u23F0"} Same day available until 2:00 PM ET</p>
                   )}
                   {errors.delivery_date && <p className="text-10 text-destructive">{errors.delivery_date}</p>}
@@ -700,12 +727,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Delivery</span>
                   <span>
-                    {form.delivery_type === "same_day"
-                      ? "Same Day"
-                      : form.delivery_type === "next_day"
-                        ? "Next Day"
-                        : "Custom"}{" "}
-                    &middot; {form.delivery_date}
+                    {deliveryTypeLabel} &middot; {form.delivery_date}
                   </span>
                 </div>
               </div>
@@ -868,12 +890,7 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 <div className="flex items-center justify-between px-3 py-2.5">
                   <span className="text-muted-foreground">Delivery</span>
                   <span>
-                    {form.delivery_type === "same_day"
-                      ? "Today"
-                      : form.delivery_type === "next_day"
-                        ? "Tomorrow"
-                        : form.delivery_date}{" "}
-                    &middot; {form.delivery_date}
+                    {deliveryDayLabel} &middot; {form.delivery_date}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2.5">

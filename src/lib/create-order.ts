@@ -231,7 +231,7 @@ export async function createOrder(tenantId: number, body: OrderBody): Promise<Cr
       height_in: 2,
     },
     service: {
-      type: deliveryType === "same_day" ? "same_day" : "local",
+      type: deliveryType === "same_day" ? "same_day" : deliveryType === "on_demand" ? "on_demand" : "local",
       date: deliveryDate || null,
       collect_payment: Boolean(body.collect_cod),
       cod_amount: body.collect_cod ? parseFloat(String(body.collect_amount || "0")) : 0,

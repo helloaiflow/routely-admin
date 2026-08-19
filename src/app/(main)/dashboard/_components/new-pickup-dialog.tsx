@@ -76,12 +76,10 @@ type OrderResult = {
 const PACKAGE_TYPES = [
   { id: "rx", label: "\u{1F48A} Prescription" },
   { id: "specimen", label: "\u{1F9EA} Lab Specimen" },
-  { id: "blood", label: "\u{1FA78} Blood" },
   { id: "medical", label: "\u{1F3E5} Medical Supply" },
   { id: "cold", label: "\u2744\uFE0F Cold Package" },
   { id: "urgent", label: "\u26A1 Urgent" },
   { id: "document", label: "\u{1F4CB} Document" },
-  { id: "internal", label: "\u{1F3E2} Internal" },
 ];
 
 function nextBusinessDay(from: Date): Date {

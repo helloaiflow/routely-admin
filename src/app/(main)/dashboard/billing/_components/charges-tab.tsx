@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
@@ -53,35 +53,54 @@ export function ChargesTab() {
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
-  function buildParams(includePagination: boolean) {
-    const p = new URLSearchParams();
-    if (includePagination) {
-      p.set("limit", String(PAGE_SIZE));
-      p.set("offset", String(filters.offset));
-    }
-    if (filters.type !== "all") p.set("resolved_type", filters.type);
-    if (filters.status !== "all") p.set("status", filters.status);
-    if (filters.search.trim()) p.set("search", filters.search.trim());
-    if (filters.dateFrom) p.set("date_from", toISODate(filters.dateFrom));
-    if (filters.dateTo) p.set("date_to", toISODate(filters.dateTo));
-    if (filters.sortBy) p.set("sort_by", filters.sortBy === "status" ? "status" : filters.sortBy);
-    p.set("sort_dir", filters.sortDir);
-    return p;
-  }
+  // Was a plain function redefined on every render — the effect below
+  // depended on it directly, so its identity never stabilized and the
+  // effect re-fired on every render (including the ones ITS OWN setState
+  // calls caused), refetching in an infinite loop. Overlapping, uncancelled
+  // requests could then resolve out of order and let a stale response
+  // overwrite a newer one (2026-08-19, found live: the header showed
+  // unfiltered all-time totals while the table — set from the SAME
+  // response object, just a later-arriving one — showed the correctly
+  // filtered zero rows). Memoizing on `filters` (itself stable via
+  // useBillingFilters' own useMemo) fixes both: the effect now only re-runs
+  // when filters actually change.
+  const buildParams = useCallback(
+    (includePagination: boolean) => {
+      const p = new URLSearchParams();
+      if (includePagination) {
+        p.set("limit", String(PAGE_SIZE));
+        p.set("offset", String(filters.offset));
+      }
+      if (filters.type !== "all") p.set("resolved_type", filters.type);
+      if (filters.status !== "all") p.set("status", filters.status);
+      if (filters.search.trim()) p.set("search", filters.search.trim());
+      if (filters.dateFrom) p.set("date_from", toISODate(filters.dateFrom));
+      if (filters.dateTo) p.set("date_to", toISODate(filters.dateTo));
+      if (filters.sortBy) p.set("sort_by", filters.sortBy === "status" ? "status" : filters.sortBy);
+      p.set("sort_dir", filters.sortDir);
+      return p;
+    },
+    [filters],
+  );
 
   useEffect(() => {
     setLoading(true);
     setErrored(false);
-    fetch(`/api/client/billing/ledger?${buildParams(true).toString()}`)
+    const ctrl = new AbortController();
+    fetch(`/api/client/billing/ledger?${buildParams(true).toString()}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
         setRows(d.rows ?? []);
         setTotal(d.total ?? 0);
         setTotalAmountCents(d.total_amount_cents ?? 0);
+        setLoading(false);
       })
-      .catch(() => setErrored(true))
-      .finally(() => setLoading(false));
-    // biome-ignore lint/correctness/useExhaustiveDependencies: buildParams closes over `filters`, already a dependency of this effect via the object below
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        setErrored(true);
+        setLoading(false);
+      });
+    return () => ctrl.abort();
   }, [buildParams]);
 
   async function handleExport() {

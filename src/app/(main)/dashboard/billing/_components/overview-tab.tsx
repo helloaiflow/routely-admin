@@ -91,12 +91,30 @@ export function OverviewTab({
       .catch(() => {
         /* best-effort — cards below degrade to their own skeleton/empty state */
       });
+    loadSummary();
+  }
+
+  // "Charged this month" / "Monthly average" / "Projected end of cycle" all
+  // depend on this one fetch — a single failure (a cold Vercel function
+  // start, a momentary network blip) used to leave all three permanently at
+  // "—" with a static banner and no way to recover short of a full page
+  // reload. Retries twice with a short backoff before giving up; the banner
+  // (still shown on final failure) now also offers a manual retry.
+  function loadSummary(attempt = 0) {
+    setSummaryErrored(false);
     fetch("/api/client/billing/summary")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setSummary)
-      .catch(() => setSummaryErrored(true));
+      .catch(() => {
+        if (attempt < 2) {
+          setTimeout(() => loadSummary(attempt + 1), 800 * (attempt + 1));
+        } else {
+          setSummaryErrored(true);
+        }
+      });
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount — load/loadSummary are recreated every render (not memoized), so listing loadSummary here would re-fire this effect on every render instead of just mount
   useEffect(load, []);
 
   if (loading) {
@@ -141,9 +159,18 @@ export function OverviewTab({
 
       {summaryErrored && (
         <Card className="border-warning/40 bg-warning/5">
-          <CardContent className="py-2.5 text-11 text-warning">
-            Usage trend (current usage / monthly average / projected end of cycle) couldn't load — the rest of this page
-            is unaffected.
+          <CardContent className="flex items-center justify-between gap-3 py-2.5 text-11 text-warning">
+            <span>
+              Usage trend (current usage / monthly average / projected end of cycle) couldn't load after 3 tries — the
+              rest of this page is unaffected.
+            </span>
+            <button
+              type="button"
+              onClick={() => loadSummary()}
+              className="shrink-0 whitespace-nowrap underline underline-offset-2 hover:no-underline"
+            >
+              Try again
+            </button>
           </CardContent>
         </Card>
       )}

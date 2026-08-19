@@ -282,7 +282,7 @@ export function SettingsTab() {
                   <NativeSelect
                     value={condKey}
                     onChange={(e) => updateRuleKey(rule._key, e.target.value as RuleKey)}
-                    className="w-32"
+                    className="w-40"
                     size="sm"
                   >
                     {RULE_KEYS.map((k) => (

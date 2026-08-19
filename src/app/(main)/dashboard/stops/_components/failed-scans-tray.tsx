@@ -29,15 +29,22 @@ interface FailedScansTrayProps {
 export default function FailedScansTray({ open, onOpenChange, onResolve, onCountChange }: FailedScansTrayProps) {
   const [items, setItems] = useState<FailedScan[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const list = await fetchFailedScans();
-    setItems(list);
-    onCountChange?.(list.length);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const list = await fetchFailedScans();
+      setItems(list);
+      onCountChange?.(list.length);
+    } catch {
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [onCountChange]);
 
   // Re-fetch every time the tray opens — the server is the source of truth.
@@ -109,6 +116,20 @@ export default function FailedScansTray({ open, onOpenChange, onResolve, onCount
               <Loader2 className="size-5 animate-spin" />
               <p className="text-xs">Loading…</p>
             </div>
+          ) : errored ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-destructive/10">
+                <AlertCircle className="size-6 text-destructive" />
+              </div>
+              <p className="font-medium text-13 text-foreground">Couldn't load failed scans</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="text-11 text-primary underline underline-offset-2 hover:no-underline"
+              >
+                Try again
+              </button>
+            </div>
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10">
@@ -144,9 +165,7 @@ export default function FailedScansTray({ open, onOpenChange, onResolve, onCount
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-13 text-foreground">
-                        {item.name || "Unreadable name"}
-                      </p>
+                      <p className="truncate font-medium text-13 text-foreground">{item.name || "Unreadable name"}</p>
                       <p className="truncate text-11 text-muted-foreground/70">
                         {[item.phone, item.address].filter(Boolean).join(" · ") || "No data extracted"}
                       </p>
@@ -199,6 +218,7 @@ export default function FailedScansTray({ open, onOpenChange, onResolve, onCount
           </button>
           {/* biome-ignore lint/a11y/useAltText: expanded failed label */}
           {/* biome-ignore lint/performance/noImgElement: stored base64 data URL */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick here only stops the backdrop-close click from bubbling — not an interactive action needing a keyboard equivalent */}
           <img
             src={lightbox}
             className="max-h-[88svh] max-w-full rounded-lg object-contain shadow-2xl"

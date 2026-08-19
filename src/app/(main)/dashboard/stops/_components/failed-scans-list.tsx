@@ -34,6 +34,7 @@ interface FailedScansListProps {
 export default function FailedScansList({ refreshKey = 0, onResolve, onCountChange }: FailedScansListProps) {
   const [items, setItems] = useState<FailedScan[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -41,11 +42,17 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
 
   const load = useCallback(async () => {
     setLoading(true);
-    const list = await fetchFailedScans();
-    setItems(list);
-    setSelected(new Set());
-    onCountChange?.(list.length);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const list = await fetchFailedScans();
+      setItems(list);
+      setSelected(new Set());
+      onCountChange?.(list.length);
+    } catch {
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [onCountChange]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refetch on mount + each refreshKey change
@@ -105,8 +112,16 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
       <div className="custom-scroll flex-1 overflow-y-auto px-4 pb-6 pt-2">
         <div className="mb-3 flex items-center justify-between">
           {items.length > 0 ? (
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground/70">
-              <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
+            <label
+              htmlFor="failed-scans-select-all"
+              className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground/70"
+            >
+              <Checkbox
+                id="failed-scans-select-all"
+                checked={allSelected}
+                onCheckedChange={toggleSelectAll}
+                aria-label="Select all"
+              />
               {selected.size > 0 ? `${selected.size} selected` : "Select all"}
             </label>
           ) : (
@@ -139,6 +154,20 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
           <div className="flex flex-col items-center justify-center gap-2 py-20 text-muted-foreground/50">
             <Loader2 className="size-5 animate-spin" />
             <p className="text-xs">Loading…</p>
+          </div>
+        ) : errored ? (
+          <div className="flex flex-col items-center justify-center gap-2.5 py-20 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-destructive/10">
+              <AlertCircle className="size-6 text-destructive" />
+            </div>
+            <p className="font-medium text-13 text-foreground">Couldn't load failed scans</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="text-11 text-primary underline underline-offset-2 hover:no-underline"
+            >
+              Try again
+            </button>
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2.5 py-20 text-center">
@@ -237,6 +266,7 @@ export default function FailedScansList({ refreshKey = 0, onResolve, onCountChan
           </button>
           {/* biome-ignore lint/a11y/useAltText: expanded failed label */}
           {/* biome-ignore lint/performance/noImgElement: stored base64 data URL */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick here only stops the backdrop-close click from bubbling — not an interactive action needing a keyboard equivalent */}
           <img
             src={lightbox}
             className="max-h-[88svh] max-w-full rounded-lg object-contain shadow-2xl"

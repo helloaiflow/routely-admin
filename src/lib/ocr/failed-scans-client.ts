@@ -101,15 +101,15 @@ export async function fetchFailedScansCount(): Promise<number> {
   }
 }
 
+/* Throws on a genuine fetch/network failure rather than returning [] — an
+ * empty array here used to be indistinguishable from "server unreachable,"
+ * so a real outage rendered the caller's list as a cheerful "All caught up"
+ * instead of an error. Callers must catch and show an honest error state. */
 export async function fetchFailedScans(): Promise<FailedScan[]> {
-  try {
-    const res = await fetch("/api/client/failed-scans");
-    if (!res.ok) return [];
-    const d = (await res.json()) as { items?: FailedScan[] };
-    return d.items ?? [];
-  } catch {
-    return [];
-  }
+  const res = await fetch("/api/client/failed-scans");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = (await res.json()) as { items?: FailedScan[] };
+  return d.items ?? [];
 }
 
 export async function resolveFailedScan(id: string, status: "resolved" | "discarded"): Promise<boolean> {

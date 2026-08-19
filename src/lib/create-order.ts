@@ -1,7 +1,6 @@
 import type { Db, ObjectId } from "mongodb";
 
 import { logExternalCall } from "@/lib/api-log";
-import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb } from "@/lib/tenant";
 
 // ─────────────────────────────────────────────────────────
@@ -250,61 +249,6 @@ export async function createOrder(tenantId: number, body: OrderBody): Promise<Cr
     created_at: now,
     updated_at: now,
   });
-
-  // 3. usage_events — same source record_attempt() bills from
-  // (tenants.billing_rates, Postgres/Supabase, integer cents). `tenant`
-  // above is the legacy Mongo tenants mirror, which was never extended
-  // with billing_rates when it was introduced — fetched separately here.
-  const planKey = String(tenant.plan_type || "trial");
-  const { data: rateRow } = await getSupabaseAdmin()
-    .from("tenants")
-    .select("billing_rates")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  const rates = (rateRow?.billing_rates ?? {}) as Record<string, number>;
-  const pricePerStop = (Number(rates.package) || 0) / 100;
-  const pricePerMile = (Number(rates.per_mile) || 0) / 100;
-  const billingPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const billed = String(tenant.billing_method || "prepaid") === "prepaid";
-
-  await db.collection("usage_events").insertMany([
-    {
-      tenant_id: tenantId,
-      rtscan_id,
-      rtstop_id,
-      tracking_number,
-      event_type: "stop",
-      quantity: stops,
-      unit_price: pricePerStop,
-      amount: stops * pricePerStop,
-      billing_method: tenant.billing_method,
-      billing_period: billingPeriod,
-      plan_type: planKey,
-      billed,
-      stripe_invoice_id: null,
-      source: "client_portal",
-      event_date: now,
-      created_at: now,
-    },
-    {
-      tenant_id: tenantId,
-      rtscan_id,
-      rtstop_id,
-      tracking_number,
-      event_type: "mile",
-      quantity: actualMiles,
-      unit_price: pricePerMile,
-      amount: actualMiles * pricePerMile,
-      billing_method: tenant.billing_method,
-      billing_period: billingPeriod,
-      plan_type: planKey,
-      billed,
-      stripe_invoice_id: null,
-      source: "client_portal",
-      event_date: now,
-      created_at: now,
-    },
-  ]);
 
   // 4. Update tenant stats
   await db.collection("tenants").updateOne(

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { type CreateOrderResult, createOrder, fireN8nBackup, type OrderBody } from "@/lib/create-order";
+import { type CreateOrderResult, createOrder, fireN8nBackup, genTracking, type OrderBody } from "@/lib/create-order";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
+
+const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
+const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
 
 async function dispatchOrder(tenantId: number, body: Record<string, unknown>): Promise<Partial<CreateOrderResult>> {
   try {
@@ -39,7 +42,29 @@ export async function POST(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { stops, miles, same_day_fee } = body as { stops: number; miles: number; same_day_fee?: number };
+  const {
+    stops,
+    miles,
+    same_day_fee,
+    package_type,
+    delivery_type,
+    pickup_address,
+    delivery_address,
+    delivery_city,
+    delivery_state,
+    delivery_zip,
+  } = body as {
+    stops: number;
+    miles: number;
+    same_day_fee?: number;
+    package_type?: string;
+    delivery_type?: string;
+    pickup_address?: string;
+    delivery_address?: string;
+    delivery_city?: string;
+    delivery_state?: string;
+    delivery_zip?: string;
+  };
 
   const supabase = getSupabaseAdmin();
   const { data: tenantRow } = await supabase
@@ -56,9 +81,45 @@ export async function POST(request: Request) {
   const pricePerMile = (Number(rates.per_mile) || 0) / 100;
   const totalDollars = stops * pricePerStop + miles * pricePerMile + (same_day_fee || 0);
 
+  // Reserve/Charge/Release + mileage-precompute (2026-08-19): this route
+  // creates a stop directly (no draft step), so it never went through
+  // POST /v1/billing/reservations at all — the gap that made
+  // mileage-precompute-with-refusal unsafe to ship in isolation (see the
+  // design report). Mint the stop_id here, reserve against it BEFORE
+  // dispatch, then hand the SAME id to createOrder so the real stop is
+  // created under the id the reservation is keyed to.
+  const stopId = genTracking();
+  const reserveDoc = {
+    stop_type: "delivery",
+    service: {
+      type: delivery_type === "on_demand" ? "on_demand" : delivery_type === "same_day" ? "same_day" : "local",
+    },
+    package: { type: package_type },
+    pickup_address,
+    address: { street: delivery_address, city: delivery_city, state: delivery_state, zip: delivery_zip },
+  };
+  let reserveResp: Response;
+  try {
+    reserveResp = await fetch(`${FASTAPI_BASE}/v1/billing/reservations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+      body: JSON.stringify({ tenant_id: ctx.tenantId, stop_id: stopId, doc: reserveDoc }),
+    });
+  } catch {
+    return NextResponse.json({ error: "Billing service unreachable" }, { status: 502 });
+  }
+  if (reserveResp.status === 402) {
+    const err = await reserveResp.json().catch(() => ({}));
+    return NextResponse.json({ error: err.error || "insufficient_funds", detail: err.detail ?? err }, { status: 402 });
+  }
+  if (!reserveResp.ok) {
+    return NextResponse.json({ error: "Reservation failed" }, { status: 502 });
+  }
+
   const result = await dispatchOrder(ctx.tenantId, {
     ...body,
     tenant_id: ctx.tenantId,
+    tracking_id: stopId,
     payment_status: "paid",
     total_amount: totalDollars,
   });

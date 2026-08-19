@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type BillingType = "package" | "miles" | "on_demand";
 type RuleKey = "stop_type" | "service_type" | "package_type";
@@ -19,6 +20,19 @@ type DraftRule = Rule & { _key: string };
 
 const TYPES: BillingType[] = ["package", "miles", "on_demand"];
 const RULE_KEYS: RuleKey[] = ["stop_type", "service_type", "package_type"];
+
+/* The rule VALUE used to be free text — the one field actually deciding
+ * whether a rule fires, with no constraint at all. A typo (e.g. "specimin")
+ * would silently never match: the rule never fires, the stop bills at
+ * whatever the default/next rule resolves to instead, frozen permanently,
+ * with no error anywhere — exactly the silent-money failure class this
+ * whole billing project exists to eliminate. Constrained to the real,
+ * currently-used enum per key instead. */
+const RULE_VALUE_OPTIONS: Record<RuleKey, string[]> = {
+  stop_type: ["delivery", "pickup", "dropoff", "return"],
+  service_type: ["local", "same_day", "on_demand"],
+  package_type: ["rx", "specimen", "medical", "cold", "urgent", "document"],
+};
 
 /* Same set PATCH /api/client/billing/rates enforces server-side (see that
  * route's TYPES/RULE_KEYS) — kept in lockstep intentionally rather than
@@ -102,14 +116,21 @@ export function SettingsTab() {
   }
 
   function addRule() {
-    // biome-ignore lint/suspicious/noThenProperty: `then` is the exact field name billing_rules stores and PATCH /api/client/billing/rates validates — not a thenable.
-    setRules((rs) => [...rs, { if: { service_type: "" }, then: "package", _key: crypto.randomUUID() }]);
+    setRules((rs) => [
+      ...rs,
+      // biome-ignore lint/suspicious/noThenProperty: `then` is the exact field name billing_rules stores and PATCH /api/client/billing/rates validates — not a thenable.
+      { if: { service_type: RULE_VALUE_OPTIONS.service_type[0] }, then: "package", _key: crypto.randomUUID() },
+    ]);
   }
   function removeRule(key: string) {
     setRules((rs) => rs.filter((r) => r._key !== key));
   }
   function updateRuleKey(key: string, ruleKey: RuleKey) {
-    setRules((rs) => rs.map((r) => (r._key === key ? { ...r, if: { [ruleKey]: Object.values(r.if)[0] ?? "" } } : r)));
+    // Reset to the new key's first valid value rather than carrying over the
+    // old key's value — a package_type value like "specimen" left sitting
+    // under service_type would be exactly the kind of silently-invalid state
+    // this form exists to prevent.
+    setRules((rs) => rs.map((r) => (r._key === key ? { ...r, if: { [ruleKey]: RULE_VALUE_OPTIONS[ruleKey][0] } } : r)));
   }
   function updateRuleValue(key: string, value: string) {
     setRules((rs) =>
@@ -250,6 +271,8 @@ export function SettingsTab() {
             {rules.map((rule) => {
               const condKey = (Object.keys(rule.if)[0] as RuleKey) ?? "service_type";
               const value = rule.if[condKey] ?? "";
+              const knownValues = RULE_VALUE_OPTIONS[condKey];
+              const isUnknownValue = value.length > 0 && !knownValues.includes(value);
               return (
                 <div
                   key={rule._key}
@@ -269,12 +292,21 @@ export function SettingsTab() {
                     ))}
                   </NativeSelect>
                   <span className="text-11 text-muted-foreground">is</span>
-                  <Input
+                  <NativeSelect
                     value={value}
                     onChange={(e) => updateRuleValue(rule._key, e.target.value)}
-                    placeholder="e.g. specimen"
-                    className="h-8 w-36 text-12"
-                  />
+                    className={cn("w-36", isUnknownValue && "border-destructive text-destructive")}
+                    size="sm"
+                  >
+                    {isUnknownValue && (
+                      <NativeSelectOption value={value}>{value} (not a known value)</NativeSelectOption>
+                    )}
+                    {knownValues.map((v) => (
+                      <NativeSelectOption key={v} value={v}>
+                        {v}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                   <span className="text-11 text-muted-foreground">then bill as</span>
                   <NativeSelect
                     value={rule.then}

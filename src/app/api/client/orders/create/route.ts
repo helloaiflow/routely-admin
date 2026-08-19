@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { logExternalCall } from "@/lib/api-log";
-import { fireN8nBackup, type OrderBody } from "@/lib/create-order";
+import { fireN8nBackup, genTracking, type OrderBody } from "@/lib/create-order";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 // Member-system Phase 5: the actor reference stamped on created stops.
@@ -94,6 +94,50 @@ export async function POST(request: Request) {
   if (!deliveryCity) return NextResponse.json({ ok: false, error: "Delivery city is required" }, { status: 400 });
   if (!deliveryZip) return NextResponse.json({ ok: false, error: "Delivery zip code is required" }, { status: 400 });
 
+  // Reserve/Charge/Release + mileage-precompute (2026-08-19): this route used
+  // to POST straight to FastAPI's /v1/stops with no reservation call at all —
+  // a third stop-creation path (alongside draft-stops and /pay, both already
+  // wired) that bypassed the pre-dispatch fund check AND the
+  // cannot_compute_miles hard refusal. Mint the stop_id here (reuse a
+  // pre-supplied tracking_id if the caller already has one, e.g. a
+  // preprinted label), reserve against it BEFORE dispatch, then hand the
+  // SAME id to FastAPI so the real stop is created under the id the
+  // reservation is keyed to — the same pattern already used by /pay.
+  const deliveryTypeRaw = String(body.delivery_type ?? "next_day");
+  const serviceType =
+    deliveryTypeRaw === "on_demand" ? "on_demand" : deliveryTypeRaw === "same_day" ? "same_day" : "local";
+  const providedTrackingId = (body as Record<string, unknown>).tracking_id
+    ? String((body as Record<string, unknown>).tracking_id)
+    : "";
+  const stopId = providedTrackingId || genTracking();
+  const reserveDoc = {
+    stop_type: stopType,
+    service: { type: serviceType },
+    package: { type: packageType },
+    pickup_address: pickupAddr,
+    address: { street: deliveryAddr, city: deliveryCity, state: deliveryState, zip: deliveryZip },
+  };
+  let reserveResp: Response;
+  try {
+    reserveResp = await fetch(`${FASTAPI_BASE}/v1/billing/reservations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+      body: JSON.stringify({ tenant_id: tenantId, stop_id: stopId, doc: reserveDoc }),
+    });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Billing service unreachable" }, { status: 502 });
+  }
+  if (reserveResp.status === 402) {
+    const err = await reserveResp.json().catch(() => ({}));
+    return NextResponse.json(
+      { ok: false, error: err.detail || err.error || "insufficient_funds", detail: err.detail ?? err },
+      { status: 402 },
+    );
+  }
+  if (!reserveResp.ok) {
+    return NextResponse.json({ ok: false, error: "Reservation failed" }, { status: 502 });
+  }
+
   try {
     // FastAPI expects nested objects — confirmed working with 200 response
     const fastapiRes = await fetch(`${FASTAPI_BASE}/v1/stops/`, {
@@ -117,7 +161,17 @@ export async function POST(request: Request) {
           type: packageType,
           notes: String(body.notes ?? "").trim() || null,
         },
+        // `type` here is what FastAPI persists as doc.service.type (the ONLY
+        // field name it renames from — see CreateStopInput/create_stop) —
+        // the same value just reserved above, so reservation-time and
+        // persisted-doc billing resolution can never disagree. A prior
+        // version of this route sent a flat top-level `delivery_type` field
+        // instead, which CreateStopInput has no matching field for and
+        // Pydantic silently dropped — every stop through this route was
+        // persisting doc.service.type="local" (the schema default)
+        // regardless of what was actually selected.
         delivery: {
+          type: serviceType,
           address: deliveryAddr.toUpperCase(),
           city: deliveryCity.toUpperCase(),
           state: deliveryState.toUpperCase(),
@@ -155,14 +209,12 @@ export async function POST(request: Request) {
         requires_signature: Boolean(body.requires_signature),
         collect_cod: Boolean(body.collect_cod),
         collect_amount: String(body.collect_amount ?? "0"),
-        delivery_type: String(body.delivery_type ?? "next_day"),
         delivery_date: String(body.delivery_date ?? "").trim() || null,
         rx_number: String(body.rx_number ?? "").trim() || null,
-        // Forward preprinted RTL to FastAPI when provided. When absent,
-        // FastAPI generates its own delivery stop_id.
-        tracking_id: (body as Record<string, unknown>).tracking_id
-          ? String((body as Record<string, unknown>).tracking_id)
-          : undefined,
+        // Always the id reserved above — either a preprinted RTL the caller
+        // supplied, or the one minted for this reservation — never absent,
+        // so the reservation and the real stop always share one id.
+        tracking_id: stopId,
         // Idempotency key — FastAPI uses (tenant_id, created_from_draft_id,
         // stop_type) to dedupe pickup + delivery siblings on retry.
         created_from_draft_id: (body as Record<string, unknown>).created_from_draft_id
@@ -233,9 +285,7 @@ export async function POST(request: Request) {
       // PG→Mongo mirror, which lags under STOPS_AUTHORITY=supabase and produced FALSE
       // "not accepted by Spoke" verdicts on stops Spoke actually accepted.
       const deliverySpoke =
-        (((data.delivery as Record<string, unknown> | null) ?? null)?.spoke as
-          | Record<string, unknown>
-          | null) ?? null;
+        (((data.delivery as Record<string, unknown> | null) ?? null)?.spoke as Record<string, unknown> | null) ?? null;
       const spokeStopId = (deliverySpoke?.stop_id as string | undefined) ?? null;
       const spokePosted = deliverySpoke?.posted === true;
       const spokeAccepted = String(data.status ?? "") !== "draft";

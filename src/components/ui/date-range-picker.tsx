@@ -219,10 +219,15 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
           {/* Popover — centered fixed on mobile, absolute right-0 on sm+ */}
           <div className={cn(
             "z-50 flex overflow-hidden rounded-xl border border-border bg-popover shadow-lg ring-1 ring-black/5",
-            // Mobile: fixed, centered horizontally
+            // Mobile: fixed, centered horizontally, capped so it doesn't span
+            // an absurdly wide viewport in portrait.
             "fixed left-1/2 -translate-x-1/2 top-[60px] w-[calc(100vw-24px)] max-w-[420px]",
-            // sm+: absolute, aligned to right of trigger
-            "sm:fixed-none sm:absolute sm:right-0 sm:top-10 sm:w-auto sm:translate-x-0 sm:left-auto",
+            // sm+: absolute, aligned to right of trigger, sized to its own
+            // content (presets column + calendar together run ~433px —
+            // the mobile max-w-[420px] above was clipping them via the
+            // overflow-hidden on this same element; drop the cap entirely
+            // here instead of raising it by a guessed amount).
+            "sm:absolute sm:right-0 sm:top-10 sm:w-auto sm:max-w-none sm:translate-x-0 sm:left-auto",
           )}>
             {/* Presets */}
             <div className="flex w-32 flex-col gap-0.5 border-r border-border bg-muted/20 p-2">

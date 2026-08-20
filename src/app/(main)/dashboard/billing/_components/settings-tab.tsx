@@ -49,6 +49,11 @@ export function SettingsTab() {
   const [driverPct, setDriverPct] = useState(70);
   const [defaultType, setDefaultType] = useState<BillingType>("package");
   const [rules, setRules] = useState<DraftRule[]>([]);
+  // D40/D41 (2026-08-20): courtesy credit per package_type. "" (not "0.00")
+  // means unconfigured — distinguishes "no credit" from "explicitly $0",
+  // and keeps every package_type's field blank until someone opts in rather
+  // than pre-filling six zero-dollar rows.
+  const [creditDollars, setCreditDollars] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/client/billing/rates")
@@ -67,6 +72,12 @@ export function SettingsTab() {
             })
           : [];
         setRules(loadedRules.map((rule) => ({ ...rule, _key: crypto.randomUUID() })));
+        const cr = d.credit_rules ?? {};
+        const loadedCredits: Record<string, string> = {};
+        for (const pt of RULE_VALUE_OPTIONS.package_type) {
+          if (Number.isInteger(cr[pt]) && cr[pt] > 0) loadedCredits[pt] = (cr[pt] / 100).toFixed(2);
+        }
+        setCreditDollars(loadedCredits);
       })
       .catch(() => setResult({ kind: "error", message: "Failed to load current rates." }))
       .finally(() => setLoading(false));
@@ -77,6 +88,11 @@ export function SettingsTab() {
   const onDemandPerMileCents = Math.round(Number(onDemandPerMileDollars) * 100);
   const routelyPct = 100 - driverPct;
 
+  const creditCents: Record<string, number> = {};
+  for (const [pt, v] of Object.entries(creditDollars)) {
+    if (v.trim() !== "") creditCents[pt] = Math.round(Number(v) * 100);
+  }
+
   const payload = {
     billing_rates: {
       package: packageCents,
@@ -86,6 +102,7 @@ export function SettingsTab() {
     },
     default_billing_type: defaultType,
     billing_rules: rules.map(({ _key, ...rule }) => rule),
+    credit_rules: creditCents,
   };
 
   const moneyValid = [packageCents, perMileCents, onDemandPerMileCents].every((n) => Number.isInteger(n) && n >= 0);
@@ -94,7 +111,8 @@ export function SettingsTab() {
     const keys = Object.keys(rule.if) as RuleKey[];
     return keys.length > 0 && keys.every((k) => (rule.if[k] ?? "").trim().length > 0) && TYPES.includes(rule.then);
   });
-  const canSave = moneyValid && splitValid && rulesValid && !saving;
+  const creditsValid = Object.values(creditCents).every((n) => Number.isInteger(n) && n >= 0);
+  const canSave = moneyValid && splitValid && rulesValid && creditsValid && !saving;
 
   async function save() {
     setSaving(true);
@@ -329,6 +347,75 @@ export function SettingsTab() {
                   >
                     <Trash2 className="size-3.5 text-muted-foreground" />
                   </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-14">Credits</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-11 text-muted-foreground">
+              D40: a stop that shouldn't be charged is charged normally and gets a credit appended alongside it —
+              there's no "don't bill" outcome. Configured per package_type, applies per attempt. Capped at the charge
+              itself — a credit can never exceed what it's crediting.
+            </p>
+            {RULE_VALUE_OPTIONS.package_type.map((pt) => {
+              const dollars = creditDollars[pt] ?? "";
+              const cents = dollars.trim() !== "" ? Math.round(Number(dollars) * 100) : 0;
+              const pctOfPackage = cents > 0 && packageCents > 0 ? Math.round((cents / packageCents) * 100) : null;
+              const exceedsPackage = cents > packageCents && packageCents > 0;
+              // On-demand cutoff (mileage below which this credit costs Routely
+              // money): driver keeps driverPct% regardless of any credit — see
+              // Part C report, 2026-08-20. Any package_type can be dispatched
+              // on-demand (service_type is independent of package_type), so
+              // this applies to every row, not just ones with an explicit
+              // package_type -> on_demand rule.
+              const cutoffMiles =
+                cents > 0 && onDemandPerMileCents > 0 && routelyPct > 0
+                  ? cents / ((routelyPct / 100) * onDemandPerMileCents)
+                  : null;
+              return (
+                <div key={pt} className="flex flex-wrap items-start gap-2 rounded-lg border border-border/60 p-2.5">
+                  <div className="flex min-w-[160px] items-center gap-2">
+                    <span className="text-12 capitalize">{pt}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-11 text-muted-foreground">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={dollars}
+                      onChange={(e) => setCreditDollars((c) => ({ ...c, [pt]: e.target.value }))}
+                      className={cn("h-8 w-24", exceedsPackage && "border-destructive text-destructive")}
+                    />
+                  </div>
+                  {cents > 0 && (
+                    <div className="min-w-0 flex-1 space-y-0.5 text-11">
+                      {exceedsPackage ? (
+                        <p className="text-destructive">
+                          Exceeds the ${(packageCents / 100).toFixed(2)} package rate — will be capped to the charge at
+                          attempt time, never exceeding it.
+                        </p>
+                      ) : (
+                        pctOfPackage != null && (
+                          <p className="text-muted-foreground">{pctOfPackage}% of the package rate.</p>
+                        )
+                      )}
+                      {cutoffMiles != null && (
+                        <p className="text-muted-foreground">
+                          On-demand: the driver keeps {driverPct}% of an on-demand charge regardless of this credit —
+                          below ~{cutoffMiles < 10 ? cutoffMiles.toFixed(1) : Math.round(cutoffMiles)} mi, this credit
+                          costs Routely money on that stop. Longer on-demand trips are unaffected.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

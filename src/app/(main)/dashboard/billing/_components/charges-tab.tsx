@@ -225,7 +225,16 @@ export function ChargesTab() {
                         </TableCell>
                         <TableCell className="tabular-nums">{r.units ?? "—"}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">
-                          {centsToUsd(r.amount_cents)}
+                          {r.credit ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-10 text-muted-foreground line-through decoration-1">
+                                {centsToUsd(r.amount_cents)}
+                              </span>
+                              <span>{centsToUsd(r.net_amount_cents)}</span>
+                            </div>
+                          ) : (
+                            centsToUsd(r.amount_cents)
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={r.document_id ? "secondary" : "outline"} className="text-10">

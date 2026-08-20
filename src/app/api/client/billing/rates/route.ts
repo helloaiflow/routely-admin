@@ -11,6 +11,11 @@ import { requirePagePermission } from "@/lib/tenant";
 
 const RULE_KEYS = new Set(["stop_type", "service_type", "package_type"]);
 const TYPES = new Set(["package", "miles", "on_demand"]);
+// Same enum settings-tab.tsx's RULE_VALUE_OPTIONS.package_type offers — a
+// credit_rules key that isn't a real package_type would silently never
+// match any stop, same failure class the rules editor's own value
+// constraint already exists to prevent.
+const PACKAGE_TYPES = new Set(["rx", "specimen", "medical", "cold", "urgent", "document"]);
 
 export async function GET() {
   const ctx = await requirePagePermission("billing");
@@ -18,7 +23,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data } = await supabase
     .from("tenants")
-    .select("billing_rates, default_billing_type, billing_rules, postpay_enabled, credit_limit")
+    .select("billing_rates, default_billing_type, billing_rules, credit_rules, postpay_enabled, credit_limit")
     .eq("tenant_id", Number(ctx.tenantId))
     .maybeSingle();
   return NextResponse.json(data ?? {});
@@ -70,6 +75,18 @@ export async function PATCH(req: NextRequest) {
         );
     }
     patch.billing_rules = body.billing_rules;
+  }
+  if (body.credit_rules !== undefined) {
+    const cr = body.credit_rules;
+    if (typeof cr !== "object" || cr === null || Array.isArray(cr))
+      return NextResponse.json({ error: "credit_rules must be an object of package_type -> cents" }, { status: 400 });
+    for (const [k, v] of Object.entries(cr)) {
+      if (!PACKAGE_TYPES.has(k))
+        return NextResponse.json({ error: `credit_rules key "${k}" is not a known package_type` }, { status: 400 });
+      if (!Number.isInteger(v) || (v as number) < 0)
+        return NextResponse.json({ error: `credit_rules.${k} must be integer cents ≥ 0` }, { status: 400 });
+    }
+    patch.credit_rules = cr;
   }
   // postpay_enabled/credit_limit moved OFF this route (2026-08-11) — they
   // used to write straight to Supabase here with no audit trail and no

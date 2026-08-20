@@ -37,6 +37,13 @@ export type ChargeRow = {
   document_id: number | null;
   document_number: string | null;
   document_status: string | null;
+  /** D40/D41 (2026-08-20): the courtesy credit appended to THIS charge, if
+   * tenant.credit_rules configured one for this stop's package_type — its
+   * own ledger row, own reason, referencing this charge via
+   * correction_of_id. null when no credit applies. Never edits amount_cents
+   * above; the charge is always the real, un-suppressed rate. */
+  credit: { id: number; amount_cents: number; correction_reason: string | null } | null;
+  net_amount_cents: number;
 };
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -112,6 +119,22 @@ export function ChargeDetailPanel({ charge, className }: { charge: ChargeRow; cl
         <p className="min-w-0 flex-1 font-medium text-13">{charge.charge_label}</p>
         <span className="shrink-0 font-bold text-lg tabular-nums">{centsToUsd(charge.amount_cents)}</span>
       </div>
+      {charge.credit && (
+        <div className="space-y-1 rounded-lg border border-success/30 bg-success/5 p-2.5 text-13">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Charge</span>
+            <span className="tabular-nums">{centsToUsd(charge.amount_cents)}</span>
+          </div>
+          <div className="flex items-center justify-between text-success">
+            <span>{charge.credit.correction_reason ?? "Courtesy credit"}</span>
+            <span className="tabular-nums">−{centsToUsd(Math.abs(charge.credit.amount_cents))}</span>
+          </div>
+          <div className="flex items-center justify-between border-border/60 border-t pt-1 font-semibold">
+            <span>Net</span>
+            <span className="tabular-nums">{centsToUsd(charge.net_amount_cents)}</span>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <Badge variant="outline">{TYPE_LABEL[charge.resolved_type] ?? charge.resolved_type}</Badge>
         {charge.attempt_seq != null && (

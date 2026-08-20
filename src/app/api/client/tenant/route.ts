@@ -8,12 +8,23 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = getSupabaseAdmin();
-  const { data: row, error } = await supabase.from("tenants").select("doc").eq("tenant_id", ctx.tenantId).maybeSingle();
+  const { data: row, error } = await supabase
+    .from("tenants")
+    .select("plan_type, billing_rates, credit_limit, doc")
+    .eq("tenant_id", ctx.tenantId)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
   if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
-  // `doc` jsonb is the original Mongo document → the field mapping below is unchanged.
+  // `doc` jsonb is the original Mongo document → still the source for fields
+  // with no promoted-column equivalent (address, contact info, notification
+  // prefs). plan_type/billing_rates/credit_limit are NOT among them — those
+  // are read from the real columns below, never from doc, and never
+  // defaulted to an invented number (found live 2026-08-20: a Professional
+  // tenant's own account page showed "trial" at $16/$1.65 — this endpoint's
+  // own hardcoded fallbacks, not anything actually stored).
   // biome-ignore lint/suspicious/noExplicitAny: doc is the raw Mongo shape
   const tenant = (row as { doc: Record<string, unknown> }).doc as any;
+  const rates = (row as { billing_rates: Record<string, number> | null }).billing_rates;
 
   // Outstanding is derived from billing_ledger (v_tenant_outstanding), never
   // stored/incremented on the tenant row — see 2026-08 billing v3 migration.
@@ -32,16 +43,18 @@ export async function GET() {
   return NextResponse.json({
     tenant_id: tenant.tenant_id,
     company_name: tenant.company_name,
-    plan_type: tenant.plan_type || "trial",
-    // Routely Next Day pricing (set per tenant)
-    price_per_stop: tenant.price_per_stop ?? 16.0,
-    price_per_mile: tenant.price_per_mile ?? 1.65,
-    // Routely Xpress pricing (fixed platform-wide, overridable)
-    xpress_base_fee: tenant.xpress_base_fee ?? 14.99,
-    xpress_per_mile: tenant.xpress_per_mile ?? 1.38,
+    plan_type: (row as { plan_type: string | null }).plan_type,
+    // Derived from the real billing_rates (cents) — the only thing that
+    // actually bills (D31). null when unset, never an invented number.
+    price_per_stop: rates?.package != null ? rates.package / 100 : null,
+    price_per_mile: rates?.per_mile != null ? rates.per_mile / 100 : null,
+    // No billing_rates equivalent exists for "Xpress" pricing — genuinely
+    // unknown rather than defaulted.
+    xpress_base_fee: null,
+    xpress_per_mile: null,
     // Billing
     postpay_enabled: tenant.postpay_enabled ?? false,
-    credit_limit: tenant.credit_limit ?? 0,
+    credit_limit: (row as { credit_limit: number | null }).credit_limit ?? 0,
     credit_period: tenant.credit_period ?? "monthly", // monthly | weekly | biweekly
     credit_reset_day: tenant.credit_reset_day ?? 1, // day of month (1-28) or day of week (0=Sun)
     outstanding_amount: outstandingAmount,

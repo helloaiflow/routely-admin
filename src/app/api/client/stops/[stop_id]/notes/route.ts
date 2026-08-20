@@ -1,19 +1,21 @@
-import { currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import { currentUser } from "@clerk/nextjs/server";
+
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 // FastAPI (VPS) owns internal notes on STOPS (F6b): it writes PG — what the
 // detail panel reads — and mirrors to Mongo. A Mongo-direct note here was
 // invisible to the panel and doomed to be wiped by the full-doc reverse
-// mirror on the next edit. Drafts stay Mongo-direct (they live only in Mongo).
+// mirror on the next edit. Drafts moved to Supabase public.draft_stops on
+// 2026-06-22 (commit 975852a) — this fallback was left querying Mongo
+// draft_stops after that migration and has been 404ing on any draft made
+// since (found live 2026-08-19/20, Mongo Inventory report). Repointed here.
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ stop_id: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ stop_id: string }> }) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -28,7 +30,7 @@ export async function POST(
   // Resolve author name from Clerk session
   const user = await currentUser();
   const author = user
-    ? (`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.emailAddresses[0]?.emailAddress || "Client")
+    ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.emailAddresses[0]?.emailAddress || "Client"
     : "Client";
 
   // ── Stops: delegate to FastAPI (same actor shape as the main stop route) ──
@@ -41,15 +43,12 @@ export async function POST(
     };
     let upstream: Response | null = null;
     try {
-      upstream = await fetch(
-        `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}/notes?tenant_id=${tenantId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
-          body: JSON.stringify({ text, actor }),
-          signal: AbortSignal.timeout(15000),
-        },
-      );
+      upstream = await fetch(`${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}/notes?tenant_id=${tenantId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": FASTAPI_SECRET },
+        body: JSON.stringify({ text, actor }),
+        signal: AbortSignal.timeout(15000),
+      });
     } catch {
       return NextResponse.json(
         { error: "Notes service unreachable — note not saved. Please try again." },
@@ -75,22 +74,43 @@ export async function POST(
     created_at: new Date().toISOString(),
   };
 
-  // ── Drafts (and stops fallback when FastAPI is not configured) ──
-  // biome-ignore lint/suspicious/noExplicitAny: MongoDB $push type inference
-  const pushOp = { $push: { internal_notes: note }, $set: { updated_at: new Date() } } as any;
-
-  const db = await getDb();
-  let result = { matchedCount: 0 };
+  // ── Stops fallback when FastAPI is not configured (Mongo — dev-only path,
+  // stops itself stays on Mongo per standing instruction) ──
   if (!FASTAPI_SECRET) {
-    result = await db.collection("stops").updateOne({ stop_id, tenant_id: tenantId }, pushOp);
-  }
-  if (result.matchedCount === 0) {
-    result = await db
-      .collection("draft_stops")
-      .updateOne({ $or: [{ draft_id: stop_id }, { stop_id }], tenant_id: tenantId }, pushOp);
+    // biome-ignore lint/suspicious/noExplicitAny: MongoDB $push type inference
+    const pushOp = { $push: { internal_notes: note }, $set: { updated_at: new Date() } } as any;
+    const db = await getDb();
+    const result = await db.collection("stops").updateOne({ stop_id, tenant_id: tenantId }, pushOp);
+    if (result.matchedCount > 0) return NextResponse.json({ ok: true, note });
   }
 
-  if (result.matchedCount === 0) {
+  // ── Drafts — Supabase public.draft_stops (jsonb doc, no $push — read,
+  // mutate the JS object, write the whole doc back, same pattern
+  // draft-stops/route.ts's PATCH handler already uses). ──
+  const supabase = getSupabaseAdmin();
+  const { data: draftRow } = await supabase
+    .from("draft_stops")
+    .select("doc")
+    .or(`draft_id.eq.${stop_id},tracking_id.eq.${stop_id}`)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (!draftRow) {
+    return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+  }
+
+  const doc = (draftRow.doc ?? {}) as Record<string, unknown>;
+  const existingNotes = Array.isArray(doc.internal_notes) ? doc.internal_notes : [];
+  doc.internal_notes = [...existingNotes, note];
+  doc.updated_at = new Date().toISOString();
+
+  const { error: updErr } = await supabase
+    .from("draft_stops")
+    .update({ doc, updated_at: new Date().toISOString() })
+    .eq("draft_id", (doc as { draft_id?: string }).draft_id ?? stop_id)
+    .eq("tenant_id", tenantId);
+  if (updErr) {
+    console.error("[notes] draft_stops update error:", updErr);
     return NextResponse.json({ error: "Stop not found" }, { status: 404 });
   }
 

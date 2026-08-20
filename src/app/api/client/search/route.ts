@@ -9,6 +9,7 @@ import {
   shapeDraftForSearch,
   shapeStopForSearch,
 } from "@/lib/spoke-fields";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 function esc(s: string) {
@@ -88,25 +89,45 @@ export async function GET(request: Request) {
   const driverMap = await resolveDriverNames(db, stopDocs);
   const stopsResults = stopDocs.map((d) => shapeStopForSearch(d, driverMap)) as SearchResult[];
 
-  const draftOr: Record<string, unknown>[] = [
-    { tracking_id: { $regex: regex } },
-    { draft_id: { $regex: regex } },
-    { recipient_name: { $regex: regex } },
-    { "delivery_info.delivery_address": { $regex: regex } },
-    { "delivery_info.delivery_city": { $regex: regex } },
-    { "delivery_info.delivery_zip": { $regex: regex } },
-    { status: { $regex: regex } },
-    { order_ids: { $regex: regex } },
-    { "service_info.rx_number": { $regex: regex } },
-  ];
-  if (phoneRx) draftOr.push({ recipient_phone: { $regex: phoneRx } });
+  // Drafts moved to Supabase public.draft_stops on 2026-06-22 (commit
+  // 975852a) — this endpoint was left querying Mongo draft_stops after that
+  // migration and has been silently missing every draft made since (found
+  // live 2026-08-19/20, Mongo Inventory report). doc is a verbatim mirror of
+  // the original Mongo document shape (same pattern as draft-stops/route.ts's
+  // own GET), so the same field-matching logic applies unchanged — filtered
+  // in JS rather than translated into nested-jsonb-path SQL, to keep the
+  // matching semantics identical to what stops search already does, not a
+  // reimplementation with its own subtly different behavior. Draft volume is
+  // low enough (tens, not thousands) that fetching the tenant's non-deleted
+  // drafts and testing them in memory is cheap.
+  const supabase = getSupabaseAdmin();
+  let draftQuery = supabase.from("draft_stops").select("doc").neq("status", "deleted");
+  if (!scopeAll) draftQuery = draftQuery.eq("tenant_id", tenantId);
+  const { data: draftRows } = await draftQuery.order("created_at", { ascending: false }).limit(500);
 
-  const draftDocs = await db
-    .collection("draft_stops")
-    .find({ ...(scopeAll ? {} : { tenant_id: tenantId }), status: { $ne: "deleted" }, $or: draftOr })
-    .sort({ created_at: -1 })
-    .limit(limit)
-    .toArray();
+  function draftMatches(d: Record<string, unknown>): boolean {
+    const deliveryInfo = (d.delivery_info ?? {}) as Record<string, unknown>;
+    const serviceInfo = (d.service_info ?? {}) as Record<string, unknown>;
+    const fields = [
+      d.tracking_id,
+      d.draft_id,
+      d.recipient_name,
+      deliveryInfo.delivery_address,
+      deliveryInfo.delivery_city,
+      deliveryInfo.delivery_zip,
+      d.status,
+      serviceInfo.rx_number,
+    ];
+    if (fields.some((v) => typeof v === "string" && regex.test(v))) return true;
+    if (Array.isArray(d.order_ids) && d.order_ids.some((v) => typeof v === "string" && regex.test(v))) return true;
+    if (phoneRx && typeof d.recipient_phone === "string" && phoneRx.test(d.recipient_phone)) return true;
+    return false;
+  }
+
+  const draftDocs = (draftRows ?? [])
+    .map((r) => (r as { doc: Record<string, unknown> }).doc ?? {})
+    .filter(draftMatches)
+    .slice(0, limit);
   const draftResults = draftDocs.map(shapeDraftForSearch) as SearchResult[];
 
   const seenIds = new Set(stopsResults.map((r) => r.stop_id).filter(Boolean));

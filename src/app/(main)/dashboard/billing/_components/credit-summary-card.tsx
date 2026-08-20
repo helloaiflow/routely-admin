@@ -24,8 +24,11 @@ export type RadialStats = {
   currentUsageCents: number;
   /** Trailing 2-month average (this month + last month) / 2 — a historical
    * reference point, not a ceiling on currentUsageCents. Can legitimately
-   * be LOWER than current usage if this month is busier than last. */
-  monthlyAverageCents: number;
+   * be LOWER than current usage if this month is busier than last. Null
+   * when lastMonthCents is 0 (no real prior month to average against) —
+   * averaging against zero produced a misleading "exactly half of this
+   * month" figure, found live 2026-08-19. */
+  monthlyAverageCents: number | null;
   lastMonthCents: number;
   monthName: string;
   dayOfMonth: number;
@@ -190,9 +193,11 @@ export function CreditSummaryCard({
                   label="Monthly average"
                   value={stats?.monthlyAverageCents != null ? usd(stats.monthlyAverageCents) : "—"}
                   tooltip={
-                    stats
+                    stats?.monthlyAverageCents != null
                       ? `Average of ${stats.monthName} (${usd(stats.currentUsageCents)} so far) and last month (${usd(stats.lastMonthCents)}) — a trailing 2-month reference, not a cap.`
-                      : undefined
+                      : stats
+                        ? "No prior month to average against yet — check back after this cycle closes."
+                        : undefined
                   }
                 />
               </div>
@@ -234,9 +239,11 @@ export function CreditSummaryCard({
                   label="Monthly average"
                   value={stats?.monthlyAverageCents != null ? usd(stats.monthlyAverageCents) : "—"}
                   tooltip={
-                    stats
+                    stats?.monthlyAverageCents != null
                       ? `Average of ${stats.monthName} (${usd(stats.currentUsageCents)} so far) and last month (${usd(stats.lastMonthCents)}) — a trailing 2-month reference, not a cap. Can be lower than this month's own total if this month is busier than last.`
-                      : undefined
+                      : stats
+                        ? "No prior month to average against yet — check back after this cycle closes."
+                        : undefined
                   }
                 />
                 <StatCell

@@ -40,7 +40,16 @@ function radialStats(summary: Summary | null): RadialStats | undefined {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const monthName = now.toLocaleDateString("en-US", { month: "long" });
   const currentUsageCents = summary.delivery_this_month_cents;
-  const monthlyAverageCents = Math.round((summary.delivery_this_month_cents + summary.delivery_last_month_cents) / 2);
+  // Averaging month-to-date against a genuinely-zero last month isn't a
+  // trailing average, it's just half of this month's own number wearing a
+  // different label — found live 2026-08-19: "Monthly average" rendered
+  // exactly half of "Charged this month" for a tenant with no prior-month
+  // history. Null (rendered as "—") is the honest answer when there's
+  // nothing real to average against yet.
+  const monthlyAverageCents =
+    summary.delivery_last_month_cents > 0
+      ? Math.round((summary.delivery_this_month_cents + summary.delivery_last_month_cents) / 2)
+      : null;
   const projectedEndOfCycleCents = dayOfMonth < 3 ? null : Math.round((currentUsageCents / dayOfMonth) * daysInMonth);
   return {
     currentUsageCents,

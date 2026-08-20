@@ -188,7 +188,10 @@ export function InvoiceDetail({ documentId, onPay }: { documentId: number; onPay
       {/* Header block */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-border/60 border-b pb-4">
         <div>
-          <p className="font-bold text-lg text-primary">Routely</p>
+          {/* Real mark, not a text stand-in. h-10 is rem-based so it scales with the
+              density dial like everything else — the old text-lg was the only
+              non-token size left in this file. */}
+          <img src="/img/routelyLogoBlack.svg" alt="Routely" className="h-10 w-auto dark:invert" />
           {tenant && (
             <div className="mt-1 text-11 text-muted-foreground">
               <p className="font-medium text-foreground">{tenant.company_name}</p>

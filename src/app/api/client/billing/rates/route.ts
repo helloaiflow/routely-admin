@@ -84,6 +84,13 @@ export async function PATCH(req: NextRequest) {
   }
   if (!Object.keys(patch).length) return NextResponse.json({ error: "nothing to update" }, { status: 400 });
 
+  // D39 (CEO-locked 2026-08-19): "Custom" is the only plan whose rates/rules
+  // aren't locked. This route is the sole path that changes them directly —
+  // so a direct write here IS the act of going Custom, structurally, not by
+  // UI convention. A tenant can never display "Starter" while carrying a
+  // hand-edited rate: the write that would cause that also flips the label.
+  patch.plan_type = "custom";
+
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("tenants")

@@ -359,9 +359,9 @@ export function SettingsTab() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-11 text-muted-foreground">
-              D40: a stop that shouldn't be charged is charged normally and gets a credit appended alongside it —
-              there's no "don't bill" outcome. Configured per package_type, applies per attempt. Capped at the charge
-              itself — a credit can never exceed what it's crediting.
+              A stop that shouldn't be charged is charged normally and gets a credit appended alongside it — there's no
+              "don't bill" outcome. Configured per package_type, applies per attempt. Capped at the charge itself — a
+              credit can never exceed what it's crediting.
             </p>
             {RULE_VALUE_OPTIONS.package_type.map((pt) => {
               const dollars = creditDollars[pt] ?? "";

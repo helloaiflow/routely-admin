@@ -117,7 +117,16 @@ export function ChargeDetailPanel({ charge, className }: { charge: ChargeRow; cl
       <div className="flex items-center gap-2">
         <span className={cn("size-2 shrink-0 rounded-full", OUTCOME_DOT[charge.outcome] ?? "bg-muted-foreground")} />
         <p className="min-w-0 flex-1 font-medium text-13">{charge.charge_label}</p>
-        <span className="shrink-0 font-bold text-lg tabular-nums">{centsToUsd(charge.amount_cents)}</span>
+        {charge.credit ? (
+          <span className="flex shrink-0 items-baseline gap-1.5">
+            <span className="text-11 text-muted-foreground line-through decoration-1">
+              {centsToUsd(charge.amount_cents)}
+            </span>
+            <span className="font-bold text-lg tabular-nums">{centsToUsd(charge.net_amount_cents)}</span>
+          </span>
+        ) : (
+          <span className="shrink-0 font-bold text-lg tabular-nums">{centsToUsd(charge.amount_cents)}</span>
+        )}
       </div>
       {charge.credit && (
         <div className="space-y-1 rounded-lg border border-success/30 bg-success/5 p-2.5 text-13">

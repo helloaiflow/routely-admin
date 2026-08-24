@@ -10,14 +10,18 @@ export async function GET() {
   if (!ctx.isAdmin) return NextResponse.json({ tenants: [] }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
-  const { data } = await supabase.from("tenants").select("tenant_id, doc");
+  // company_name is the real column onboarding writes — doc.company_name is
+  // never populated by any writer (2026-08-24, found live: tenant 5 had a
+  // real company_name but the selector still showed "Tenant 5" because this
+  // query never selected the column that actually had the value).
+  const { data } = await supabase.from("tenants").select("tenant_id, company_name, doc");
   const tenants = (data ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((t: any) => {
       const d = t.doc ?? {};
       return {
         tenant_id: t.tenant_id,
-        name: d.company_name || d.business_name || d.name || `Tenant ${t.tenant_id}`,
+        name: t.company_name || d.company_name || d.business_name || d.name || `Tenant ${t.tenant_id}`,
       };
     })
     .filter((t) => t.tenant_id != null)

@@ -16,26 +16,12 @@ import { Label } from "@/components/ui/label";
 
 import { LogisticsWorld } from "./_components/logistics-world";
 
-// Mirrors middleware.ts's safeRedirectPath — a same-origin relative path is
-// trusted, and so is an absolute URL back to routelypro.com/www.routelypro.com
-// specifically (D43 superseded, 2026-08-25: this is now the only login for
-// the whole product, so routely-web's middleware sends unauthenticated
-// /onboarding and /dashboard hits here with ?redirect_url= pointing back at
-// itself). Any other absolute URL — "//evil.com" or a smuggled foreign host
-// — falls back to /dashboard/default (open-redirect prevention).
-const TRUSTED_EXTERNAL_HOSTS = new Set(["routelypro.com", "www.routelypro.com"]);
+// Mirrors middleware.ts's safeRedirectPath — only a same-origin relative path
+// is trusted as a post-login destination, never "//evil.com" or an absolute
+// URL smuggled through the query string (open-redirect prevention).
 function safeRedirectTarget(raw: string | null): string {
-  if (!raw) return "/dashboard/default";
-  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  try {
-    const url = new URL(raw);
-    if (url.protocol === "https:" && TRUSTED_EXTERNAL_HOSTS.has(url.hostname)) {
-      return url.toString();
-    }
-  } catch {
-    // not a valid absolute URL — fall through to the default below
-  }
-  return "/dashboard/default";
+  if (!raw?.startsWith("/") || raw.startsWith("//")) return "/dashboard/default";
+  return raw;
 }
 
 function LoginContent() {

@@ -71,7 +71,11 @@ export function SettingsShell() {
         if (!d.error) setBilling(d);
       })
       .catch(() => {
-        /* best-effort — PlansTab falls back to Clerk publicMetadata.plan */
+        /* best-effort — PlansTab handles a null plan (nothing marked
+         * "Current") rather than falling back to a fake tier name. Clerk
+         * publicMetadata.plan is never written anywhere in this codebase
+         * (D42 made Postgres tenants.plan_type the sole source) — using it
+         * as a fallback here would silently show "free" 100% of the time. */
       });
   }, []);
 
@@ -87,7 +91,6 @@ export function SettingsShell() {
 
   const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : "account";
 
-  const plan = (user?.publicMetadata?.plan as string) || "free";
   const companyName = (user?.publicMetadata?.companyName as string) || "";
 
   return (
@@ -146,7 +149,7 @@ export function SettingsShell() {
       <div className="min-h-[400px]">
         {activeTab === "account" && <AccountTab />}
         {activeTab === "notifications" && <NotificationsTab />}
-        {activeTab === "plans" && <PlansTab plan={billing?.plan ?? plan} />}
+        {activeTab === "plans" && <PlansTab plan={billing?.plan ?? null} />}
         {activeTab === "pickup" && <PickupTab />}
         {activeTab === "team" && !isMember && <TeamSection />}
         {activeTab === "integrations" && !isMember && <IntegrationsTab />}

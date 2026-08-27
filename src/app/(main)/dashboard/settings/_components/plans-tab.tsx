@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 import { PLANS } from "./settings-types";
 
-export function PlansTab({ plan }: { plan: string }) {
+export function PlansTab({ plan }: { plan: string | null }) {
   return (
     <div className="space-y-5">
       <div>
@@ -17,9 +17,9 @@ export function PlansTab({ plan }: { plan: string }) {
         <p className="text-muted-foreground text-sm">Choose the plan that fits your delivery volume.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {PLANS.map((p) => {
-          const isCurrent = p.id === plan;
+          const isCurrent = plan != null && p.id === plan;
           const isFeatured = p.id === "professional";
           return (
             <div
@@ -43,7 +43,10 @@ export function PlansTab({ plan }: { plan: string }) {
                 </Badge>
               )}
               {isFeatured && !isCurrent && (
-                <Badge variant="outline" className="absolute top-4 right-4 gap-1 border-primary/30 text-10 text-primary">
+                <Badge
+                  variant="outline"
+                  className="absolute top-4 right-4 gap-1 border-primary/30 text-10 text-primary"
+                >
                   <Sparkles className="size-3" aria-hidden="true" /> Popular
                 </Badge>
               )}
@@ -58,7 +61,10 @@ export function PlansTab({ plan }: { plan: string }) {
                 {p.features.map((f) => (
                   <div key={f} className="flex items-start gap-2 text-muted-foreground text-sm">
                     <Check
-                      className={cn("mt-0.5 size-3.5 shrink-0", isCurrent ? "text-primary" : "text-muted-foreground/50")}
+                      className={cn(
+                        "mt-0.5 size-3.5 shrink-0",
+                        isCurrent ? "text-primary" : "text-muted-foreground/50",
+                      )}
                       aria-hidden="true"
                     />
                     <span className="leading-tight">{f}</span>
@@ -81,8 +87,7 @@ export function PlansTab({ plan }: { plan: string }) {
         })}
       </div>
       <p className="text-muted-foreground text-xs">
-        All paid plans include a 14-day free trial. No credit card required to start. Changes take effect at the next
-        billing cycle.
+        Every plan includes a $100 courtesy balance to get started. Changes take effect at the next billing cycle.
       </p>
     </div>
   );

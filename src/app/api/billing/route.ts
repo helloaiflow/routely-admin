@@ -11,11 +11,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data: row } = await supabase
-      .from("tenants")
-      .select("*")
-      .eq("clerk_user_id", userId)
-      .maybeSingle();
+    const { data: row } = await supabase.from("tenants").select("*").eq("clerk_user_id", userId).maybeSingle();
     if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
     const tenant = (row.doc ?? {}) as Record<string, unknown>;
@@ -39,7 +35,13 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      plan: row.plan_type || tenant.plan_type || "free",
+      // D36 (2026-08-27): "free" is not a real plan_type value — tenants
+      // always get one of starter/professional/enterprise/custom at
+      // creation (D42), so this fallback should never actually trigger for
+      // a real tenant. If it ever does, null (unknown) is honest; "free"
+      // was a fake tier name that made PlansTab wrongly mark "Free Trial"
+      // as the customer's current plan.
+      plan: row.plan_type || tenant.plan_type || null,
       paymentTerm: tenant.payment_term || "on_demand",
       paymentType: tenant.payment_type || "card",
       stripeCustomerId: stripeCustomerId || null,
@@ -62,20 +64,13 @@ export async function PUT(req: Request) {
     const { paymentTerm, paymentType } = body;
 
     const supabase = getSupabaseAdmin();
-    const { data: row } = await supabase
-      .from("tenants")
-      .select("doc")
-      .eq("clerk_user_id", userId)
-      .maybeSingle();
+    const { data: row } = await supabase.from("tenants").select("doc").eq("clerk_user_id", userId).maybeSingle();
 
     const doc = { ...((row?.doc ?? {}) as Record<string, unknown>) };
     if (paymentTerm) doc.payment_term = paymentTerm;
     if (paymentType) doc.payment_type = paymentType;
 
-    await supabase
-      .from("tenants")
-      .update({ doc, updated_at: new Date().toISOString() })
-      .eq("clerk_user_id", userId);
+    await supabase.from("tenants").update({ doc, updated_at: new Date().toISOString() }).eq("clerk_user_id", userId);
 
     return NextResponse.json({ success: true });
   } catch (err) {

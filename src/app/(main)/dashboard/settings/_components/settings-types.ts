@@ -11,7 +11,7 @@ export type SettingsTab =
   | "integrations";
 
 export type BillingData = {
-  plan: string;
+  plan: string | null;
   paymentTerm: string;
   paymentType: string;
   stripeCustomerId: string | null;
@@ -126,15 +126,15 @@ export type NotificationPrefs = {
   sms_channel: boolean;
 };
 
+// D36: the $100 courtesy balance is a status every new tenant gets
+// automatically, on top of whichever real tier they're on — not a 4th tier
+// of its own. It used to be listed here as {id:"free", name:"Free Trial"},
+// presented as a peer of Starter/Professional/Enterprise; a customer could
+// reasonably read that as "picking a real plan gives up the trial balance,"
+// backwards from reality. Removed outright (2026-08-27) rather than
+// reworded, matching the same fix already made in the onboarding wizard
+// (routely-web/app/onboarding/page.tsx) the same week.
 export const PLANS = [
-  {
-    id: "free",
-    name: "Free Trial",
-    price: "$100",
-    unit: "courtesy balance",
-    desc: "Try Routely risk-free with a $100 trial balance (~6 packages).",
-    features: ["$100 trial balance", "No credit card required", "Real-time GPS", "Proof of delivery"],
-  },
   {
     id: "starter",
     name: "Starter",

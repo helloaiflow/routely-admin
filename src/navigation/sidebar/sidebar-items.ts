@@ -12,6 +12,7 @@ import {
   Search,
   Truck,
   Users,
+  PackageOpen,
   Warehouse,
 } from "lucide-react";
 
@@ -96,6 +97,12 @@ export const sidebarItems: NavGroup[] = [
             title: "Shipping Labels",
             url: "/dashboard/labels",
             icon: Box,
+            permission: "orders",
+          },
+          {
+            title: "Internal Packages",
+            url: "/dashboard/internal-packages",
+            icon: PackageOpen,
             permission: "orders",
           },
           {

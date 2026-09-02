@@ -1,0 +1,83 @@
+{
+  "parameters_mm": {
+    "nfc_diameter": 25.0,
+    "nfc_thickness": 0.8,
+    "nfc_clearance": 0.2,
+    "cavity_depth": 1.0,
+    "back_cover_thickness": 0.9,
+    "overall_width": 61.0,
+    "overall_height": 34.0,
+    "base_thickness": 4.2,
+    "logo_relief": 0.8,
+    "eyelet_inner_diameter": 5.0,
+    "eyelet_outer_diameter": 11.0
+  },
+  "nfc_fit": {
+    "pocket_diameter": 25.4,
+    "provisional_tag": 25.0,
+    "diametral_clearance": 0.4,
+    "pocket_depth": 1.0,
+    "tag_thickness": 0.8
+  },
+  "minimums": {
+    "positive_feature": 0.8,
+    "gap": 0.5,
+    "structural_wall": 1.6,
+    "eyelet_wall_radial": 3.0
+  },
+  "mesh_validation": [
+    {
+      "file": "MedFlorida_NFC_Tolerance_Test.stl",
+      "bounds_mm": [
+        46.0,
+        18.0,
+        2.0
+      ],
+      "watertight": true,
+      "winding_consistent": true,
+      "volume_mm3": 1543.88,
+      "faces": 1020
+    },
+    {
+      "file": "MedFlorida_NFC_Keychain_Logo.stl",
+      "bounds_mm": [
+        13.8,
+        16.8,
+        0.8
+      ],
+      "watertight": true,
+      "winding_consistent": true,
+      "volume_mm3": 67.19,
+      "faces": 2048
+    },
+    {
+      "file": "MedFlorida_NFC_Keychain_Base.stl",
+      "bounds_mm": [
+        60.495,
+        34.0,
+        4.2
+      ],
+      "watertight": true,
+      "winding_consistent": true,
+      "volume_mm3": 6871.54,
+      "faces": 768
+    },
+    {
+      "file": "MedFlorida_NFC_Keychain_BackCover.stl",
+      "bounds_mm": [
+        27.0,
+        27.0,
+        0.9
+      ],
+      "watertight": true,
+      "winding_consistent": true,
+      "volume_mm3": 513.55,
+      "faces": 946
+    }
+  ],
+  "slicing": {
+    "supports_required_by_geometry": false,
+    "orientation": "flat, base front down for base; cover flat",
+    "Creality_Print_GUI_validation": "pending automated GUI/physical printer profile verification"
+  }
+}

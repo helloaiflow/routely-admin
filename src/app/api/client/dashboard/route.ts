@@ -88,9 +88,31 @@ export async function GET(request: Request) {
   // window, OR date-less docs with created_at inside it (±24h padding so no
   // timezone edge can exclude a doc the JS fallback would keep). All the fine
   // in-range/trend/missing-field semantics below run UNCHANGED in JS.
-  const lowYmd = rangeStartYmd < ymd(sevenDaysAgo) ? rangeStartYmd : ymd(sevenDaysAgo);
+  // Trend window (CEO, 2026-09-01): the chart follows the SELECTED range; a
+  // single-day selection charts the last 30 days instead (one bar says
+  // nothing). Bucket count is capped at 92 so "This Year" can't build a
+  // 365-bucket chart. Computed BEFORE the fetch so the SQL superset below
+  // covers it.
+  const trendEndYmd = rangeEndYmd < today ? rangeEndYmd : today;
+  const trendEndNoon = new Date(trendEndYmd + "T12:00:00Z");
+  let trendStartYmd: string;
+  if (rangeStartYmd === rangeEndYmd) {
+    trendStartYmd = ymd(new Date(trendEndNoon.getTime() - 29 * 86_400_000));
+  } else {
+    trendStartYmd = rangeStartYmd;
+  }
+  const trendStartNoon = new Date(trendStartYmd + "T12:00:00Z");
+  const trendDays = Math.min(
+    92,
+    Math.max(1, Math.round((trendEndNoon.getTime() - trendStartNoon.getTime()) / 86_400_000) + 1),
+  );
+  const trendStartDate = startOfDayET(new Date(trendEndNoon.getTime() - (trendDays - 1) * 86_400_000));
+
+  const lowYmd = [rangeStartYmd, ymd(sevenDaysAgo), ymd(trendStartDate)].sort()[0];
   const highYmd = rangeEndYmd > today ? rangeEndYmd : today;
-  const lowCreatedIso = new Date(Math.min(rangeStart.getTime(), sevenDaysAgo.getTime()) - 86_400_000).toISOString();
+  const lowCreatedIso = new Date(
+    Math.min(rangeStart.getTime(), sevenDaysAgo.getTime(), trendStartDate.getTime()) - 86_400_000,
+  ).toISOString();
   let stopsQuery = supabase.from("stops").select("doc");
   if (!scopeAll) stopsQuery = stopsQuery.eq("tenant_id", tenantId);
   const { data: stopRows, error: stopErr } = await stopsQuery
@@ -100,7 +122,7 @@ export async function GET(request: Request) {
         `and(doc->service->>date.is.null,doc->delivery->>date.is.null,doc->>created_at.gte.${lowCreatedIso})`,
     )
     .order("doc->>created_at", { ascending: false })
-    .limit(1000);
+    .limit(2000);
 
   if (stopErr) {
     console.error("[dashboard] stops supabase error:", stopErr);
@@ -204,6 +226,20 @@ export async function GET(request: Request) {
     dropoff: periodStops.filter((s) => s.stop_type === "dropoff").length,
   };
 
+  // Zone breakdown — dynamic, not hardcoded to a fixed list of zone names.
+  // (2026-08-31: confirmed live against production that the real zones are
+  // North/South/Central/Other, not the four historically documented in
+  // CLAUDE.md — "Deerfield" doesn't appear anywhere in the zones table or
+  // on any real stop. This derives whatever's actually present in each
+  // tenant's own data instead of assuming a fixed set.) Same `periodStops`
+  // population the rest of the KPIs above use, so it inherits the same
+  // 500-stop cap they already have — not a new limitation.
+  const zoneBreakdown: Record<string, number> = {};
+  for (const s of periodStops) {
+    const z = s.zone?.trim() || "Unassigned";
+    zoneBreakdown[z] = (zoneBreakdown[z] ?? 0) + 1;
+  }
+
   const draftSummary = {
     total: draftStops.length,
     pending: draftStops.filter((s) => ["draft", "pending"].includes(s.status)).length,
@@ -236,17 +272,23 @@ export async function GET(request: Request) {
     else pipeline.deliveries += 1;
   }
 
-  // ── 7-day trend ───────────────────────────────────────────────────────────
+  // ── Daily trend — buckets span the trend window computed above ────────────
+  // Bucket keys are derived from noon-UTC anchors of the YMD strings (noon UTC
+  // is always the same calendar day in ET), NOT from server-local setHours(0)
+  // dates — the old 7-day loop did the latter, which on a UTC server after
+  // 8pm ET shifted every bucket one day back (the chart's last bar was
+  // yesterday, never today).
   const trend: Array<{ date: string; label: string; completed: number; failed: number; total: number }> = [];
   const trendIndex = new Map<string, (typeof trend)[number]>();
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
+  for (let i = trendDays - 1; i >= 0; i--) {
+    const d = new Date(trendEndNoon.getTime() - i * 86_400_000);
     const key = ymd(d);
     const pt = {
       date: key,
-      label: d.toLocaleDateString("en-US", { weekday: "short" }),
+      label:
+        trendDays <= 7
+          ? d.toLocaleDateString("en-US", { weekday: "short", timeZone: "America/New_York" })
+          : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }),
       completed: 0,
       failed: 0,
       total: 0,
@@ -254,20 +296,18 @@ export async function GET(request: Request) {
     trend.push(pt);
     trendIndex.set(key, pt);
   }
-  // The trend needs the FULL last-7-days window (not the selected range). Derive
-  // it from the same single fetch, with the identical date logic (incl. the
-  // date-less created_at fallback).
-  const trendStartYmd = ymd(sevenDaysAgo);
-  const trendEndDateExclusive = new Date(todayMidnight.getTime() + 86_400_000);
+  const trendFirstYmd = trend[0]?.date ?? trendStartYmd;
+  const trendLastYmd = trend[trend.length - 1]?.date ?? trendEndYmd;
+  const trendEndDateExclusive = new Date(startOfDayET(new Date(trendLastYmd + "T12:00:00")).getTime() + 86_400_000);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const inTrendWindow = (d: any): boolean => {
     const sd = d.service?.date ?? null;
     const dd = d.delivery?.date ?? null;
-    if (sd != null && sd >= trendStartYmd && sd <= today) return true;
-    if (dd != null && dd >= trendStartYmd && dd <= today) return true;
+    if (sd != null && sd >= trendFirstYmd && sd <= trendLastYmd) return true;
+    if (dd != null && dd >= trendFirstYmd && dd <= trendLastYmd) return true;
     if (sd == null && dd == null) {
       const t = ms(d.created_at);
-      return t >= sevenDaysAgo.getTime() && t < trendEndDateExclusive.getTime();
+      return t >= trendStartDate.getTime() && t < trendEndDateExclusive.getTime();
     }
     return false;
   };
@@ -311,6 +351,7 @@ export async function GET(request: Request) {
     stops: realStops,
     drafts: draftStops,
     trend,
+    zone_breakdown: zoneBreakdown,
     next_stop: nextStop,
     cod_queue: codQueue,
     cold_packages: coldPackages,

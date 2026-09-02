@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Printer, Tag, Package as PackageIcon, AlertTriangle } from "lucide-react";
+
 import JsBarcode from "jsbarcode";
+import { AlertTriangle, Package as PackageIcon, Printer, Tag } from "lucide-react";
 import QRCode from "qrcode";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+
+import {
+  ShippingLabel4x6 as PremiumShippingLabel,
+  type ShippingLabelData,
+} from "../../_components/internal-package-wizard/shipping-label-4x6";
 
 /** Public image — copied from media/LabelLogo.png so Next can serve it.
  *  Path uses the on-disk casing (lowercase 'l') so Vercel's case-sensitive
@@ -25,51 +33,57 @@ const LABEL_LOGO_SRC = "/img/labelLogo.png";
 type LabelMode = "rx2x1" | "shipping4x6";
 type PrinterId = "zebra-zd410" | "jadens-268bt" | "system";
 
-const PAPER: Record<LabelMode, {
-  w: number; h: number; label: string; orient: "landscape" | "portrait";
-}> = {
-  rx2x1:       { w: 2.25, h: 1.25, label: "2.25 × 1.25 in", orient: "landscape" },
+const PAPER: Record<
+  LabelMode,
+  {
+    w: number;
+    h: number;
+    label: string;
+    orient: "landscape" | "portrait";
+  }
+> = {
+  rx2x1: { w: 2.25, h: 1.25, label: "2.25 × 1.25 in", orient: "landscape" },
   // 4 × 6 in shipping stock. The 1fr BARCODE row in the grid absorbs the
   // height change so the layout reflows automatically (no row math to redo).
   shipping4x6: { w: 4, h: 6, label: "4 × 6 in", orient: "portrait" },
 };
 
 const PRINTER_TO_MODE: Record<PrinterId, LabelMode | null> = {
-  "zebra-zd410":  "rx2x1",
+  "zebra-zd410": "rx2x1",
   "jadens-268bt": "shipping4x6",
-  "system":       null,
+  system: null,
 };
 const MODE_TO_PRINTER: Record<LabelMode, PrinterId> = {
-  "rx2x1":       "zebra-zd410",
-  "shipping4x6": "jadens-268bt",
+  rx2x1: "zebra-zd410",
+  shipping4x6: "jadens-268bt",
 };
 // Customer-facing names are by LABEL SIZE, not printer model (models confuse
 // non-technical clients). The underlying ids stay the same so size pairing
 // keeps working; only the displayed text changes.
 const PRINTER_LABELS: Record<PrinterId, string> = {
-  "zebra-zd410":  "Label · 2.25 × 1.25 in",
+  "zebra-zd410": "Label · 2.25 × 1.25 in",
   "jadens-268bt": "Shipping · 4 × 6 in",
-  "system":       "Other / system printer",
+  system: "Other / system printer",
 };
 
 /* ───────────────────────────────────────────────────────────────────────────
  * Label data
  * ─────────────────────────────────────────────────────────────────────────── */
 type LabelData = {
-  trackingId:        string;       // "RTL-XXXXXXXX" or "Tracking Pending"
-  recipient:         string;       // UPPERCASED
-  recipientAddress?: string;       // "STREET, CITY, ST ZIP" UPPERCASED
-  recipientPhone?:   string;
-  fromName:          string;       // tenant.company_name uppercased
-  fromAddress?:      string;
-  serviceType:       string;       // "Delivery" | "DropOff" | "Pickup" | "Return"
-  serviceDate:       string;
-  packageType?:      string;
+  trackingId: string; // "RTL-XXXXXXXX" or "Tracking Pending"
+  recipient: string; // UPPERCASED
+  recipientAddress?: string; // "STREET, CITY, ST ZIP" UPPERCASED
+  recipientPhone?: string;
+  fromName: string; // tenant.company_name uppercased
+  fromAddress?: string;
+  serviceType: string; // "Delivery" | "DropOff" | "Pickup" | "Return"
+  serviceDate: string;
+  packageType?: string;
   requiresSignature: boolean;
-  coldChain:         boolean;
-  collectCod:        boolean;
-  codAmount:         string;
-  notes?:            string;
+  coldChain: boolean;
+  collectCod: boolean;
+  codAmount: string;
+  notes?: string;
 };
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -139,10 +153,12 @@ async function generateQrSvg(text: string): Promise<string> {
     });
     // qrcode's SVG ships with fixed width/height — strip so it scales.
     return raw
-      .replace(/<svg([^>]*)\swidth="[^"]*"/i, '<svg$1')
-      .replace(/<svg([^>]*)\sheight="[^"]*"/i, '<svg$1')
-      .replace(/<svg([^>]*)>/i,
-               '<svg$1 preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">');
+      .replace(/<svg([^>]*)\swidth="[^"]*"/i, "<svg$1")
+      .replace(/<svg([^>]*)\sheight="[^"]*"/i, "<svg$1")
+      .replace(
+        /<svg([^>]*)>/i,
+        '<svg$1 preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">',
+      );
   } catch {
     return "";
   }
@@ -165,7 +181,10 @@ function fmtShortDate(s: string): string {
  * ─────────────────────────────────────────────────────────────────────────── */
 function splitAddress(addr?: string): { street: string; locality: string } {
   if (!addr) return { street: "", locality: "" };
-  const parts = addr.split(",").map(s => s.trim()).filter(Boolean);
+  const parts = addr
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (parts.length <= 1) return { street: parts[0] || "", locality: "" };
   return { street: parts[0], locality: parts.slice(1).join(", ") };
 }
@@ -188,85 +207,158 @@ function splitAddress(addr?: string): { street: string; locality: string } {
  * ═══════════════════════════════════════════════════════════════════════════ */
 function RxLabel2x1({ data, barcodeSvg }: { data: LabelData; barcodeSvg: string }) {
   const { street, locality } = splitAddress(data.recipientAddress);
-  const metaText = `${fmtShortDate(data.serviceDate)}${
-    data.packageType ? ` · ${data.packageType.toUpperCase()}` : ""
-  }`;
+  const metaText = `${fmtShortDate(data.serviceDate)}${data.packageType ? ` · ${data.packageType.toUpperCase()}` : ""}`;
   return (
-    <div style={{
-      width: "2.25in", height: "1.25in", background: "#fff", color: "#000",
-      boxSizing: "border-box", padding: "0.03in",
-      display: "grid",
-      gridTemplateRows: "0.24in 0.28in 0.14in 0.07in 0.01in 0.10in 0.09in 0.09in 0.09in",
-      rowGap: "0.01in",
-      fontFamily: '-apple-system,BlinkMacSystemFont,"Inter",Arial,sans-serif',
-      overflow: "hidden",
-    }}>
+    <div
+      style={{
+        width: "2.25in",
+        height: "1.25in",
+        background: "#fff",
+        color: "#000",
+        boxSizing: "border-box",
+        padding: "0.03in",
+        display: "grid",
+        gridTemplateRows: "0.24in 0.28in 0.14in 0.07in 0.01in 0.10in 0.09in 0.09in 0.09in",
+        rowGap: "0.01in",
+        fontFamily: '-apple-system,BlinkMacSystemFont,"Inter",Arial,sans-serif',
+        overflow: "hidden",
+      }}
+    >
       {/* HEADER — logo + MM/DD/YY · PKG (no service-type text) */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={LABEL_LOGO_SRC} alt="Routely"
-             style={{ height: "0.22in", width: "auto", display: "block" }} />
+        {/* biome-ignore lint/performance/noImgElement: rendered into a printed physical label — must NOT go through next/image optimization */}
+        <img src={LABEL_LOGO_SRC} alt="Routely" style={{ height: "0.22in", width: "auto", display: "block" }} />
         {metaText && (
-          <div style={{
-            textAlign: "right", lineHeight: 1.1, flexShrink: 0,
-            fontSize: "7pt", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase",
-          }}>{metaText}</div>
+          <div
+            style={{
+              textAlign: "right",
+              lineHeight: 1.1,
+              flexShrink: 0,
+              fontSize: "7pt",
+              fontWeight: 800,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            {metaText}
+          </div>
         )}
       </div>
       {/* BARCODE */}
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", overflow: "hidden" }}
-           dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+      <div
+        style={{ display: "flex", alignItems: "stretch", justifyContent: "center", overflow: "hidden" }}
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: barcodeSvg is generated locally by jsbarcode from the tracking id, never raw user/API input
+        dangerouslySetInnerHTML={{ __html: barcodeSvg }}
+      />
       {/* RTL — dominant */}
-      <div style={{
-        textAlign: "center",
-        fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
-        fontSize: "12pt", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1,
-      }}>
+      <div
+        style={{
+          textAlign: "center",
+          fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+          fontSize: "12pt",
+          fontWeight: 900,
+          letterSpacing: "0.03em",
+          lineHeight: 1,
+        }}
+      >
         {data.trackingId}
       </div>
       {/* FROM */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.04in",
-        fontSize: "6pt", lineHeight: 1.1, overflow: "hidden",
-        borderTop: "0.005in solid #000", paddingTop: "0.01in",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.04in",
+          fontSize: "6pt",
+          lineHeight: 1.1,
+          overflow: "hidden",
+          borderTop: "0.005in solid #000",
+          paddingTop: "0.01in",
+        }}
+      >
         <span style={{ fontWeight: 800, flexShrink: 0 }}>FROM:</span>
-        <span style={{ fontWeight: 600, textTransform: "uppercase",
-                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            fontWeight: 600,
+            textTransform: "uppercase",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {data.fromName}
         </span>
       </div>
       {/* SPACER — visual gap between FROM and TO block */}
       <div />
       {/* TO name */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.04in",
-        fontSize: "7pt", lineHeight: 1.1, overflow: "hidden",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.04in",
+          fontSize: "7pt",
+          lineHeight: 1.1,
+          overflow: "hidden",
+        }}
+      >
         <span style={{ fontWeight: 800, flexShrink: 0 }}>TO:</span>
-        <span style={{ fontWeight: 700, textTransform: "uppercase",
-                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            fontWeight: 700,
+            textTransform: "uppercase",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {data.recipient}
         </span>
       </div>
       {/* street */}
-      <div style={{
-        fontSize: "6pt", lineHeight: 1.1, fontWeight: 600, textTransform: "uppercase",
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        paddingLeft: "0.16in",
-      }}>{street || "—"}</div>
+      <div
+        style={{
+          fontSize: "6pt",
+          lineHeight: 1.1,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          paddingLeft: "0.16in",
+        }}
+      >
+        {street || "—"}
+      </div>
       {/* city, state zip */}
-      <div style={{
-        fontSize: "6pt", lineHeight: 1.1, fontWeight: 600, textTransform: "uppercase",
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        paddingLeft: "0.16in",
-      }}>{locality || ""}</div>
+      <div
+        style={{
+          fontSize: "6pt",
+          lineHeight: 1.1,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          paddingLeft: "0.16in",
+        }}
+      >
+        {locality || ""}
+      </div>
       {/* phone */}
-      <div style={{
-        fontSize: "6pt", lineHeight: 1.1, fontWeight: 700,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        paddingLeft: "0.16in",
-      }}>{data.recipientPhone ? `☎ ${data.recipientPhone}` : ""}</div>
+      <div
+        style={{
+          fontSize: "6pt",
+          lineHeight: 1.1,
+          fontWeight: 700,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          paddingLeft: "0.16in",
+        }}
+      >
+        {data.recipientPhone ? `☎ ${data.recipientPhone}` : ""}
+      </div>
     </div>
   );
 }
@@ -292,171 +384,262 @@ function RxLabel2x1({ data, barcodeSvg }: { data: LabelData; barcodeSvg: string 
  *   BARCODE    (1fr)    full-width real Code 128 + 9pt mono caption
  *   FOOTER     (0.50)   ROUTELYPRO.COM · Scan QR for tracking | chip
  * ═══════════════════════════════════════════════════════════════════════════ */
-function ShippingLabel4x6V2({ data, barcodeSvg, qrSvg }: {
-  data: LabelData; barcodeSvg: string; qrSvg: string;
-}) {
+function ShippingLabel4x6V2({ data, barcodeSvg, qrSvg }: { data: LabelData; barcodeSvg: string; qrSvg: string }) {
   const { street, locality } = splitAddress(data.recipientAddress);
   const opChips: string[] = [data.serviceType.toUpperCase()];
-  if (data.coldChain)         opChips.push("COLD CHAIN");
+  if (data.coldChain) opChips.push("COLD CHAIN");
   if (data.requiresSignature) opChips.push("SIGNATURE");
-  if (data.collectCod && parseFloat(data.codAmount || "0") > 0)
-                              opChips.push(`COD $${data.codAmount}`);
-  if (data.packageType)       opChips.push(data.packageType.toUpperCase());
+  if (data.collectCod && parseFloat(data.codAmount || "0") > 0) opChips.push(`COD $${data.codAmount}`);
+  if (data.packageType) opChips.push(data.packageType.toUpperCase());
   return (
-    <div style={{
-      // 4 × 6 in shipping label.
-      width: "4in", height: "6in", background: "#fff", color: "#000",
-      boxSizing: "border-box", padding: "0.06in",
-      display: "grid",
-      // BARCODE row is 1fr → absorbs the height automatically.
-      //   fixed 3.85 + padding 0.20 + gaps 0.25 = 4.30in
-      //   BARCODE (1fr) = 6 − 4.30 = 1.70in. Σ = 6.00in ✓
-      gridTemplateRows: "0.50in 1.50in 0.55in 0.80in 1fr 0.50in",
-      rowGap: "0.05in",
-      overflow: "hidden",
-      fontFamily: '-apple-system,BlinkMacSystemFont,"Inter",Arial,sans-serif',
-    }}>
+    <div
+      style={{
+        // 4 × 6 in shipping label.
+        width: "4in",
+        height: "6in",
+        background: "#fff",
+        color: "#000",
+        boxSizing: "border-box",
+        padding: "0.06in",
+        display: "grid",
+        // BARCODE row is 1fr → absorbs the height automatically.
+        //   fixed 3.85 + padding 0.20 + gaps 0.25 = 4.30in
+        //   BARCODE (1fr) = 6 − 4.30 = 1.70in. Σ = 6.00in ✓
+        gridTemplateRows: "0.50in 1.50in 0.55in 0.80in 1fr 0.50in",
+        rowGap: "0.05in",
+        overflow: "hidden",
+        fontFamily: '-apple-system,BlinkMacSystemFont,"Inter",Arial,sans-serif',
+      }}
+    >
       {/* HEADER */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        borderBottom: "0.014in solid #000", paddingBottom: "0.05in",
-      }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={LABEL_LOGO_SRC} alt="Routely"
-             style={{ height: "0.40in", width: "auto", display: "block" }} />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "0.014in solid #000",
+          paddingBottom: "0.05in",
+        }}
+      >
+        {/* biome-ignore lint/performance/noImgElement: rendered into a printed physical label — must NOT go through next/image optimization */}
+        <img src={LABEL_LOGO_SRC} alt="Routely" style={{ height: "0.40in", width: "auto", display: "block" }} />
         <div style={{ textAlign: "right", lineHeight: 1.1 }}>
           <div style={{ fontSize: "10pt", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             {data.serviceType}
           </div>
-          {data.serviceDate && (
-            <div style={{ fontSize: "8pt", fontWeight: 600 }}>{data.serviceDate}</div>
-          )}
+          {data.serviceDate && <div style={{ fontSize: "8pt", fontWeight: 600 }}>{data.serviceDate}</div>}
         </div>
       </div>
 
       {/* SHIP TO */}
-      <div style={{
-        padding: "0.06in 0", borderBottom: "0.014in solid #000",
-        display: "flex", flexDirection: "column", minHeight: 0,
-      }}>
-        <span style={{
-          alignSelf: "flex-start",
-          fontSize: "7pt", fontWeight: 900, letterSpacing: "0.20em",
-          padding: "0.015in 0.07in", background: "#000", color: "#fff",
-        }}>SHIP TO</span>
-        <div style={{
-          fontSize: "15pt", fontWeight: 900, textTransform: "uppercase",
-          marginTop: "0.06in", lineHeight: 1.1,
-          overflow: "hidden", display: "-webkit-box",
-          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-        }}>{data.recipient}</div>
+      <div
+        style={{
+          padding: "0.06in 0",
+          borderBottom: "0.014in solid #000",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        }}
+      >
+        <span
+          style={{
+            alignSelf: "flex-start",
+            fontSize: "7pt",
+            fontWeight: 900,
+            letterSpacing: "0.20em",
+            padding: "0.015in 0.07in",
+            background: "#000",
+            color: "#fff",
+          }}
+        >
+          SHIP TO
+        </span>
+        <div
+          style={{
+            fontSize: "15pt",
+            fontWeight: 900,
+            textTransform: "uppercase",
+            marginTop: "0.06in",
+            lineHeight: 1.1,
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {data.recipient}
+        </div>
         {street && (
-          <div style={{
-            fontSize: "10.5pt", fontWeight: 600, textTransform: "uppercase",
-            marginTop: "0.04in", lineHeight: 1.2,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{street}</div>
+          <div
+            style={{
+              fontSize: "10.5pt",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              marginTop: "0.04in",
+              lineHeight: 1.2,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {street}
+          </div>
         )}
         {locality && (
-          <div style={{
-            fontSize: "12pt", fontWeight: 800, textTransform: "uppercase",
-            marginTop: "0.02in", lineHeight: 1.1,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{locality}</div>
+          <div
+            style={{
+              fontSize: "12pt",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              marginTop: "0.02in",
+              lineHeight: 1.1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {locality}
+          </div>
         )}
         {data.recipientPhone && (
-          <div style={{ fontSize: "9pt", fontWeight: 700, marginTop: "auto" }}>
-            ☎ {data.recipientPhone}
-          </div>
+          <div style={{ fontSize: "9pt", fontWeight: 700, marginTop: "auto" }}>☎ {data.recipientPhone}</div>
         )}
       </div>
 
       {/* ROUTE · HANDLING */}
-      <div style={{
-        padding: "0.04in 0", borderBottom: "0.014in solid #000",
-        display: "flex", flexDirection: "column", gap: "0.04in", minHeight: 0,
-      }}>
-        <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>
-          ROUTE · HANDLING
-        </span>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.04in",
-                      alignContent: "flex-start" }}>
+      <div
+        style={{
+          padding: "0.04in 0",
+          borderBottom: "0.014in solid #000",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.04in",
+          minHeight: 0,
+        }}
+      >
+        <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>ROUTE · HANDLING</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.04in", alignContent: "flex-start" }}>
           {opChips.map((c, i) => (
-            <span key={`${c}-${i}`} style={{
-              fontSize: "8.5pt", fontWeight: 900, textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              border: "0.012in solid #000", padding: "0.02in 0.07in",
-              background: i === 0 ? "#000" : "#fff",
-              color:      i === 0 ? "#fff" : "#000",
-            }}>{c}</span>
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed, short operational-chip list (SIGNATURE/COD/etc), never reordered
+              key={`${c}-${i}`}
+              style={{
+                fontSize: "8.5pt",
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                border: "0.012in solid #000",
+                padding: "0.02in 0.07in",
+                background: i === 0 ? "#000" : "#fff",
+                color: i === 0 ? "#fff" : "#000",
+              }}
+            >
+              {c}
+            </span>
           ))}
         </div>
       </div>
 
       {/* QR + RTL */}
-      <div style={{
-        padding: "0.05in 0", borderBottom: "0.014in solid #000",
-        display: "grid", gridTemplateColumns: "0.70in 1fr",
-        columnGap: "0.12in", alignItems: "center", minHeight: 0,
-      }}>
-        <div style={{ width: "0.70in", height: "0.70in" }}
-             dangerouslySetInnerHTML={{ __html: qrSvg }} />
+      <div
+        style={{
+          padding: "0.05in 0",
+          borderBottom: "0.014in solid #000",
+          display: "grid",
+          gridTemplateColumns: "0.70in 1fr",
+          columnGap: "0.12in",
+          alignItems: "center",
+          minHeight: 0,
+        }}
+      >
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: qrSvg is generated locally by the qrcode lib from the tracking URL, never raw user/API input */}
+        <div style={{ width: "0.70in", height: "0.70in" }} dangerouslySetInnerHTML={{ __html: qrSvg }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1, minWidth: 0 }}>
-          <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>
-            TRACKING #
+          <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>TRACKING #</span>
+          <span
+            style={{
+              marginTop: "0.04in",
+              fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+              fontSize: "17pt",
+              fontWeight: 900,
+              letterSpacing: "0.04em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {data.trackingId}
           </span>
-          <span style={{
-            marginTop: "0.04in",
-            fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
-            fontSize: "17pt", fontWeight: 900, letterSpacing: "0.04em",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{data.trackingId}</span>
           {data.fromName && (
-            <span style={{
-              marginTop: "0.04in", fontSize: "7.5pt", fontWeight: 600, textTransform: "uppercase",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              <span style={{ fontWeight: 800 }}>FROM: </span>{data.fromName}
+            <span
+              style={{
+                marginTop: "0.04in",
+                fontSize: "7.5pt",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ fontWeight: 800 }}>FROM: </span>
+              {data.fromName}
             </span>
           )}
         </div>
       </div>
 
       {/* BARCODE (1fr — absorbs slack so footer hugs the bottom) */}
-      <div style={{
-        padding: "0.05in 0", borderBottom: "0.014in solid #000",
-        display: "flex", flexDirection: "column", minHeight: 0,
-      }}>
-        <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>
-          BARCODE · CODE 128
-        </span>
-        <div style={{ flex: 1, minHeight: 0, marginTop: "0.04in" }}
-             dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
-        <div style={{
-          textAlign: "center", marginTop: "0.03in",
-          fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
-          fontSize: "9pt", fontWeight: 800, letterSpacing: "0.10em", lineHeight: 1,
-        }}>
+      <div
+        style={{
+          padding: "0.05in 0",
+          borderBottom: "0.014in solid #000",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        }}
+      >
+        <span style={{ fontSize: "6.5pt", fontWeight: 800, letterSpacing: "0.20em" }}>BARCODE · CODE 128</span>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: barcodeSvg is generated locally by jsbarcode from the tracking id, never raw user/API input */}
+        <div style={{ flex: 1, minHeight: 0, marginTop: "0.04in" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: "0.03in",
+            fontFamily: '"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+            fontSize: "9pt",
+            fontWeight: 800,
+            letterSpacing: "0.10em",
+            lineHeight: 1,
+          }}
+        >
           {data.trackingId}
         </div>
       </div>
 
       {/* FOOTER — sits at the very bottom of the 6in page */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-          <span style={{ fontSize: "8pt", fontWeight: 800, letterSpacing: "0.10em" }}>
-            ROUTELYPRO.COM
-          </span>
-          <span style={{ fontSize: "6.5pt", fontWeight: 500, marginTop: "0.02in" }}>
-            Scan QR for tracking
-          </span>
+          <span style={{ fontSize: "8pt", fontWeight: 800, letterSpacing: "0.10em" }}>ROUTELYPRO.COM</span>
+          <span style={{ fontSize: "6.5pt", fontWeight: 500, marginTop: "0.02in" }}>Scan QR for tracking</span>
         </div>
-        <span style={{
-          fontSize: "6.5pt", fontWeight: 700, letterSpacing: "0.10em",
-          border: "0.008in solid #000", padding: "0.015in 0.06in",
-        }}>ROUTELY · {data.serviceType.toUpperCase()}</span>
+        <span
+          style={{
+            fontSize: "6.5pt",
+            fontWeight: 700,
+            letterSpacing: "0.10em",
+            border: "0.008in solid #000",
+            padding: "0.015in 0.06in",
+          }}
+        >
+          ROUTELY · {data.serviceType.toUpperCase()}
+        </span>
       </div>
     </div>
   );
@@ -466,22 +649,36 @@ function ShippingLabel4x6V2({ data, barcodeSvg, qrSvg }: {
  * ScaledPreview — outer takes the SCALED size, inner stays at natural inch
  * size with transform: scale(...). Prevents preview overflow.
  * ─────────────────────────────────────────────────────────────────────────── */
-function ScaledPreview({ widthIn, heightIn, scale, children }: {
-  widthIn: number; heightIn: number; scale: number; children: React.ReactNode;
+function ScaledPreview({
+  widthIn,
+  heightIn,
+  scale,
+  children,
+}: {
+  widthIn: number;
+  heightIn: number;
+  scale: number;
+  children: React.ReactNode;
 }) {
-  const naturalWpx = widthIn  * 96;
+  const naturalWpx = widthIn * 96;
   const naturalHpx = heightIn * 96;
   return (
-    <div style={{
-      width:  naturalWpx * scale,
-      height: naturalHpx * scale,
-      overflow: "hidden",
-      flexShrink: 0,
-    }}>
-      <div style={{
-        width: naturalWpx, height: naturalHpx,
-        transform: `scale(${scale})`, transformOrigin: "top left",
-      }}>
+    <div
+      style={{
+        width: naturalWpx * scale,
+        height: naturalHpx * scale,
+        overflow: "hidden",
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: naturalWpx,
+          height: naturalHpx,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
         {children}
       </div>
     </div>
@@ -501,11 +698,10 @@ function ScaledPreview({ widthIn, heightIn, scale, children }: {
  *   - All sizes are real inch units; no transforms.
  * ═══════════════════════════════════════════════════════════════════════════ */
 function rxLabelHtml(data: LabelData, logoSrc: string, barcodeSvg: string): string {
-  const W = PAPER.rx2x1.w, H = PAPER.rx2x1.h;
+  const W = PAPER.rx2x1.w,
+    H = PAPER.rx2x1.h;
   const { street, locality } = splitAddress(data.recipientAddress);
-  const meta = `${fmtShortDate(data.serviceDate)}${
-    data.packageType ? ` · ${data.packageType.toUpperCase()}` : ""
-  }`;
+  const meta = `${fmtShortDate(data.serviceDate)}${data.packageType ? ` · ${data.packageType.toUpperCase()}` : ""}`;
   const dataPayload = { ...data, street, locality, meta };
   return `<!doctype html><html><head><meta charset="utf-8"><title>Rx Label</title><style>
   @page { size: ${W}in ${H}in; margin: 0; }
@@ -563,23 +759,23 @@ function rxLabelHtml(data: LabelData, logoSrc: string, barcodeSvg: string): stri
 }
 
 function shippingLabelHtml(data: LabelData, logoSrc: string, barcodeSvg: string, qrSvg: string): string {
-  const W = PAPER.shipping4x6.w, H = PAPER.shipping4x6.h;
+  const W = PAPER.shipping4x6.w,
+    H = PAPER.shipping4x6.h;
   const opChips: string[] = [data.serviceType.toUpperCase()];
-  if (data.coldChain)         opChips.push("COLD CHAIN");
+  if (data.coldChain) opChips.push("COLD CHAIN");
   if (data.requiresSignature) opChips.push("SIGNATURE");
-  if (data.collectCod && parseFloat(data.codAmount || "0") > 0)
-                              opChips.push(`COD $${data.codAmount}`);
-  if (data.packageType)       opChips.push(data.packageType.toUpperCase());
-  const chipsHtml = opChips.map((c, i) =>
-    `<span class="chip${i === 0 ? " primary" : ""}">${escapeHtml(c)}</span>`
-  ).join("");
+  if (data.collectCod && parseFloat(data.codAmount || "0") > 0) opChips.push(`COD $${data.codAmount}`);
+  if (data.packageType) opChips.push(data.packageType.toUpperCase());
+  const chipsHtml = opChips
+    .map((c, i) => `<span class="chip${i === 0 ? " primary" : ""}">${escapeHtml(c)}</span>`)
+    .join("");
   const { street, locality } = splitAddress(data.recipientAddress);
-  const streetHtml   = street   ? `<div class="d-street">${escapeHtml(street)}</div>` : "";
+  const streetHtml = street ? `<div class="d-street">${escapeHtml(street)}</div>` : "";
   const localityHtml = locality ? `<div class="d-locality">${escapeHtml(locality)}</div>` : "";
-  const phoneHtml    = data.recipientPhone
-    ? `<div class="d-phone">☎ ${escapeHtml(data.recipientPhone)}</div>` : "";
-  const fromHtml     = data.fromName
-    ? `<span class="qr-from"><span class="qr-from-k">FROM: </span>${escapeHtml(data.fromName)}</span>` : "";
+  const phoneHtml = data.recipientPhone ? `<div class="d-phone">☎ ${escapeHtml(data.recipientPhone)}</div>` : "";
+  const fromHtml = data.fromName
+    ? `<span class="qr-from"><span class="qr-from-k">FROM: </span>${escapeHtml(data.fromName)}</span>`
+    : "";
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Shipping Label</title><style>
   @page { size: ${W}in ${H}in; margin: 0; }
@@ -678,24 +874,34 @@ function shippingLabelHtml(data: LabelData, logoSrc: string, barcodeSvg: string,
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, c => (
-    c === "&" ? "&amp;" :
-    c === "<" ? "&lt;" :
-    c === ">" ? "&gt;" :
-    c === '"' ? "&quot;" : "&#39;"
-  ));
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+  );
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
  * PrintLabelDialog
  * ─────────────────────────────────────────────────────────────────────────── */
 export function PrintLabelDialog({
-  open, onOpenChange, trackingId, recipientName,
-  recipientAddress, recipientPhone,
-  fromName, fromAddress,
-  serviceType, serviceDate, packageType,
-  requiresSignature, coldChain, collectCod, codAmount, notes,
+  open,
+  onOpenChange,
+  trackingId,
+  recipientName,
+  recipientAddress,
+  recipientPhone,
+  fromName,
+  fromAddress,
+  serviceType,
+  serviceDate,
+  packageType,
+  requiresSignature,
+  coldChain,
+  collectCod,
+  codAmount,
+  notes,
   isDraft,
+  initialMode,
+  premiumShipping,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -714,12 +920,44 @@ export function PrintLabelDialog({
   codAmount?: string;
   notes?: string;
   isDraft?: boolean;
+  /** Which label size the dialog opens on. Default preserves the historical
+   *  Rx-first behavior; the Internal Package wizard passes "shipping4x6". */
+  initialMode?: LabelMode;
+  /** Premium 4×6 template data (Internal Package wizard). When set, the
+   *  shipping tab previews AND prints the wizard's ShippingLabel4x6 —
+   *  one component, one data source — plus copies/QR/sender controls.
+   *  Stops flow (prop absent) keeps the classic template untouched. */
+  premiumShipping?: ShippingLabelData;
 }) {
-  const [mode, setMode]       = useState<LabelMode>("rx2x1");
-  const [printer, setPrinter] = useState<PrinterId>("zebra-zd410");
-  useEffect(() => { if (open) { setMode("rx2x1"); setPrinter("zebra-zd410"); } }, [open]);
+  const [mode, setMode] = useState<LabelMode>(initialMode ?? "rx2x1");
+  const [printer, setPrinter] = useState<PrinterId>(MODE_TO_PRINTER[initialMode ?? "rx2x1"]);
+  useEffect(() => {
+    if (open) {
+      const m = initialMode ?? "rx2x1";
+      setMode(m);
+      setPrinter(MODE_TO_PRINTER[m]);
+    }
+  }, [open, initialMode]);
 
-  function pickMode(m: LabelMode) { setMode(m); setPrinter(MODE_TO_PRINTER[m]); }
+  function pickMode(m: LabelMode) {
+    setMode(m);
+    setPrinter(MODE_TO_PRINTER[m]);
+  }
+
+  /* Premium 4×6 settings (only rendered when premiumShipping is passed). */
+  const [copies, setCopies] = useState(1);
+  const [includeSender, setIncludeSender] = useState(true);
+  useEffect(() => {
+    if (open) {
+      setCopies(1);
+      setIncludeSender(true);
+    }
+  }, [open]);
+  const premiumData: ShippingLabelData | null = premiumShipping
+    ? { ...premiumShipping, includeSenderContact: includeSender }
+    : null;
+  const premiumActive = !!premiumData && mode === "shipping4x6";
+  const premiumPrintRef = useRef<HTMLDivElement>(null);
   function pickPrinter(p: PrinterId) {
     setPrinter(p);
     const native = PRINTER_TO_MODE[p];
@@ -727,42 +965,59 @@ export function PrintLabelDialog({
   }
 
   const hasTracking = Boolean(trackingId) && !trackingId.startsWith("draft_");
-  const canPrint    = hasTracking && !isDraft;
+  const canPrint = hasTracking && !isDraft;
 
-  const data: LabelData = useMemo(() => ({
-    trackingId:        hasTracking ? trackingId : "Tracking Pending",
-    recipient:         (recipientName || "Recipient").toUpperCase(),
-    recipientAddress:  recipientAddress ? recipientAddress.toUpperCase() : undefined,
-    recipientPhone:    recipientPhone || undefined,
-    fromName:          (fromName || "Routely").trim().toUpperCase() || "ROUTELY",
-    fromAddress:       fromAddress || undefined,
-    serviceType:       prettyServiceType(serviceType),
-    serviceDate:       serviceDate || "",
-    packageType:       packageType ? prettyPackageType(packageType) : undefined,
-    requiresSignature: Boolean(requiresSignature),
-    coldChain:         Boolean(coldChain),
-    collectCod:        Boolean(collectCod),
-    codAmount:         codAmount || "0",
-    notes:             notes || undefined,
-  }), [
-    hasTracking, trackingId, recipientName, recipientAddress, recipientPhone,
-    fromName, fromAddress, serviceType, serviceDate, packageType,
-    requiresSignature, coldChain, collectCod, codAmount, notes,
-  ]);
+  const data: LabelData = useMemo(
+    () => ({
+      trackingId: hasTracking ? trackingId : "Tracking Pending",
+      recipient: (recipientName || "Recipient").toUpperCase(),
+      recipientAddress: recipientAddress ? recipientAddress.toUpperCase() : undefined,
+      recipientPhone: recipientPhone || undefined,
+      fromName: (fromName || "Routely").trim().toUpperCase() || "ROUTELY",
+      fromAddress: fromAddress || undefined,
+      serviceType: prettyServiceType(serviceType),
+      serviceDate: serviceDate || "",
+      packageType: packageType ? prettyPackageType(packageType) : undefined,
+      requiresSignature: Boolean(requiresSignature),
+      coldChain: Boolean(coldChain),
+      collectCod: Boolean(collectCod),
+      codAmount: codAmount || "0",
+      notes: notes || undefined,
+    }),
+    [
+      hasTracking,
+      trackingId,
+      recipientName,
+      recipientAddress,
+      recipientPhone,
+      fromName,
+      fromAddress,
+      serviceType,
+      serviceDate,
+      packageType,
+      requiresSignature,
+      coldChain,
+      collectCod,
+      codAmount,
+      notes,
+    ],
+  );
 
   // Real barcode + QR SVG strings — regenerate when the tracking id
   // changes. Both are reused by the preview AND injected into the
   // print popup so what users see is exactly what prints.
   const [barcodeSvg, setBarcodeSvg] = useState("");
-  const [qrSvg, setQrSvg]           = useState("");
+  const [qrSvg, setQrSvg] = useState("");
   useEffect(() => {
     let cancelled = false;
     const bc = generateBarcodeSvg(hasTracking ? trackingId : "");
     if (!cancelled) setBarcodeSvg(bc);
-    generateQrSvg(trackingUrl(hasTracking ? trackingId : "")).then(svg => {
+    generateQrSvg(trackingUrl(hasTracking ? trackingId : "")).then((svg) => {
       if (!cancelled) setQrSvg(svg);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [hasTracking, trackingId]);
 
   // Preview scale is computed dynamically from the surface's actual width
@@ -776,7 +1031,7 @@ export function PrintLabelDialog({
     if (!open) return;
     const el = previewSurfaceRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(entries => {
+    const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0;
       setSurfaceW(w);
     });
@@ -787,30 +1042,42 @@ export function PrintLabelDialog({
 
   // Visual cap so labels don't blow up huge on wide desktop monitors.
   const desktopMaxW = mode === "rx2x1" ? 560 : 380;
-  const naturalWpx  = paper.w * 96;
+  const naturalWpx = paper.w * 96;
   // Minus 16px inner padding on each side of the bordered surface.
-  const availableW  = Math.max(0, surfaceW - 32);
-  const previewScale = surfaceW > 0
-    ? Math.max(0.4, Math.min(desktopMaxW, availableW) / naturalWpx)
-    : (mode === "rx2x1" ? 2.5 : 0.92);
+  const availableW = Math.max(0, surfaceW - 32);
+  const previewScale =
+    surfaceW > 0 ? Math.max(0.4, Math.min(desktopMaxW, availableW) / naturalWpx) : mode === "rx2x1" ? 2.5 : 0.92;
   const previewHeight = paper.h * 96 * previewScale;
 
   const popupSizeRef = useRef<{ w: number; h: number }>({ w: 560, h: 320 });
-  popupSizeRef.current = mode === "rx2x1"
-    ? { w: 560, h: 320 }
-    : { w: 480, h: 740 };
+  popupSizeRef.current = mode === "rx2x1" ? { w: 560, h: 320 } : { w: 480, h: 740 };
 
   function handlePrint() {
     if (!canPrint) return;
     const { w: pw, h: ph } = popupSizeRef.current;
     const w = window.open("", "_blank", `width=${pw},height=${ph}`);
     if (!w) return;
-    const absLogo = typeof window !== "undefined"
-      ? new URL(LABEL_LOGO_SRC, window.location.origin).toString()
-      : LABEL_LOGO_SRC;
-    const html  = mode === "rx2x1"
-      ? rxLabelHtml(data, absLogo, barcodeSvg)
-      : shippingLabelHtml(data, absLogo, barcodeSvg, qrSvg);
+    if (premiumActive && premiumPrintRef.current) {
+      // Premium path: print the EXACT node the preview renders (inline
+      // styles + inline QR/barcode SVGs travel with innerHTML) — one copy
+      // per page, physical 4×6, zero margins.
+      const label = premiumPrintRef.current.innerHTML;
+      const pages = Array.from(
+        { length: copies },
+        () => `<div style="width:4in;height:6in;overflow:hidden;page-break-after:always;break-after:page">${label}</div>`,
+      ).join("");
+      w.document.open();
+      w.document.write(
+        `<!doctype html><html><head><meta charset="utf-8"><title>Shipping label</title><style>@page{size:4in 6in;margin:0}html,body{margin:0;padding:0;background:#ffffff}</style></head><body>${pages}<script>window.onload=function(){window.focus();window.print();}<\/script></body></html>`,
+      );
+      w.document.close();
+      w.focus();
+      return;
+    }
+    const absLogo =
+      typeof window !== "undefined" ? new URL(LABEL_LOGO_SRC, window.location.origin).toString() : LABEL_LOGO_SRC;
+    const html =
+      mode === "rx2x1" ? rxLabelHtml(data, absLogo, barcodeSvg) : shippingLabelHtml(data, absLogo, barcodeSvg, qrSvg);
     w.document.open();
     w.document.write(html);
     w.document.close();
@@ -827,10 +1094,10 @@ export function PrintLabelDialog({
           // height; flex/overflow lets the body scroll internally.
           "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] gap-0 p-0",
           "sm:w-auto sm:max-w-4xl",
-          "max-h-[90dvh] flex flex-col overflow-hidden",
+          "flex max-h-[90dvh] flex-col overflow-hidden",
         )}
       >
-        <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-3 sm:px-5">
+        <DialogHeader className="shrink-0 border-border border-b px-4 pt-4 pb-3 sm:px-5">
           <DialogTitle className="flex items-center gap-2 text-sm">
             <Printer className="size-4" /> Print Label
           </DialogTitle>
@@ -839,16 +1106,15 @@ export function PrintLabelDialog({
         {/* Scrollable body — banner, mode toggle, preview, controls.
             Sticky header/footer stay visible while the middle scrolls
             on shorter viewports. */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
           {!canPrint && (
-            <div className="mb-3 flex items-start gap-2.5 rounded-md border border-amber-200/70 bg-amber-500/10 px-3 py-2.5
-                            text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <div className="mb-3 flex items-start gap-2.5 rounded-md border border-amber-200/70 bg-amber-500/10 px-3 py-2.5 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div className="text-xs leading-relaxed">
                 <p className="font-semibold">Drafts can&apos;t be printed yet.</p>
-                <p className="mt-0.5 text-11">
-                  This stop is still a draft, so it doesn&apos;t have a real RTL tracking number yet.
-                  Submit (approve) the draft to create a tracked stop — then come back here to print its label.
+                <p className="mt-0.5 text-[11px]">
+                  This stop is still a draft, so it doesn&apos;t have a real RTL tracking number yet. Submit (approve)
+                  the draft to create a tracked stop — then come back here to print its label.
                 </p>
               </div>
             </div>
@@ -858,27 +1124,31 @@ export function PrintLabelDialog({
               under sm so the two buttons fit on a 320px viewport. */}
           <div className="mb-4 flex justify-center">
             <div className="inline-flex w-full max-w-full items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:w-auto">
-              {([
-                { id: "rx2x1"       as const, label: "Rx Label",       size: "2.25 × 1.25 in", Icon: Tag },
-                { id: "shipping4x6" as const, label: "Shipping Label", size: "4 × 6 in",       Icon: PackageIcon },
-              ]).map(({ id, label, size, Icon }) => (
+              {[
+                { id: "rx2x1" as const, label: "Rx Label", size: "2.25 × 1.25 in", Icon: Tag },
+                { id: "shipping4x6" as const, label: "Shipping Label", size: "4 × 6 in", Icon: PackageIcon },
+              ].map(({ id, label, size, Icon }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => pickMode(id)}
                   className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none sm:gap-2 sm:px-3.5",
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-semibold text-xs transition-colors sm:flex-none sm:gap-2 sm:px-3.5",
                     mode === id
                       ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <Icon className="size-3.5 shrink-0" />
                   <span>{label}</span>
-                  <span className={cn(
-                    "hidden text-10 font-medium sm:inline",
-                    mode === id ? "text-muted-foreground" : "text-muted-foreground/70"
-                  )}>{size}</span>
+                  <span
+                    className={cn(
+                      "hidden font-medium text-[10px] sm:inline",
+                      mode === id ? "text-muted-foreground" : "text-muted-foreground/70",
+                    )}
+                  >
+                    {size}
+                  </span>
                 </button>
               ))}
             </div>
@@ -890,19 +1160,23 @@ export function PrintLabelDialog({
             <div className="flex min-w-0 flex-col items-center justify-start gap-2">
               <div
                 ref={previewSurfaceRef}
-                className="flex w-full max-w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-[hsl(0_0%_96%)] p-3 dark:bg-[hsl(0_0%_12%)] sm:p-4"
+                className="flex w-full max-w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-[hsl(0_0%_96%)] p-3 sm:p-4 dark:bg-[hsl(0_0%_12%)]"
                 style={{ minHeight: previewHeight + 24 }}
               >
                 <ScaledPreview widthIn={paper.w} heightIn={paper.h} scale={previewScale}>
-                  {mode === "rx2x1"
-                    ? <RxLabel2x1 data={data} barcodeSvg={barcodeSvg} />
-                    : <ShippingLabel4x6V2 data={data} barcodeSvg={barcodeSvg} qrSvg={qrSvg} />}
+                  {mode === "rx2x1" ? (
+                    <RxLabel2x1 data={data} barcodeSvg={barcodeSvg} />
+                  ) : premiumData ? (
+                    <PremiumShippingLabel data={premiumData} />
+                  ) : (
+                    <ShippingLabel4x6V2 data={data} barcodeSvg={barcodeSvg} qrSvg={qrSvg} />
+                  )}
                 </ScaledPreview>
               </div>
-              <p className="text-center text-10 text-muted-foreground/80">
+              <p className="text-center text-[10px] text-muted-foreground/80">
                 Preview · {paper.label} {paper.orient} · thermal
               </p>
-              <p className="text-center text-10 text-muted-foreground/60">
+              <p className="text-center text-[10px] text-muted-foreground/60">
                 {paper.w * 96} × {paper.h * 96} px @ 96 dpi · scale {previewScale.toFixed(2)}×
               </p>
             </div>
@@ -910,40 +1184,77 @@ export function PrintLabelDialog({
             {/* Controls column */}
             <div className="flex flex-col gap-3">
               <div>
-                <label className="mb-1 block text-11 font-semibold uppercase tracking-wider text-muted-foreground">
+                <label
+                  htmlFor="print-label-size"
+                  className="mb-1 block font-semibold text-[11px] text-muted-foreground uppercase tracking-wider"
+                >
                   Label size
                 </label>
-                <Select value={printer} onValueChange={v => pickPrinter(v as PrinterId)}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                <Select value={printer} onValueChange={(v) => pickPrinter(v as PrinterId)}>
+                  <SelectTrigger id="print-label-size" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(PRINTER_LABELS) as PrinterId[]).map(id => (
-                      <SelectItem key={id} value={id} className="text-xs">{PRINTER_LABELS[id]}</SelectItem>
+                    {(Object.keys(PRINTER_LABELS) as PrinterId[]).map((id) => (
+                      <SelectItem key={id} value={id} className="text-xs">
+                        {PRINTER_LABELS[id]}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="mt-1.5 text-10 leading-relaxed text-muted-foreground/70">
-                  Pick the label size, then choose your printer in the print dialog. Set your thermal printer
-                  as the default and the dialog opens ready — orientation is handled by the driver.
+                <p className="mt-1.5 text-[10px] text-muted-foreground/70 leading-relaxed">
+                  Pick the label size, then choose your printer in the print dialog. Set your thermal printer as the
+                  default and the dialog opens ready — orientation is handled by the driver.
                 </p>
               </div>
 
+              {premiumActive && (
+                <div className="flex flex-col gap-2.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">Copies</span>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-6"
+                        onClick={() => setCopies((c) => Math.max(1, c - 1))}
+                        aria-label="Fewer copies"
+                      >
+                        −
+                      </Button>
+                      <span className="w-6 text-center font-semibold text-xs tabular-nums">{copies}</span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-6"
+                        onClick={() => setCopies((c) => Math.min(10, c + 1))}
+                        aria-label="More copies"
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                  <label className="flex items-center justify-between gap-2 text-xs">
+                    Include sender contact
+                    <Switch checked={includeSender} onCheckedChange={setIncludeSender} />
+                  </label>
+                  <p className="text-[10px] text-muted-foreground/70">Optimized for 203 DPI thermal printers.</p>
+                </div>
+              )}
+
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-                <p className="text-11 font-semibold uppercase tracking-wider text-muted-foreground">
-                  Page setup
-                </p>
-                <p className="mt-1 break-all text-11 font-mono text-foreground/80">
+                <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">Page setup</p>
+                <p className="mt-1 break-all font-mono text-[11px] text-foreground/80">
                   @page {`{ size: ${paper.w}in ${paper.h}in; margin: 0 }`}
                 </p>
-                <p className="mt-1 text-10 text-muted-foreground/70">
+                <p className="mt-1 text-[10px] text-muted-foreground/70">
                   Real physical size · single root · driver controls orientation.
                 </p>
               </div>
 
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-                <p className="text-11 font-semibold uppercase tracking-wider text-muted-foreground">
-                  Codes
-                </p>
-                <p className="mt-1 break-all text-11 text-foreground/85">
+                <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">Codes</p>
+                <p className="mt-1 break-all text-[11px] text-foreground/85">
                   Real Code 128 barcode · QR encodes <span className="font-mono">app.routelypro.com/track/RTL-…</span>
                 </p>
               </div>
@@ -951,14 +1262,18 @@ export function PrintLabelDialog({
           </div>
         </div>
 
+        {/* Hidden UNSCALED premium label — the print popup copies this exact
+            markup, so preview and print can never drift. */}
+        {premiumData && (
+          <div ref={premiumPrintRef} className="hidden" aria-hidden="true">
+            <PremiumShippingLabel data={premiumData} />
+          </div>
+        )}
+
         {/* Footer — sticky bottom; full-width buttons on mobile so they
             stay tappable; horizontal on sm+. */}
-        <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t border-border px-4 py-3 sm:flex-row sm:px-5">
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            className="w-full sm:w-auto"
-          >
+        <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-border border-t px-4 py-3 sm:flex-row sm:px-5">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
             Cancel
           </Button>
           <Button
@@ -979,16 +1294,16 @@ export function PrintLabelDialog({
 function prettyServiceType(s?: string): string {
   const v = (s || "delivery").toLowerCase();
   if (v === "dropoff" || v === "drop_off" || v === "drop-off") return "DropOff";
-  if (v === "delivery")                                         return "Delivery";
-  if (v === "pickup")                                           return "Pickup";
-  if (v === "return")                                           return "Return";
-  if (v === "same_day" || v === "express")                      return "Express";
+  if (v === "delivery") return "Delivery";
+  if (v === "pickup") return "Pickup";
+  if (v === "return") return "Return";
+  if (v === "same_day" || v === "express") return "Express";
   return v.charAt(0).toUpperCase() + v.slice(1);
 }
 function prettyPackageType(s: string): string {
   const v = s.toLowerCase();
-  if (v === "rx")      return "Rx";
-  if (v === "cold")    return "Cold";
+  if (v === "rx") return "Rx";
+  if (v === "cold") return "Cold";
   if (v === "regular") return "Regular";
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

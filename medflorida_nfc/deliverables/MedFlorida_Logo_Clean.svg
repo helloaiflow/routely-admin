@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="118" viewBox="0 0 500 118">
+<g id="symbol" fill="none" stroke-linecap="round">
+ <path d="M20 103 C31 84 50 83 68 74 C84 66 94 51 99 40" stroke="#00A9CE" stroke-width="7"/>
+ <path d="M19 80 C29 63 48 60 65 52 C80 45 90 31 93 13" stroke="#73CEE2" stroke-width="8"/>
+ <path d="M8 104 C22 82 43 78 61 69 C78 61 91 48 98 31" stroke="#009BC2" stroke-width="5"/>
+</g>
+<g id="wordmark" fill="#000"><text x="119" y="69" font-family="Avenir Next,Arial,sans-serif" font-size="42" font-weight="600">MedFlorida</text><text x="121" y="91" font-family="Avenir Next,Arial,sans-serif" font-size="16" letter-spacing="1.2">MEDICAL CENTERS</text></g>
+</svg>

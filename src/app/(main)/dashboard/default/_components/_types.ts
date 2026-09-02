@@ -64,6 +64,7 @@ export interface DashboardStop {
   recipient_phone: string | null;
   zone: string | null;
   requires_signature: boolean;
+  internal_package: boolean;
   return_to_sender: boolean;
   notes: string | null;
   pickup_name: string | null;
@@ -89,6 +90,9 @@ export interface DashboardData {
   stops: DashboardStop[];
   drafts: DashboardStop[];
   trend: DashboardTrendPoint[];
+  // Real zone names present in this tenant's own stops (North/South/Central/
+  // Other today — confirmed live, 2026-08-31; never a fixed/hardcoded set).
+  zone_breakdown: Record<string, number>;
   next_stop: DashboardStop | null;
   cod_queue: DashboardStop[];
   cold_packages: DashboardStop[];

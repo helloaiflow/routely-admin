@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -10,26 +10,29 @@ import {
   Clock,
   LayoutDashboard,
   Package,
+  Share2,
   Truck,
   XCircle,
 } from "lucide-react";
 import useSWR from "swr";
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import type { DateRange } from "@/components/ui/date-range-picker";
 import { DateRangePicker, todayRange } from "@/components/ui/date-range-picker";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRoutelyRealtime } from "@/hooks/use-routely-realtime";
 import { phaseOf } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 import { formatEta, statusLabel, statusTone, toneClasses } from "./_helpers";
 import type { DashboardData, DashboardStop } from "./_types";
-import { DeliveriesBreakdown, StopsByDisposition } from "./delivery-charts";
-import { KpiCards } from "./kpi-cards";
-import { NextStopPanel } from "./next-stop-panel";
-import { SankeyFlow } from "./sankey-flow";
+import { DeliveryStatusCard } from "./delivery-status-card";
+import { NeedsAttentionCard } from "./needs-attention-card";
+import { OpsMetricStrip } from "./ops-metric-strip";
+import { StopMixCard } from "./stop-mix-card";
+import { ZonesCapacityCard } from "./zones-capacity-card";
+import { StopsOverviewChart } from "./stops-overview-chart";
 import { StopEditSheet } from "./stop-edit-sheet";
 import { StopsCard } from "./stops-card";
 import { StopsTable } from "./stops-table";
@@ -46,6 +49,33 @@ function toYmd(d: Date) {
 
 type Tab = "overview" | "stops" | "activities";
 const DASHBOARD_REALTIME_TABLES = ["stops", "draft_stops"] as const;
+
+// ── Share / screenshot ──────────────────────────────────────────────────
+async function shareDashboard(el: HTMLElement | null) {
+  if (!el) return;
+  try {
+    // Dynamic import so html2canvas only loads when needed
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(el, {
+      backgroundColor: null,
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `routely-dashboard-${new Date().toISOString().split("T")[0]}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  } catch {
+    // Fallback: window.print()
+    window.print();
+  }
+}
 
 // ── Activities feed ──────────────────────────────────────────────────────
 function ActivitiesFeed({ stops, loading }: { stops: DashboardStop[]; loading: boolean }) {
@@ -125,15 +155,15 @@ function ActivitiesFeed({ stops, loading }: { stops: DashboardStop[]; loading: b
                     {[s.delivery_address, s.delivery_city].filter(Boolean).join(", ")}
                   </p>
                   {/* Tracking number */}
-                  <p className="mt-0.5 font-medium font-mono text-10 text-primary/70">
+                  <p className="mt-0.5 font-medium font-mono text-[10px] text-primary/70">
                     {s.stop_id ?? s.id?.slice(-12).toUpperCase() ?? "—"}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={cn("rounded-full px-2 py-0.5 font-semibold text-10", tone.bg, tone.text)}>
+                  <span className={cn("rounded-full px-2 py-0.5 font-semibold text-[10px]", tone.bg, tone.text)}>
                     {statusLabel(s.status)}
                   </span>
-                  <span className="flex items-center gap-1 text-10 text-muted-foreground/50">
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
                     <Clock className="size-2.5" />
                     {formatEta(s.delivery_date, s.is_same_day)}
                   </span>
@@ -150,8 +180,12 @@ function ActivitiesFeed({ stops, loading }: { stops: DashboardStop[]; loading: b
 // ── Main shell ───────────────────────────────────────────────────────────
 export function DashboardShell() {
   const [tab, setTab] = useState<Tab>("overview");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editStopId, setEditStopId] = useState<string | null>(null);
+  // Default range = rolling last 7 days (CEO, 2026-09-01) — always opens
+  // with data, and every card (KPIs, chart, disposition, zone) reads the
+  // SAME filter.
+  // Default range: Today (CEO, 2026-09-01 — supersedes the Last-7-Days call
+  // from earlier the same day; single-day KPIs + the trend still charts 30d).
   const [dateRange, setDateRange] = useState<DateRange>(todayRange);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
@@ -175,9 +209,7 @@ export function DashboardShell() {
 
   const loading = isLoading && !data;
   const showStaleBanner = Boolean(error && data);
-  const upcoming = data?.upcoming ?? [];
   const allStops = data?.stops ?? [];
-  const selectedStop: DashboardStop | null = upcoming.find((s) => s.id === selectedId) ?? data?.next_stop ?? null;
 
   // "Today's Stops" = the server's real total (CEO 2026-07-13). The previous
   // local override excluded the UNCONFIRMED set (phaseOf === "pre"), which made
@@ -197,15 +229,52 @@ export function DashboardShell() {
     { key: "activities", label: "Activities", Icon: Activity },
   ];
 
+  const handleShare = useCallback(() => {
+    shareDashboard(dashboardRef.current);
+  }, []);
+
   return (
     <div ref={dashboardRef} className="@container/main flex flex-1 flex-col gap-3 p-3 md:gap-4 md:p-4">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="type-page-title">Operations Dashboard</h1>
-          <p className="type-desc mt-0.5">Live view of today&apos;s stops, routes and deliveries</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="type-page-title text-foreground">Operations Dashboard</h1>
+          <p className="hidden text-muted-foreground text-xs sm:block">
+            Monitor volume, delivery performance, and exceptions across your network.
+          </p>
         </div>
-        <DateRangePicker value={dateRange} onChange={setDateRange} />
+
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Live — reflects the REAL SWR refresh loop (30s interval +
+            revalidate-on-focus + realtime mutate), not decoration. The
+            tooltip carries the server's own generated_at timestamp. */}
+          <span
+            className="hidden items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 font-medium text-xs sm:flex"
+            title={
+              data?.generated_at
+                ? `Auto-refreshing every 30s · last refresh ${new Date(data.generated_at).toLocaleTimeString()}`
+                : "Auto-refreshing every 30s"
+            }
+          >
+            <span
+              className={cn("size-1.5 rounded-full", error ? "bg-amber-500" : "bg-emerald-500")}
+              aria-hidden="true"
+            />
+            Live
+          </span>
+          {/* Date Range Picker */}
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          {/* Share — hidden on mobile */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden h-8 gap-1.5 font-medium text-xs sm:flex"
+            onClick={handleShare}
+          >
+            <Share2 className="size-3.5" />
+            Share
+          </Button>
+        </div>
       </div>
 
       {/* ── Tab nav — shadcn Tabs (dark-mode aware via its baked-in dark:
@@ -225,7 +294,7 @@ export function DashboardShell() {
               value={t.key}
               disabled={t.soon}
               title={t.soon ? "Routes — coming soon" : undefined}
-              className="group shrink-0 gap-1.5 px-2.5 text-13 sm:px-3 sm:text-sm"
+              className="group shrink-0 gap-1.5 px-2.5 text-[13px] sm:px-3 sm:text-sm"
             >
               <t.Icon
                 className={cn(
@@ -240,7 +309,8 @@ export function DashboardShell() {
               {t.label}
               {t.count != null && t.count > 0 && (
                 <Badge
-                  className="ml-0.5 h-4 min-w-4 justify-center rounded-full border-transparent bg-primary px-1 text-10 text-white tabular-nums leading-none"
+                  variant="secondary"
+                  className="ml-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px] tabular-nums leading-none"
                 >
                   {t.count}
                 </Badge>
@@ -259,7 +329,7 @@ export function DashboardShell() {
       )}
 
       {/* ── KPI Cards — only on overview tab (per user feedback) ───────── */}
-      {tab === "overview" && <KpiCards kpis={kpis} loading={loading} />}
+      {tab === "overview" && <OpsMetricStrip data={data} loading={loading} />}
 
       {/* ── Tab content ────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
@@ -270,55 +340,28 @@ export function DashboardShell() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="grid grid-cols-1 gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,36%)]"
+            className="flex flex-col gap-3 md:gap-4"
           >
             {/*
-              Mobile order (single col):
-                1. Stop Flow (Sankey)
-                2. Live Stop Monitor  ← appears right after Sankey on mobile
-                3. Deliveries + Disposition charts
-                4. Activity Trend
-                5. COD Queue + Cold Chain
-
-              Desktop order (xl 2-col):
-                Left:  Sankey → charts → activity → cod/cold
-                Right: Live Stop Monitor (sticky)
+              Command-center layout (CEO, 2026-09-01, reference image):
+                1. KPI strip (above, outside this container)
+                2. Main row 8/4 — Delivery flow + Needs attention
+                3. Analytics row — Stop mix · Delivery status · Zones
+                   (ranked/stacked BARS, no donuts, per the redesign spec)
+                4. Special Handling table
             */}
-
-            {/* ── Sankey — top on ALL breakpoints ── */}
-            <div className="xl:col-start-1 xl:row-start-1">
-              <SankeyFlow data={data} loading={loading} />
+            <div className="grid grid-cols-1 items-stretch gap-3 md:gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+              <StopsOverviewChart data={data} loading={loading} />
+              <NeedsAttentionCard data={data} loading={loading} onGoToStops={() => setTab("stops")} />
             </div>
 
-            {/* ── Right column — Live Stop Monitor only ───────────────────────────
-              The monitor SPANS both left rows (row-span-2) so it never shares a
-              single grid row with the short Sankey — that sharing forced row 1 to
-              the monitor's ~640px height and left a giant dead gap under the Sankey
-              (charts pushed down). With row-span-2, row 1 sizes to the Sankey alone
-              and the charts sit right beneath it. `self-start` + the panel's own
-              FIXED height (no h-full) keep it a tidy top-aligned ~12-stop card —
-              it does NOT stretch to fill the span. The left column total (Sankey +
-              charts + Special Handling) is always taller than the monitor, so the
-              spanned rows never stretch to fit it. ──────────────────────────── */}
-            <div className="xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:self-start">
-              <NextStopPanel
-                stop={selectedStop}
-                upcoming={upcoming}
-                allStops={allStops}
-                loading={loading}
-                selectedId={selectedId ?? null}
-                onSelect={setSelectedId}
-              />
+            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
+              <StopMixCard data={data} loading={loading} />
+              <DeliveryStatusCard data={data} loading={loading} />
+              <ZonesCapacityCard data={data} loading={loading} />
             </div>
 
-            {/* ── Left column row 2 — charts + Special Handling ── */}
-            <div className="flex flex-col gap-3 md:gap-4 xl:col-start-1 xl:row-start-2">
-              <div className="hidden grid-cols-1 gap-3 sm:grid md:grid-cols-2 md:gap-4">
-                <DeliveriesBreakdown stops={data?.stops ?? []} loading={loading} />
-                <StopsByDisposition stops={data?.stops ?? []} loading={loading} />
-              </div>
-              <StopsCard stops={data?.stops ?? []} loading={loading} />
-            </div>
+            <StopsCard stops={data?.stops ?? []} loading={loading} />
           </motion.div>
         )}
 

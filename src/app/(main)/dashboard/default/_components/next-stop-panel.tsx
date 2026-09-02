@@ -35,6 +35,9 @@ function stopPhase(s: DashboardStop): "completed" | "active" | "pending" {
   return p === "in_motion" ? "active" : p === "pre" ? "pending" : "completed";
 }
 
+// ⚠ PRESERVED ON PURPOSE (CEO, 2026-09-01): this component was removed from the
+// Operations Dashboard overview but must NOT be deleted — it will be reused as
+// the live monitor on the upcoming Routes tab/page.
 // The Live Stop Monitor is a control-tower feed of TODAY's DELIVERIES IN MOTION
 // (+ the day's terminal stops that sink to the bottom). A stop only belongs here
 // if it's dispatched/in-transit (a driver is moving it) OR already terminal today.
@@ -66,8 +69,10 @@ function _fmtDate(v: string | null | undefined): string {
   }
 }
 
-import { formatDisplayCase } from "@/lib/format-display";
-const toTitleCase = (s: string) => formatDisplayCase(s);
+function toTitleCase(s: string): string {
+  if (!s) return s;
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 // Format a US phone as (XXX) XXX-XXXX for the monitor row. Strips non-digits,
 // drops a leading country-code 1 on 11-digit E.164, and degrades gracefully on
@@ -256,7 +261,7 @@ function StopNode({
     >
       <span
         className={cn(
-          "relative mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full font-semibold text-10",
+          "relative mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full font-semibold text-[10px]",
           numCls,
         )}
       >
@@ -279,13 +284,13 @@ function StopNode({
           </p>
           <div className="flex shrink-0 items-center gap-1">
             {isNext && (
-              <span className="inline-flex items-center rounded-md bg-primary/12 px-1.5 py-0.5 font-bold text-10 text-primary leading-none tracking-widest ring-1 ring-primary/25">
+              <span className="inline-flex items-center rounded-md bg-primary/12 px-1.5 py-0.5 font-bold text-[10px] text-primary leading-none tracking-widest ring-1 ring-primary/25">
                 NEXT
               </span>
             )}
             <span
               className={cn(
-                "inline-flex items-center rounded-full px-2 py-0.5 font-semibold text-10 leading-none ring-1",
+                "inline-flex items-center rounded-full px-2 py-0.5 font-semibold text-[10px] leading-none ring-1",
                 pillCls,
               )}
             >
@@ -296,8 +301,8 @@ function StopNode({
 
         {/* Line 2: Street address + ETA (clock icon, semibold, no background) */}
         <div className="mt-1 flex items-baseline justify-between gap-2">
-          <p className="truncate text-11 text-muted-foreground leading-tight">{street || "—"}</p>
-          <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-11 text-foreground/75 tabular-nums leading-none">
+          <p className="truncate text-[11px] text-muted-foreground leading-tight">{street || "—"}</p>
+          <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-[11px] text-foreground/75 tabular-nums leading-none">
             <Clock className="size-2.5 text-muted-foreground/60" aria-hidden="true" />
             {etaTag}
           </span>
@@ -305,17 +310,17 @@ function StopNode({
 
         {/* Line 3: City, State ZIP — full address stacked for mobile (#3) */}
         {cityLine && (
-          <p className="mt-0.5 truncate text-11 text-muted-foreground/70 leading-tight">{cityLine}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70 leading-tight">{cityLine}</p>
         )}
 
         {/* Line 4: Recipient phone (mono italic, muted) */}
         {phone && (
-          <p className="mt-0.5 truncate font-mono text-10 text-muted-foreground/65 italic leading-none">{phone}</p>
+          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/65 italic leading-none">{phone}</p>
         )}
 
         {/* Line 5: RTL tracking number — always present in the monitor (no drafts
             here), kept visible on mobile per spec (#4). */}
-        <p className="mt-0.5 truncate font-mono font-semibold text-10 text-primary leading-none tracking-tight">
+        <p className="mt-0.5 truncate font-mono font-semibold text-[10px] text-primary leading-none tracking-tight">
           {stopId}
         </p>
       </div>
@@ -435,7 +440,7 @@ function ProgressTimeline({ s }: { s: DashboardStop }) {
             <span
               key={stage.key}
               className={cn(
-                "text-10 leading-tight tracking-wide transition-colors duration-500",
+                "text-[10px] leading-tight tracking-wide transition-colors duration-500",
                 isCurrent
                   ? failed
                     ? "font-semibold text-rose-600"
@@ -510,7 +515,7 @@ function DetailSection({ s }: { s: DashboardStop & Record<string, unknown> }) {
           </Link>
           <span
             className={cn(
-              "shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-10 leading-none ring-1",
+              "shrink-0 rounded-full px-1.5 py-0.5 font-semibold text-[10px] leading-none ring-1",
               s.stop_type === "pickup"
                 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-amber-500/20"
                 : s.stop_type === "dropoff"
@@ -558,19 +563,19 @@ function DetailSection({ s }: { s: DashboardStop & Record<string, unknown> }) {
         <p className="mt-0.5 truncate font-semibold text-xs text-foreground/75 leading-tight">
           {physicalStreet(s) || "—"}
         </p>
-        <p className="truncate text-11 text-muted-foreground">{cityLine || "—"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{cityLine || "—"}</p>
 
         {/* Inline badges row — type / package / status / same-day / signature / cod / rts */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 font-medium text-10 text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
             {tBadge.emoji} {tBadge.label}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 font-medium text-10 text-muted-foreground">
+          <span className="inline-flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
             {pkgEmoji} {pkgLabel}
           </span>
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 font-semibold text-10 ring-1",
+              "rounded-full px-2 py-0.5 font-semibold text-[10px] ring-1",
               isDelivered(s)
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-500/20"
                 : isFailed(s)
@@ -583,22 +588,22 @@ function DetailSection({ s }: { s: DashboardStop & Record<string, unknown> }) {
             {status.label}
           </span>
           {s.is_same_day && (
-            <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 font-medium text-10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20">
+            <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 font-medium text-[10px] text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20">
               ⚡ Same Day
             </span>
           )}
           {s.requires_signature && (
-            <span className="rounded-md bg-indigo-500/10 px-1.5 py-0.5 font-medium text-10 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-500/20">
+            <span className="rounded-md bg-indigo-500/10 px-1.5 py-0.5 font-medium text-[10px] text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-500/20">
               ✍ Signature
             </span>
           )}
           {s.collect_cod && (
-            <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-medium text-10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+            <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-medium text-[10px] text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20">
               💵 COD
             </span>
           )}
           {s.return_to_sender && (
-            <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 font-medium text-10 text-rose-700 dark:text-rose-400 ring-1 ring-rose-500/20">
+            <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 font-medium text-[10px] text-rose-700 dark:text-rose-400 ring-1 ring-rose-500/20">
               ↩ RTS
             </span>
           )}
@@ -607,8 +612,8 @@ function DetailSection({ s }: { s: DashboardStop & Record<string, unknown> }) {
         {/* Driver row */}
         <div className="mt-1.5 flex items-center gap-1.5">
           <Truck className="size-3 text-muted-foreground/60" aria-hidden="true" />
-          <span className="font-medium text-11 text-muted-foreground">{toTitleCase(driver)}</span>
-          {s.notes && <span className="truncate text-10 text-muted-foreground/60">· {s.notes as string}</span>}
+          <span className="font-medium text-[11px] text-muted-foreground">{toTitleCase(driver)}</span>
+          {s.notes && <span className="truncate text-[10px] text-muted-foreground/60">· {s.notes as string}</span>}
         </div>
       </div>
 
@@ -651,8 +656,8 @@ function StopFlow({
   return (
     <>
       <div className="mt-1 flex items-center justify-between border-border/35 border-t bg-muted/10 px-3 py-2">
-        <span className="font-semibold text-10 text-muted-foreground/55 tracking-wide">Active Deliveries</span>
-        <span className="text-10 text-muted-foreground/40 tabular-nums">
+        <span className="font-semibold text-[10px] text-muted-foreground/55 tracking-wide">Active Deliveries</span>
+        <span className="text-[10px] text-muted-foreground/40 tabular-nums">
           {filtered.length}/{stops.length}
         </span>
       </div>
@@ -664,7 +669,7 @@ function StopFlow({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search stops…"
-            className="h-7 w-full rounded-md border border-border/35 bg-background pr-6 pl-7 text-10 text-foreground outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary/35 focus:ring-1 focus:ring-primary/15"
+            className="h-7 w-full rounded-md border border-border/35 bg-background pr-6 pl-7 text-[10px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-primary/35 focus:ring-1 focus:ring-primary/15"
           />
           {search && (
             <button
@@ -679,7 +684,7 @@ function StopFlow({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="py-5 text-center text-10 text-muted-foreground/45">
+        <div className="py-5 text-center text-[10px] text-muted-foreground/45">
           {search ? "No stops match" : "No stops today"}
         </div>
       ) : (
@@ -791,7 +796,7 @@ export function NextStopPanel({
               animate={{ opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.4, repeat: Number.POSITIVE_INFINITY }}
             />
-            <span className="font-semibold text-10 text-primary tabular-nums">{liveCount} live</span>
+            <span className="font-semibold text-[10px] text-primary tabular-nums">{liveCount} live</span>
           </span>
         )}
       </div>
@@ -816,7 +821,7 @@ export function NextStopPanel({
             <div className="flex size-8 items-center justify-center rounded-full bg-emerald-500/12 ring-1 ring-emerald-500/20">
               <CheckCircle2 className="size-4 text-emerald-600" />
             </div>
-            <p className="font-medium text-11 text-muted-foreground">All stops complete</p>
+            <p className="font-medium text-[11px] text-muted-foreground">All stops complete</p>
           </div>
         ) : (
           <AnimatePresence mode="wait">
@@ -856,7 +861,7 @@ export function NextStopPanel({
               <div className="flex size-8 items-center justify-center rounded-full bg-emerald-500/12 ring-1 ring-emerald-500/20">
                 <CheckCircle2 className="size-4 text-emerald-600" />
               </div>
-              <p className="font-medium text-11 text-muted-foreground">All stops complete</p>
+              <p className="font-medium text-[11px] text-muted-foreground">All stops complete</p>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -895,7 +900,7 @@ export function NextStopPanel({
             >
               <CheckCircle2 className="size-3.5 text-emerald-600" />
             </motion.div>
-            <p className="text-10 text-muted-foreground">All caught up</p>
+            <p className="text-[10px] text-muted-foreground">All caught up</p>
           </div>
         )}
       </div>
@@ -913,12 +918,12 @@ export function NextStopPanel({
                   <span className="font-bold text-base text-foreground tabular-nums leading-none">
                     {monitorStops.length}
                   </span>
-                  <span className="text-11 text-muted-foreground/65">showing</span>
+                  <span className="text-[11px] text-muted-foreground/65">showing</span>
                 </span>
                 {deliveredCount > 0 && (
                   <>
                     <div className="h-3 w-px bg-border/40" />
-                    <span className="inline-flex items-center gap-1 text-11 text-emerald-600">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
                       <span className="size-1.5 rounded-full bg-emerald-500" />
                       {deliveredCount} delivered
                     </span>
@@ -927,7 +932,7 @@ export function NextStopPanel({
                 {liveCount > 0 && (
                   <>
                     <div className="h-3 w-px bg-border/40" />
-                    <span className="inline-flex items-center gap-1 text-11 text-blue-600">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-blue-600">
                       <span className="size-1.5 rounded-full bg-blue-500" />
                       {liveCount} active
                     </span>
@@ -936,14 +941,14 @@ export function NextStopPanel({
                 {failedCount > 0 && (
                   <>
                     <div className="h-3 w-px bg-border/40" />
-                    <span className="inline-flex items-center gap-1 text-11 text-rose-600">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-rose-600">
                       <span className="size-1.5 rounded-full bg-rose-500" />
                       {failedCount} failed
                     </span>
                   </>
                 )}
               </div>
-              <span className="font-medium text-11 text-muted-foreground/45 uppercase tracking-widest">
+              <span className="font-medium text-[11px] text-muted-foreground/45 uppercase tracking-widest">
                 {monthDayET()}
               </span>
             </div>

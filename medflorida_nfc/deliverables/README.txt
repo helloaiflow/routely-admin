@@ -1,0 +1,1 @@
+Generated with CadQuery 2.8. Run build_medflorida.py to regenerate. NFC is provisional Ø25 x 0.8 mm; confirm the real tag before production. Creality Print GUI slicing screenshots require final operator verification.

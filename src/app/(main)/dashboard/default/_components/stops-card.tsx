@@ -2,16 +2,18 @@
 
 import { useMemo, useState } from "react";
 
-import { ChevronDown, ChevronRight, Phone } from "lucide-react";
+import { ChevronDown, ChevronRight, Phone, Plus } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useInternalPackageStore } from "@/stores/internal-package/internal-package-store";
 
 import { statusLabel } from "./_helpers";
 import type { DashboardStop } from "./_types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type FilterKey = "signature" | "cod" | "cold" | "returns";
+type FilterKey = "signature" | "cod" | "cold" | "internal" | "returns";
 
 interface ColDef {
   key: string;
@@ -25,6 +27,7 @@ const FILTERS: { key: FilterKey; label: string; short: string; emptyMsg: string 
   { key: "signature", label: "Signature Required", short: "Signature", emptyMsg: "No signature-required stops today" },
   { key: "cod", label: "COD", short: "COD", emptyMsg: "No COD stops today" },
   { key: "cold", label: "Cold Package", short: "Cold", emptyMsg: "No cold-chain stops today" },
+  { key: "internal", label: "Internal Package", short: "Internal", emptyMsg: "No internal packages today" },
   { key: "returns", label: "Return to Tenant", short: "Returns", emptyMsg: "No return stops today" },
 ];
 
@@ -37,6 +40,8 @@ function matchFilter(s: DashboardStop, k: FilterKey): boolean {
       return !!s.collect_cod;
     case "cold":
       return ["cold", "cold_chain"].includes((s.package_type ?? "").toLowerCase());
+    case "internal":
+      return !!s.internal_package;
     case "returns":
       return !!s.return_to_sender;
   }
@@ -72,12 +77,11 @@ function fmtCurrency(n?: number | null) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
 }
 
-import { formatDisplayCase } from "@/lib/format-display";
-const toTitle = (s: string) => formatDisplayCase(s);
+const toTitle = (s: string) => (s ?? "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 // ── Reusable cell components ───────────────────────────────────────────────
 const CTracking = ({ s }: { s: DashboardStop }) => (
-  <span className="font-mono font-semibold text-11 text-primary">{s.stop_id ?? s.id.slice(-8).toUpperCase()}</span>
+  <span className="font-mono font-semibold text-[11px] text-primary">{s.stop_id ?? s.id.slice(-8).toUpperCase()}</span>
 );
 const CRecipient = ({ s }: { s: DashboardStop }) => (
   <span className="whitespace-nowrap font-medium text-foreground text-xs">{toTitle(s.recipient_name || "—")}</span>
@@ -101,7 +105,7 @@ const CDriver = ({ s }: { s: DashboardStop }) => (
 const CStatus = ({ s }: { s: DashboardStop }) => (
   <span
     className={cn(
-      "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 font-semibold text-10 ring-1",
+      "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 font-semibold text-[10px] ring-1",
       badgeCls(s.status),
     )}
   >
@@ -151,6 +155,15 @@ const COLS: Record<FilterKey, ColDef[]> = {
     { key: "eta", label: "ETA", render: (s) => <CEta s={s} /> },
     { key: "driver", label: "Driver", render: (s) => <CDriver s={s} />, cls: "hidden md:table-cell" },
   ],
+  // Internal: courier-internal packages — type + status + notes
+  internal: [
+    { key: "track", label: "Tracking", render: (s) => <CTracking s={s} /> },
+    { key: "recip", label: "Recipient", render: (s) => <CRecipient s={s} /> },
+    { key: "addr", label: "Address", render: (s) => <CAddress s={s} />, cls: "hidden md:table-cell" },
+    { key: "type", label: "Pkg Type", render: (s) => <CPackType s={s} /> },
+    { key: "status", label: "Status", render: (s) => <CStatus s={s} /> },
+    { key: "driver", label: "Driver", render: (s) => <CDriver s={s} />, cls: "hidden md:table-cell" },
+  ],
   // Returns: status + notes explain why it's being returned
   returns: [
     { key: "track", label: "Tracking", render: (s) => <CTracking s={s} /> },
@@ -166,6 +179,7 @@ const FILTER_EMOJI: Record<FilterKey, string> = {
   signature: "✍️",
   cod: "💵",
   cold: "❄️",
+  internal: "🏢",
   returns: "↩️",
 };
 
@@ -195,7 +209,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
           {/* Row 2: name + city */}
           <div className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-foreground text-xs">{toTitle(s.recipient_name || "—")}</span>
-            <span className="shrink-0 text-11 text-muted-foreground">{s.delivery_city ?? ""}</span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">{s.delivery_city ?? ""}</span>
           </div>
         </div>
         <div className="mt-1 shrink-0 text-muted-foreground/40">
@@ -212,7 +226,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
                 key={col.key}
                 className={cn("flex flex-col gap-0.5", col.key === "addr" || col.key === "notes" ? "col-span-2" : "")}
               >
-                <span className="font-semibold text-10 text-muted-foreground/50 uppercase leading-none tracking-wider">
+                <span className="font-semibold text-[10px] text-muted-foreground/50 uppercase leading-none tracking-wider">
                   {col.label}
                 </span>
                 <div>{col.render(s)}</div>
@@ -223,7 +237,7 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
           {s.recipient_phone && (
             <a
               href={`tel:${s.recipient_phone}`}
-              className="mt-3 inline-flex items-center gap-1.5 font-medium text-11 text-primary"
+              className="mt-3 inline-flex items-center gap-1.5 font-medium text-[11px] text-primary"
             >
               <Phone className="size-3" />
               Call {s.recipient_phone}
@@ -238,14 +252,16 @@ function MobileRow({ s, cols, emoji }: { s: DashboardStop; cols: ColDef[]; emoji
 // ── Main component ─────────────────────────────────────────────────────────
 export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading: boolean }) {
   const [filter, setFilter] = useState<FilterKey>("signature");
+  const openInternalPackage = useInternalPackageStore((s) => s.openInternalPackage);
 
   // Per-filter counts
   const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { signature: 0, cod: 0, cold: 0, returns: 0 };
+    const c: Record<FilterKey, number> = { signature: 0, cod: 0, cold: 0, internal: 0, returns: 0 };
     for (const s of stops) {
       if (matchFilter(s, "signature")) c.signature++;
       if (matchFilter(s, "cod")) c.cod++;
       if (matchFilter(s, "cold")) c.cold++;
+      if (matchFilter(s, "internal")) c.internal++;
       if (matchFilter(s, "returns")) c.returns++;
     }
     return c;
@@ -263,7 +279,7 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
     return (
       <Card className="border-border/60 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="font-semibold text-sm">Special Handling</CardTitle>
+          <CardTitle className="font-semibold text-sm tracking-tight">Special Handling</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
@@ -278,8 +294,17 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle className="font-semibold text-sm">Special Handling</CardTitle>
-        <CardDescription className="text-xs">{totalCount} stops require special attention today</CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="font-semibold text-sm tracking-tight">Special Handling</CardTitle>
+            <CardDescription className="text-xs">{totalCount} stops require special attention today</CardDescription>
+          </div>
+          {filter === "internal" && (
+            <Button type="button" size="sm" onClick={openInternalPackage} className="h-7 shrink-0 gap-1 px-2.5 text-xs">
+              <Plus className="size-3.5" /> New internal package
+            </Button>
+          )}
+        </div>
 
         {/* Tab selector — pill group, left-aligned, compact */}
         <div className="col-span-full -mx-4 mt-3 border-border/40 border-t px-4 pt-3 pb-3">
@@ -304,7 +329,7 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
                   {counts[f.key] > 0 && (
                     <span
                       className={cn(
-                        "min-w-[14px] text-center font-semibold text-10 tabular-nums leading-none",
+                        "min-w-[14px] text-center font-semibold text-[10px] tabular-nums leading-none",
                         on ? "text-primary" : "text-muted-foreground/55",
                       )}
                     >
@@ -372,7 +397,7 @@ export function StopsCard({ stops, loading }: { stops: DashboardStop[]; loading:
         </div>
 
         {/* Footer */}
-        <div className="border-border/35 border-t bg-muted/10 px-4 py-2 text-11 text-muted-foreground/60">
+        <div className="border-border/35 border-t bg-muted/10 px-4 py-2 text-[11px] text-muted-foreground/60">
           Showing {filtered.length} of {counts[filter]} {activeTab.label.toLowerCase()} stops
         </div>
       </CardContent>

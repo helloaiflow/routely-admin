@@ -56,6 +56,16 @@ export async function POST(request: Request) {
     const ctx = await requirePagePermission("orders");
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     tenantId = ctx.tenantId;
+    // ADMIN on behalf of a tenant: the Internal Packages wizard sends the
+    // tenant the package belongs to. Admins only — a tenant session can
+    // never redirect a stop to another tenant (CEO, 2026-09-02).
+    if (ctx.isAdmin) {
+      const requested = Number(body.tenant_id);
+      if (Number.isFinite(requested) && requested > 0) tenantId = requested;
+      if (!Number.isFinite(tenantId) || tenantId <= 0) {
+        return NextResponse.json({ error: "Pick a tenant before creating the package" }, { status: 400 });
+      }
+    }
     actor = {
       type: ctx.role === "member" ? "tenant_member" : "tenant_owner",
       clerk_user_id: ctx.userId,

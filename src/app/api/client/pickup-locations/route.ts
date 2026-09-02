@@ -88,10 +88,15 @@ async function saveLocations(tenantId: number, locations: PickupLocation[]) {
 }
 
 /* GET — list all pickup locations for the tenant. */
-export async function GET() {
+export async function GET(req: Request) {
   const ctx = await requirePagePermission("settings");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json({ locations: await loadLocations(ctx.tenantId) });
+  // ADMIN: the Internal Packages wizard picks the tenant the package belongs
+  // to — allow an explicit ?tenant_id= for admins only (CEO, 2026-09-02).
+  const param = new URL(req.url).searchParams.get("tenant_id");
+  let tenantId = ctx.tenantId;
+  if (ctx.isAdmin && param && /^\d+$/.test(param)) tenantId = Number(param);
+  return NextResponse.json({ locations: await loadLocations(tenantId) });
 }
 
 /* POST — add a new pickup location. First location auto-becomes default. */

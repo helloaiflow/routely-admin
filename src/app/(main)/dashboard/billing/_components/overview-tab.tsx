@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 
 import { AlertCircle } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyCents as centsToUsd } from "@/lib/ui/format";
@@ -74,6 +86,14 @@ export function OverviewTab({
   const [loading, setLoading] = useState(true);
   const [debitFailures, setDebitFailures] = useState<DebitFailure[]>([]);
   const [showFailures, setShowFailures] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  function confirmCycleClose() {
+    setConfirming(true);
+    fetch("/api/client/billing/cycles/confirm-close", { method: "POST" })
+      .then(() => load())
+      .finally(() => setConfirming(false));
+  }
 
   function load() {
     setLoading(true);
@@ -140,6 +160,43 @@ export function OverviewTab({
 
   return (
     <div className="space-y-4">
+      {data.cycle_close_pending_confirmation && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-start gap-1.5 text-13 text-destructive">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                Cycle close pending approval — {centsToUsd(data.cycle_close_pending_confirmation.total_cents)} over{" "}
+                {data.cycle_close_pending_confirmation.span_days} days exceeds this tenant's auto-close limit. Review
+                before approving.
+              </span>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" className="shrink-0" disabled={confirming}>
+                  Approve cycle close
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Approve this cycle close?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will close the current cycle and issue{" "}
+                    {centsToUsd(data.cycle_close_pending_confirmation.total_cents)} across{" "}
+                    {data.cycle_close_pending_confirmation.lines} line(s) as a new document.{" "}
+                    {data.cycle_close_pending_confirmation.reason}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={confirmCycleClose}>Approve & close</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
+
       {data.wallet_debit_failures > 0 && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardContent className="space-y-2 py-3">

@@ -36,6 +36,16 @@ export type Overview = {
   } | null;
   pending_approvals: number;
   wallet_debit_failures: number;
+  cycle_close_pending_confirmation: {
+    reason: string;
+    cycle_start: string;
+    cycle_end: string;
+    lines: number;
+    total_cents: number;
+    span_days: number;
+    max_days: number;
+    max_cents: number;
+  } | null;
   error?: string;
 };
 

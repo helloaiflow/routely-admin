@@ -8,11 +8,12 @@ import {
   type LucideIcon,
   MapPin,
   MessageCircle,
+  PackageOpen,
   Phone,
   Search,
   Truck,
+  UserCheck,
   Users,
-  PackageOpen,
   Warehouse,
 } from "lucide-react";
 
@@ -128,6 +129,12 @@ export const sidebarItems: NavGroup[] = [
             title: "Drivers",
             url: "/dashboard/drivers",
             icon: Users,
+            permission: "settings",
+          },
+          {
+            title: "Driver Applicants",
+            url: "/dashboard/driver-applicants",
+            icon: UserCheck,
             permission: "settings",
           },
         ],

@@ -13,6 +13,7 @@ import {
   Plug,
   Search,
   Truck,
+  UserCheck,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -135,6 +136,12 @@ export const sidebarItems: NavGroup[] = [
             title: "Providers",
             url: "/dashboard/providers",
             icon: Plug,
+            permission: "settings",
+          },
+          {
+            title: "Driver Applicants",
+            url: "/dashboard/driver-applicants",
+            icon: UserCheck,
             permission: "settings",
           },
         ],

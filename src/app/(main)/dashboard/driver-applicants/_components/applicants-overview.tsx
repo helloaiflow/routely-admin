@@ -6,14 +6,31 @@ import { AlertTriangle, ChevronRight, Clock, FileWarning } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, XAxis } from "recharts";
 import useSWR from "swr";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { type DateRange, DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { STATUS_BUCKET_COLORS, STATUS_BUCKET_LABEL, type StatusBucket, statusBucketOf } from "@/lib/driver-applicants";
 
-import { type ApplicantRow, type ApplicantsListResponse, STATUS_LABEL } from "./_types";
+import type { ApplicantRow, ApplicantsListResponse } from "./_types";
+
+/* R28 point 6: a REAL step funnel (account -> profile -> license+selfie -> insurance ->
+ * registration -> authorization -> Under Review -> Approved), driven by each row's own
+ * `funnel_step` (the FURTHEST step that applicant has actually reached — computed server-side in
+ * the list route). Replaces the old funnel, which was just the current-status distribution
+ * (draft/in_progress/submitted/in_review/approved) and never showed document/authorization
+ * progress at all. */
+const FUNNEL_STEP_LABEL: Record<string, string> = {
+  account: "Account created",
+  profile: "Profile",
+  license_and_selfie: "License + selfie",
+  insurance: "Insurance",
+  registration: "Registration",
+  authorization: "Authorization",
+  under_review: "Under Review",
+  approved: "Approved",
+};
 
 const OVERVIEW_PAGE_SIZE = 100; // the list endpoint's pagination cap — see the caveat banner below
 
@@ -73,9 +90,6 @@ export function ApplicantsOverview({
     const rows: ApplicantRow[] = data?.applicants ?? [];
     const now = Date.now();
 
-    const byStatus: Record<string, number> = {};
-    for (const r of rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
-
     const underReview = rows.filter((r) => r.status === "in_review");
     const underReviewWaitMs = underReview.map((r) => now - new Date(r.updated_at).getTime());
     const avgWaitHours = underReviewWaitMs.length
@@ -104,22 +118,20 @@ export function ApplicantsOverview({
         ...v,
       }));
 
-    // Snapshot funnel: where applications currently sit (NOT a cohort
-    // conversion funnel — see the caveat banner).
-    const funnelOrder: { key: string; label: string }[] = [
-      { key: "draft", label: "Draft" },
-      { key: "in_progress", label: "In progress" },
-      { key: "submitted", label: "Submitted" },
-      { key: "in_review", label: "Under Review" },
-      { key: "approved_applicant", label: "Approved" },
-    ];
+    // R28 point 6: a real step funnel, driven by funnel_step (the furthest step EACH applicant has
+    // actually reached — see _types.ts/route.ts). Still a current-snapshot, not a cohort/time-based
+    // conversion funnel (no per-step transition timestamps exist to compute that) — see the caveat
+    // banner below.
+    const stepOrder = Object.keys(FUNNEL_STEP_LABEL);
+    const byFunnelStep: Record<string, number> = {};
+    for (const r of rows) byFunnelStep[r.funnel_step] = (byFunnelStep[r.funnel_step] ?? 0) + 1;
     let prevCount = rows.length;
-    const funnel = funnelOrder.map((f, i) => {
-      const count = byStatus[f.key] ?? 0;
-      const cumulative = funnelOrder.slice(i).reduce((sum, g) => sum + (byStatus[g.key] ?? 0), 0);
+    const funnel = stepOrder.map((key, i) => {
+      const count = byFunnelStep[key] ?? 0;
+      const cumulative = stepOrder.slice(i).reduce((sum, k) => sum + (byFunnelStep[k] ?? 0), 0);
       const dropoffPct = i === 0 ? 0 : Math.round((1 - cumulative / prevCount) * 100);
       prevCount = cumulative;
-      return { ...f, count, cumulative, dropoffPct };
+      return { key, label: FUNNEL_STEP_LABEL[key], count, cumulative, dropoffPct };
     });
 
     // By-zone, complete vs incomplete.
@@ -146,6 +158,14 @@ export function ApplicantsOverview({
       docsNeedsReview: rows.filter((r) => r.docs_needs_review),
     };
 
+    // R28 point 7: bucketed (Onboarding/Under Review/Approved/Waitlisted/Rejected), not the raw
+    // 8-value status, so this card matches the same 5-bucket contract everywhere else in the module.
+    const byBucket = new Map<StatusBucket, number>();
+    for (const r of rows) {
+      const b = statusBucketOf(r.status);
+      byBucket.set(b, (byBucket.get(b) ?? 0) + 1);
+    }
+
     return {
       total: rows.length,
       newApplications: rows.length, // within the selected date range, by definition
@@ -160,7 +180,7 @@ export function ApplicantsOverview({
       byZone: [...byZone.entries()].map(([zoneName, v]) => ({ zone: zoneName, ...v })),
       medianAgeDays: medianAgeMs / 86_400_000,
       needsAttention,
-      byStatus,
+      byBucket,
     };
   }, [data]);
 
@@ -329,11 +349,19 @@ export function ApplicantsOverview({
             {loading ? (
               <Skeleton className="h-[80px] w-full rounded-lg" />
             ) : (
-              Object.entries(m.byStatus).map(([s, count]) => (
-                <Badge key={s} variant="outline">
-                  {STATUS_LABEL[s] ?? s}: {count}
-                </Badge>
-              ))
+              [...m.byBucket.entries()].map(([bucket, count]) => {
+                const c = STATUS_BUCKET_COLORS[bucket];
+                return (
+                  <span
+                    key={bucket}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium text-xs"
+                    style={{ backgroundColor: c.bg, color: c.fg }}
+                  >
+                    <span className="size-1.5 rounded-full" style={{ backgroundColor: c.dot }} />
+                    {STATUS_BUCKET_LABEL[bucket]}: {count}
+                  </span>
+                );
+              })
             )}
           </CardContent>
         </Card>

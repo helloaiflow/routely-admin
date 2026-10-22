@@ -20,15 +20,19 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  BACKGROUND_CHECK_CONSENT_PURPOSES,
   BACKGROUND_CHECK_STATUS_LABEL,
   BACKGROUND_CHECK_STATUSES,
+  consentPurposeLabel,
   REASON_CODE_LABEL,
   REJECT_REASON_CODES,
   REQUEST_CHANGES_REASON_CODES,
+  REQUIRED_DOCUMENT_KINDS,
   WAITLIST_REASON_CODES,
 } from "@/lib/driver-applicants";
 
-import { type ApplicantDetail, fmt, STATUS_LABEL, statusVariant } from "./_types";
+import { type ApplicantDetail, fmt } from "./_types";
+import { StatusBadge } from "./status-badge";
 
 /* A03 — Detail. Rebuilt per the 2026-10-22 mission spec: masked phone (the
  * server already masks it — see the detail route), a requirements checklist
@@ -45,15 +49,6 @@ const DOCUMENT_KIND_LABEL: Record<string, string> = {
   insurance: "Insurance",
   registration: "Registration",
 };
-
-const KNOWN_CONSENT_PURPOSES: { purpose: string; label: string }[] = [
-  { purpose: "terms_of_service", label: "Terms of service" },
-  { purpose: "privacy_policy", label: "Privacy policy" },
-  { purpose: "background_check", label: "Background check authorization" },
-  { purpose: "welcome_data_use", label: "Data use" },
-  { purpose: "waitlist_no_guarantee", label: "Waitlist — no guarantee" },
-  { purpose: "tcpa_sms_voice", label: "SMS/voice (TCPA)" },
-];
 
 type DecisionAction = "waitlist" | "reject" | "request-changes";
 
@@ -134,7 +129,12 @@ export function ApplicantDetailSheet({
   const a = detail?.applicant;
   const p = detail?.profile;
   const bg = detail?.background_check ?? null;
-  const consentOk = detail?.consents.some((c) => c.purpose === "background_check") ?? false;
+  // R28 point 1: accept EITHER real-world purpose string the backend's own approve() gate does
+  // (background_check legacy, or background_check_authorization from routely-driver's migration
+  // 0062) — this used to check 'background_check' alone, which no real applicant in this flow
+  // actually has, permanently blocking Approve even once the real requirement was satisfied.
+  const consentOk =
+    detail?.consents.some((c) => (BACKGROUND_CHECK_CONSENT_PURPOSES as readonly string[]).includes(c.purpose)) ?? false;
   const bgClear = bg?.status === "clear";
   const canApprove = a?.status === "in_review" && consentOk && bgClear;
   const canDecide = a?.status === "in_review";
@@ -168,7 +168,7 @@ export function ApplicantDetailSheet({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 font-mono">
             {applicantKey}
-            {a && <Badge variant={statusVariant(a.status)}>{STATUS_LABEL[a.status] ?? a.status}</Badge>}
+            {a && <StatusBadge status={a.status} />}
           </SheetTitle>
           <SheetDescription>
             {p ? (
@@ -300,26 +300,25 @@ export function ApplicantDetailSheet({
               </Section>
 
               <Section title="Consents">
-                <ul className="space-y-0.5">
-                  {KNOWN_CONSENT_PURPOSES.map(({ purpose, label }) => {
-                    const c = detail.consents.find((x) => x.purpose === purpose);
-                    return (
-                      <li key={purpose} className="flex items-center gap-2">
-                        {c ? (
-                          <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
-                        ) : (
-                          <CircleX className="size-3.5 text-muted-foreground/50" aria-hidden="true" />
-                        )}
-                        <span>{label}</span>
-                        {c && (
-                          <span className="text-muted-foreground text-xs">
-                            {c.version} · {fmt(c.accepted_at)}
-                          </span>
-                        )}
+                {/* R28 point 1: renders every REAL consent row this applicant actually has, not a
+                 * fixed M1 subset — the admin used to check for purpose names (terms_of_service,
+                 * privacy_policy...) that real applicants (M2/M3 funnels, the driver app) never
+                 * write, so every real consent showed as "not accepted" even when it was. */}
+                {detail.consents.length === 0 ? (
+                  <Empty>No consents recorded.</Empty>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {detail.consents.map((c) => (
+                      <li key={c.purpose} className="flex items-center gap-2">
+                        <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
+                        <span>{consentPurposeLabel(c.purpose)}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {c.version} · {fmt(c.accepted_at)}
+                        </span>
                       </li>
-                    );
-                  })}
-                </ul>
+                    ))}
+                  </ul>
+                )}
               </Section>
 
               <Section title="Background check (manual)">
@@ -487,21 +486,21 @@ function DecisionDialog({
 }
 
 function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
-  const requiredDocs: { kind: string; label: string }[] = [
-    { kind: "license_front", label: "License (front)" },
-    { kind: "license_back", label: "License (back)" },
-    { kind: "selfie", label: "Selfie" },
-  ];
+  // R28 point 2: the full document checklist per the real contract — was missing insurance and
+  // registration entirely (only ever showed license front/back + selfie).
+  const hasAuth = detail.consents.some((c) =>
+    (BACKGROUND_CHECK_CONSENT_PURPOSES as readonly string[]).includes(c.purpose),
+  );
   const items = [
-    ...requiredDocs.map((rd) => {
+    ...REQUIRED_DOCUMENT_KINDS.map((rd) => {
       const doc = detail.documents.find((d) => d.kind === rd.kind);
       const ok = doc?.status === "uploaded" || doc?.status === "verified";
       return { label: rd.label, ok, note: doc?.status ?? "missing" };
     }),
     {
       label: "Background check authorization",
-      ok: detail.consents.some((c) => c.purpose === "background_check"),
-      note: detail.consents.some((c) => c.purpose === "background_check") ? "on file" : "missing",
+      ok: hasAuth,
+      note: hasAuth ? "on file" : "missing",
     },
     {
       label: "Background check result",

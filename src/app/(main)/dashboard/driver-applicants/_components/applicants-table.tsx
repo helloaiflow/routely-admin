@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { type ApplicantsListResponse, fmt, STATUS_LABEL, statusVariant } from "./_types";
+import { type ApplicantsListResponse, fmt, STATUS_LABEL } from "./_types";
+import { StatusBadge } from "./status-badge";
 
 type Filters = {
   q: string;
@@ -295,7 +296,7 @@ export function ApplicantsTable({ onSelect, refreshToken }: { onSelect: (ref: st
                 <TableHead>Zone</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead>Flags</TableHead>
+                <TableHead>Requirements</TableHead>
                 <TableHead>Updated</TableHead>
               </TableRow>
             </TableHeader>
@@ -309,21 +310,27 @@ export function ApplicantsTable({ onSelect, refreshToken }: { onSelect: (ref: st
                   <TableCell className="font-mono">{r.application_ref}</TableCell>
                   <TableCell>{r.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant(r.status)}>{STATUS_LABEL[r.status] ?? r.status}</Badge>
+                    <StatusBadge status={r.status} />
                   </TableCell>
                   <TableCell>{r.zone ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>{r.vehicle_type ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell className="capitalize">{r.source_category}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {r.flags > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-amber-600">
-                          <Flag className="size-3.5" aria-hidden="true" />
-                          {r.flags}
+                      {/* R28 point 8: "Requirements x/7 + a bar" replaces the old "Flags" column,
+                       * which always showed 0 (applicant_signals.flag_for_review is never actually
+                       * set by anything in this pipeline today) and so carried no information. */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${(r.requirements_met / r.requirements_total) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          {r.requirements_met}/{r.requirements_total}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
+                      </div>
                       {r.docs_needs_review && (
                         <Badge variant="outline" className="text-[10px]">
                           docs

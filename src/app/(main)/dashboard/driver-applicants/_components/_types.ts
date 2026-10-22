@@ -28,9 +28,12 @@ export type ApplicantRow = {
   operating_zones: string[];
   vehicle_type: string | null;
   complete: boolean;
+  requirements_met: number;
+  requirements_total: number;
   flags: number;
   docs_needs_review: boolean;
   stuck: boolean;
+  funnel_step: string;
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +43,7 @@ export type ApplicantsListResponse = {
   total: number;
   page: number;
   pageSize: number;
+  funnel_steps: readonly string[];
 };
 
 export type BackgroundCheck = {

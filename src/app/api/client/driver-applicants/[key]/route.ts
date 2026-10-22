@@ -13,6 +13,39 @@ const ROUTELY_OPS_TENANT_ID = 1;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REF_RE = /^RA-[2-9A-HJKMNP-TV-Z]{6}$/i;
 
+/** routely-api's record_background_check() upserts into applicant_verifications
+ *  (kind='background', state one of pending|clear|needs_review, details JSONB
+ *  {date, by, external_reference}) — there is no separate background-check
+ *  table. Maps that row onto the UI's 4-state vocabulary. */
+function backgroundCheckFromVerification(
+  v: { kind: string; state: string; details: Record<string, unknown> | null; updated_at: string } | undefined,
+): {
+  status: "requested" | "clear" | "consider";
+  date: string | null;
+  external_reference: string | null;
+  actor: string | null;
+  created_at: string;
+} | null {
+  if (!v) return null;
+  const status =
+    v.state === "clear"
+      ? "clear"
+      : v.state === "needs_review"
+        ? "consider"
+        : v.state === "pending"
+          ? "requested"
+          : null;
+  if (!status) return null;
+  const details = v.details ?? {};
+  return {
+    status,
+    date: typeof details.date === "string" ? details.date : null,
+    external_reference: typeof details.external_reference === "string" ? details.external_reference : null,
+    actor: typeof details.by === "string" ? details.by : null,
+    created_at: v.updated_at,
+  };
+}
+
 /** Phone is stored unmasked in applicant_profiles (SMS OTP needs the real
  *  number) — the DB never masks it, so THIS proxy must: the full number must
  *  never leave the server. Keeps only the last 2 digits. */
@@ -46,7 +79,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
   if (!applicant) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const id = applicant.id as string;
-  const [profile, documents, consents, signals, verifications, events, backgroundCheck] = await Promise.all([
+  const [profile, documents, consents, signals, verifications, events] = await Promise.all([
     db
       .from("applicant_profiles")
       .select("legal_name, dob, phone, email, address, languages, vehicle, operating_zones, eligibility")
@@ -63,43 +96,32 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
       .select("dimension, state, confidence, flag_for_review, provenance, created_at")
       .eq("applicant_id", id)
       .order("created_at"),
-    db.from("applicant_verifications").select("kind, state, source, updated_at").eq("applicant_id", id).order("kind"),
+    db
+      .from("applicant_verifications")
+      .select("kind, state, source, details, updated_at")
+      .eq("applicant_id", id)
+      .order("kind"),
     db
       .from("applicant_events")
       .select("id, event_type, actor, actor_type, reason, from_state, to_state, occurred_at")
       .eq("applicant_id", id)
       .order("id"),
-    // Background-check tracking (mission 2026-10-22): a brand-new table the
-    // backend agent's parallel work is adding alongside the /background-check
-    // endpoint — it does not exist in this Supabase project as of this
-    // investigation. Read best-effort: an "undefined table" error (42P01) just
-    // means no backend-tracking data exists yet, same as "no rows" — the UI
-    // shows "Not started" either way. Any OTHER error still fails the request.
-    db
-      .from("applicant_background_checks")
-      .select("status, date, external_reference, actor, created_at")
-      .eq("applicant_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
   const failed = [profile, documents, consents, signals, verifications, events].find((r) => r.error);
   if (failed?.error) {
     console.error("[driver-applicants detail]", failed.error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  if (backgroundCheck.error && backgroundCheck.error.code !== "42P01") {
-    console.error("[driver-applicants detail] background_check", backgroundCheck.error);
-  }
   const maskedProfile = profile.data ? { ...profile.data, phone: maskPhone(profile.data.phone) } : null;
+  const backgroundVerification = (verifications.data ?? []).find((v) => v.kind === "background");
   return NextResponse.json({
     applicant,
     profile: maskedProfile,
     documents: documents.data ?? [],
     consents: consents.data ?? [],
     signals: signals.data ?? [],
-    verifications: verifications.data ?? [],
+    verifications: (verifications.data ?? []).map(({ kind, state, source }) => ({ kind, state, source })),
     events: events.data ?? [],
-    background_check: backgroundCheck.error ? null : backgroundCheck.data,
+    background_check: backgroundCheckFromVerification(backgroundVerification),
   });
 }

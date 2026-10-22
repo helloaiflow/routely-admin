@@ -30,6 +30,15 @@ export interface NavSubItem {
   newTab?: boolean;
   isNew?: boolean;
   permission?: SidebarPermission;
+  /** Routely-staff-only (CEO/routely_admin/dispatcher — ctx.isAdmin server-side),
+   *  NEVER a tenant permission. `permission` above is a tenant's own page_permissions
+   *  flag (any tenant owner, or any member their owner grants it to, gets it) — it
+   *  is NOT staff-exclusive, so it must never be the only gate on staff-only data.
+   *  Items with `adminOnly: true` are hidden from every non-admin regardless of
+   *  `permission`/role, in addition to (not instead of) server-side enforcement on
+   *  every API route the page calls. See app-sidebar.tsx for the client-side check
+   *  and src/lib/tenant.ts `TenantContext.isAdmin` for the real, server-enforced gate. */
+  adminOnly?: boolean;
 }
 
 export interface NavMainItem {
@@ -42,6 +51,8 @@ export interface NavMainItem {
   isNew?: boolean;
   defaultOpen?: boolean;
   permission?: SidebarPermission;
+  /** See NavSubItem.adminOnly — same staff-only gate, for a top-level item. */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -142,7 +153,10 @@ export const sidebarItems: NavGroup[] = [
             title: "Driver Applicants",
             url: "/dashboard/driver-applicants",
             icon: UserCheck,
-            permission: "settings",
+            // Staff-only applicant PII — see the `adminOnly` doc comment above.
+            // No tenant `permission` here on purpose: there is no legitimate
+            // tenant-facing version of this page to gate with "settings".
+            adminOnly: true,
           },
         ],
       },

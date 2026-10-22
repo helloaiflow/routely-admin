@@ -46,14 +46,18 @@ function backgroundCheckFromVerification(
   };
 }
 
-/** Phone is stored unmasked in applicant_profiles (SMS OTP needs the real
- *  number) — the DB never masks it, so THIS proxy must: the full number must
- *  never leave the server. Keeps only the last 2 digits. */
+/** Phone is stored unmasked in applicant_profiles/driver_accounts (SMS OTP needs the real
+ *  number) — the DB never masks it, so THIS proxy must: the full number must never leave
+ *  the server. R28 point 3: mask format is area code + last 4 visible, exchange masked
+ *  (`(305) ••• 4821`) — enough for staff to recognize/confirm a number without exposing it whole. */
 function maskPhone(phone: string | null): string | null {
   if (!phone) return phone;
   const digits = phone.replace(/\D/g, "");
-  if (digits.length < 4) return "•".repeat(phone.length);
-  return `(•••) •••-••${digits.slice(-2)}`;
+  if (digits.length < 7) return "•".repeat(phone.length);
+  const last10 = digits.slice(-10);
+  const area = last10.slice(0, 3);
+  const last4 = last10.slice(-4);
+  return `(${area}) ••• ${last4}`;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ key: string }> }) {
@@ -79,7 +83,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
   if (!applicant) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const id = applicant.id as string;
-  const [profile, documents, consents, signals, verifications, events] = await Promise.all([
+  const [profile, documents, consents, signals, verifications, events, driverAccount] = await Promise.all([
     db
       .from("applicant_profiles")
       .select("legal_name, dob, phone, email, address, languages, vehicle, operating_zones, eligibility")
@@ -106,13 +110,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
       .select("id, event_type, actor, actor_type, reason, from_state, to_state, occurred_at")
       .eq("applicant_id", id)
       .order("id"),
+    // R28 point 3: phone fallback — applicant_profiles.phone is only ever set once the applicant
+    // reaches that profile step; driver_accounts.phone_e164 (set as soon as a driver_accounts row
+    // exists, e.g. via the app's own sign-up) is a real, earlier-available source for the SAME
+    // person's phone number. Read-only — never written here.
+    db.from("driver_accounts").select("phone_e164").eq("applicant_id", id).maybeSingle(),
   ]);
   const failed = [profile, documents, consents, signals, verifications, events].find((r) => r.error);
   if (failed?.error) {
     console.error("[driver-applicants detail]", failed.error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  const maskedProfile = profile.data ? { ...profile.data, phone: maskPhone(profile.data.phone) } : null;
+  if (driverAccount.error) console.error("[driver-applicants detail] driver_accounts", driverAccount.error);
+  const rawPhone = profile.data?.phone || driverAccount.data?.phone_e164 || null;
+  const maskedProfile = profile.data ? { ...profile.data, phone: maskPhone(rawPhone) } : null;
   const backgroundVerification = (verifications.data ?? []).find((v) => v.kind === "background");
   return NextResponse.json({
     applicant,

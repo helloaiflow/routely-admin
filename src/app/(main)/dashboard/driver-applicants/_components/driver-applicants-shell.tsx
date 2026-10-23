@@ -68,14 +68,15 @@ export function DriverApplicantsShell() {
       )}
 
       {tab === "applications" && (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[22rem_1fr]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[22rem_1fr]">
           <div className="min-h-0 overflow-hidden rounded-lg border">
             <ApplicantsList onSelect={setSelected} selectedKey={selected} refreshToken={refreshKey} />
           </div>
-          {/* Responsive per the mission (<1280px): the detail panel stacks below the list instead
-           * of a 3rd visualizer column that doesn't exist yet (see R29B, split off for the full
-           * Document Visualizer) -- it's always reachable, never hidden entirely. */}
-          <div className="min-h-[24rem] overflow-hidden rounded-lg border lg:min-h-0">
+          {/* Responsive per the mission's own <1280px breakpoint (Tailwind `xl`): the detail panel
+           * stacks below the list instead of a 3rd visualizer column that doesn't exist yet (see
+           * R29B, split off for the full Document Visualizer) -- it's always reachable, never
+           * hidden entirely. */}
+          <div className="min-h-[24rem] overflow-hidden rounded-lg border xl:min-h-0">
             <ApplicantDetailPanel applicantKey={selected} onClose={() => setSelected(null)} onChanged={bump} />
           </div>
         </div>

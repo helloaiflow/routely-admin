@@ -23,19 +23,13 @@ import { Button } from "@/components/ui/button";
 
 import type { ApplicantDetail } from "./_types";
 
-/* R29B — the Document Visualizer (3rd column, >=1280px). Renders a document inline instead of
+/* R29B/R29C — the Document Visualizer (3rd column, >=1280px). Renders a document inline instead of
  * window.open()'ing the raw signed URL: zoom/pan/rotate/fit/fullscreen, native multipage PDF
  * rendering (pdf.js), client-side HEIC->JPEG conversion (heic2any -- Chrome/Edge can't render HEIC
- * natively), a subtle staff watermark, and a view-only side-by-side compare mode for the selfie vs
- * license front.
- *
- * Deliberately OUT of scope for this pass (see MISSION_2026-10-22_R29B's own "defer" note and
- * KNOWN pattern from R22/R22B): the "Same person? Yes/No" DECISION button that writes an audited
- * event. routely-api has no endpoint to record it yet (checked app/routers/onboarding.py) -- adding
- * one is a cross-repo change (new Pydantic model + service function + route + PR + VPS deploy), a
- * separate, reviewable unit of work from "build a viewer". The compare VIEW itself (visual
- * side-by-side) still ships -- it's useful on its own, even without a persisted decision yet. The
- * access-log requirement is ALREADY satisfied: every signed-URL fetch already writes a
+ * natively), a subtle staff watermark, and a side-by-side compare mode for the selfie vs license
+ * front with a "Same person? ✓/✕" decision (R29C: POST .../documents/selfie-match, proxied to the
+ * routely-api endpoint of the same name -- upserts applicant_verifications(kind='selfie'), audited).
+ * The access-log requirement is ALREADY satisfied: every signed-URL fetch already writes a
  * 'document.accessed' event server-side (see the /documents/[docId]/url route's own comment) --
  * nothing new needed there. */
 
@@ -85,12 +79,15 @@ export function DocumentVisualizer({
   selectedDocId,
   onSelectDoc,
   onClose,
+  onChanged,
 }: {
   applicantKey: string;
   documents: ApplicantDetail["documents"];
   selectedDocId: string | null;
   onSelectDoc: (docId: string) => void;
   onClose: () => void;
+  /** R29C: refreshes the detail panel's own data after a "Same person?" decision is recorded. */
+  onChanged: () => void;
 }) {
   const { user } = useUser();
   const staffEmail = user?.primaryEmailAddress?.emailAddress ?? "staff";
@@ -155,6 +152,7 @@ export function DocumentVisualizer({
             selfieDoc={selfieDoc}
             licenseDoc={licenseDoc}
             staffEmail={staffEmail}
+            onChanged={onChanged}
           />
         ) : (
           <SingleDocView
@@ -548,19 +546,51 @@ function HeicImage({
   );
 }
 
+async function postSelfieMatch(applicantKey: string, match: boolean): Promise<{ ok: boolean; message?: string }> {
+  const res = await fetch(`/api/client/driver-applicants/${encodeURIComponent(applicantKey)}/documents/selfie-match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ match }),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (res.ok) return { ok: true };
+  const detail = data.detail as { message?: string } | undefined;
+  return {
+    ok: false,
+    message: (detail?.message as string) ?? (data.message as string) ?? "Could not record this decision",
+  };
+}
+
 function CompareView({
   applicantKey,
   selfieDoc,
   licenseDoc,
   staffEmail,
+  onChanged,
 }: {
   applicantKey: string;
   selfieDoc: ApplicantDetail["documents"][number];
   licenseDoc: ApplicantDetail["documents"][number];
   staffEmail: string;
+  onChanged: () => void;
 }) {
   const selfie = useSignedUrl(applicantKey, selfieDoc.id);
   const license = useSignedUrl(applicantKey, licenseDoc.id);
+  const [busy, setBusy] = useState<"match" | "no_match" | null>(null);
+
+  async function decide(match: boolean) {
+    setBusy(match ? "match" : "no_match");
+    try {
+      const { ok, message } = await postSelfieMatch(applicantKey, match);
+      if (!ok) throw new Error(message);
+      toast.success(match ? "Recorded: same person" : "Recorded: not a match");
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not record this decision");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -585,13 +615,12 @@ function CompareView({
       </div>
       <div className="flex items-center justify-center gap-2 border-t p-2 text-xs">
         <span className="text-muted-foreground">Same person?</span>
-        <Button type="button" variant="outline" size="sm" disabled title="Needs a backend endpoint -- see R29C">
-          ✓ Match
+        <Button type="button" variant="outline" size="sm" disabled={busy !== null} onClick={() => decide(true)}>
+          {busy === "match" && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}✓ Match
         </Button>
-        <Button type="button" variant="outline" size="sm" disabled title="Needs a backend endpoint -- see R29C">
-          ✕ No match
+        <Button type="button" variant="outline" size="sm" disabled={busy !== null} onClick={() => decide(false)}>
+          {busy === "no_match" && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}✕ No match
         </Button>
-        <span className="text-[10px] text-muted-foreground">(recording this decision ships in a follow-up)</span>
       </div>
     </div>
   );

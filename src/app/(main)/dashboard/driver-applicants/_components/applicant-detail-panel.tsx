@@ -130,6 +130,7 @@ export function ApplicantDetailPanel({
   onChanged,
   onSelectDoc,
   onDocumentsLoaded,
+  refreshToken,
 }: {
   applicantKey: string | null;
   onClose: () => void;
@@ -140,6 +141,10 @@ export function ApplicantDetailPanel({
   /** R29B: the Visualizer (a sibling column, not a child of this panel) needs this applicant's own
    *  documents array for its ‹ › navigation -- fired whenever a fresh detail loads. */
   onDocumentsLoaded: (documents: ApplicantDetail["documents"]) => void;
+  /** R29C: bumped by a sibling (the Visualizer, after recording a "Same person?" decision) to make
+   *  this panel reload WITHOUT resetting its own tab/scroll state (unlike the applicantKey-change
+   *  effect below, which intentionally does reset everything for a genuinely new applicant). */
+  refreshToken: number;
 }) {
   const [detail, setDetail] = useState<ApplicantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +174,11 @@ export function ApplicantDetailPanel({
     onDocumentsLoaded([]);
     if (applicantKey) void load(applicantKey);
   }, [applicantKey, load, onDocumentsLoaded]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only reload on refreshToken bumps, not on every load() identity change
+  useEffect(() => {
+    if (applicantKey && refreshToken > 0) void load(applicantKey);
+  }, [refreshToken]);
 
   async function refresh() {
     if (applicantKey) await load(applicantKey);

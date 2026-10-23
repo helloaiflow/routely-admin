@@ -95,6 +95,7 @@ export function DriverApplicantsShell() {
               onChanged={bump}
               onSelectDoc={setSelectedDocId}
               onDocumentsLoaded={setDocuments}
+              refreshToken={refreshKey}
             />
           </div>
           {selected && (
@@ -105,6 +106,7 @@ export function DriverApplicantsShell() {
                 selectedDocId={selectedDocId}
                 onSelectDoc={setSelectedDocId}
                 onClose={() => setSelectedDocId(null)}
+                onChanged={bump}
               />
             </div>
           )}

@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bot,
   Box,
+  Briefcase,
   Building2,
   Layers,
   LayoutDashboard,
@@ -12,9 +13,11 @@ import {
   Phone,
   Plug,
   Search,
+  ShieldCheck,
   Truck,
   UserCheck,
   Users,
+  Wallet,
   Warehouse,
 } from "lucide-react";
 
@@ -138,25 +141,69 @@ export const sidebarItems: NavGroup[] = [
             permission: "settings",
           },
           {
+            title: "Providers",
+            url: "/dashboard/providers",
+            icon: Plug,
+            permission: "settings",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── Drivers (R29: new top-level section, pulled out of Operations) ─────────
+  {
+    id: 4,
+    label: "",
+    items: [
+      {
+        title: "Drivers",
+        url: "/dashboard/driver-applicants",
+        icon: Users,
+        defaultOpen: true,
+        // Staff-only applicant/driver data as a section — see the `adminOnly`
+        // doc comment above. The "Drivers" roster sub-item below keeps its own
+        // existing `permission: "settings"` gate unchanged (same route, same
+        // access as before this round) so no tenant who already used it loses
+        // access; the 3 new items are staff-only by design, no existing page.
+        subItems: [
+          {
+            title: "Applications",
+            url: "/dashboard/driver-applicants",
+            icon: UserCheck,
+            // Same route + gate as the old "Driver Applicants" item (no link
+            // broken) — just renamed/re-homed per R29.
+            adminOnly: true,
+          },
+          {
             title: "Drivers",
             url: "/dashboard/drivers",
             icon: Users,
             permission: "settings",
           },
           {
-            title: "Providers",
-            url: "/dashboard/providers",
-            icon: Plug,
-            permission: "settings",
+            title: "Background checks",
+            url: "/dashboard/driver-applicants/background-checks",
+            icon: ShieldCheck,
+            adminOnly: true,
+            // No dedicated page spec exists yet (background-check review today
+            // lives inside an Application's own detail panel) — comingSoon
+            // until a standalone page is actually designed/built.
+            comingSoon: true,
           },
           {
-            title: "Driver Applicants",
-            url: "/dashboard/driver-applicants",
-            icon: UserCheck,
-            // Staff-only applicant PII — see the `adminOnly` doc comment above.
-            // No tenant `permission` here on purpose: there is no legitimate
-            // tenant-facing version of this page to gate with "settings".
+            title: "Payouts",
+            url: "/dashboard/driver-applicants/payouts",
+            icon: Wallet,
             adminOnly: true,
+            comingSoon: true,
+          },
+          {
+            title: "Job offers",
+            url: "/dashboard/driver-applicants/job-offers",
+            icon: Briefcase,
+            adminOnly: true,
+            comingSoon: true,
           },
         ],
       },

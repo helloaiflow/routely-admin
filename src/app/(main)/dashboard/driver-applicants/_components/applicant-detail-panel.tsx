@@ -2,11 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { CircleCheck, CircleX, Clock3, ExternalLink, Flag, Loader2, PauseCircle, ShieldAlert } from "lucide-react";
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleX,
+  Clock3,
+  Copy,
+  ExternalLink,
+  Flag,
+  History,
+  Loader2,
+  Phone,
+  ShieldAlert,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +29,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   BACKGROUND_CHECK_CONSENT_PURPOSES,
@@ -31,16 +51,17 @@ import {
   WAITLIST_REASON_CODES,
 } from "@/lib/driver-applicants";
 
-import { type ApplicantDetail, fmt } from "./_types";
+import type { ApplicantDetail } from "./_types";
+import { fmt } from "./_types";
 import { StatusBadge } from "./status-badge";
 
-/* A03 — Detail. Rebuilt per the 2026-10-22 mission spec: masked phone (the
- * server already masks it — see the detail route), a requirements checklist
- * built from REAL document/consent/verification status (not a static list),
- * documents viewed only via the audited signed-URL proxy (never a direct
- * link), the 4-decision panel with real reason_code enums, and the
- * Background check (manual) block. Intentionally NOT a port of the skeleton's
- * detail section or the design board PNG. */
+/* R29 — A03 rebuilt as a persistent center-column panel (Stops-style), replacing the Sheet
+ * overlay. All the decision/requirements/background-check/consents business logic is unchanged
+ * from the previous Sheet version -- only the shell (header/icon bar/stepper/tabs/collapsible
+ * panels instead of one long scroll) is new. The Document Visualizer (3rd column, zoom/pan/
+ * compare/PDF.js/HEIC decode) is explicitly OUT of scope for this pass -- see
+ * MISSION_2026-10-22_R29B_document_visualizer.md; documents still open via the same audited
+ * signed-URL window.open() the Sheet version used. */
 
 const DOCUMENT_KIND_LABEL: Record<string, string> = {
   license_front: "License (front)",
@@ -49,6 +70,17 @@ const DOCUMENT_KIND_LABEL: Record<string, string> = {
   insurance: "Insurance",
   registration: "Registration",
 };
+
+const STAGES = ["Draft", "Profile", "Docs", "FCRA", "Review", "Check", "Approved"] as const;
+
+function stageIndex(status: string, documentsUploaded: number, hasAuth: boolean, bgClear: boolean): number {
+  if (status === "approved_applicant") return 6;
+  if (status === "in_review" || status === "waitlisted") return bgClear ? 5 : 4;
+  if (status === "rejected" || status === "withdrawn") return 4;
+  if (hasAuth) return 3;
+  if (documentsUploaded > 0) return 2; // docs in progress
+  return 1; // profile-ish / draft
+}
 
 type DecisionAction = "waitlist" | "reject" | "request-changes";
 
@@ -91,7 +123,7 @@ function apiErrorMessage(data: Record<string, unknown>, fallback: string): strin
   return (detail?.message as string) ?? (data.message as string) ?? (data.error as string) ?? fallback;
 }
 
-export function ApplicantDetailSheet({
+export function ApplicantDetailPanel({
   applicantKey,
   onClose,
   onChanged,
@@ -103,6 +135,7 @@ export function ApplicantDetailSheet({
   const [detail, setDetail] = useState<ApplicantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("review");
 
   const load = useCallback(async (key: string) => {
     try {
@@ -118,6 +151,7 @@ export function ApplicantDetailSheet({
   useEffect(() => {
     setDetail(null);
     setError(null);
+    setTab("review");
     if (applicantKey) void load(applicantKey);
   }, [applicantKey, load]);
 
@@ -129,10 +163,6 @@ export function ApplicantDetailSheet({
   const a = detail?.applicant;
   const p = detail?.profile;
   const bg = detail?.background_check ?? null;
-  // R28 point 1: accept EITHER real-world purpose string the backend's own approve() gate does
-  // (background_check legacy, or background_check_authorization from routely-driver's migration
-  // 0062) — this used to check 'background_check' alone, which no real applicant in this flow
-  // actually has, permanently blocking Approve even once the real requirement was satisfied.
   const consentOk =
     detail?.consents.some((c) => (BACKGROUND_CHECK_CONSENT_PURPOSES as readonly string[]).includes(c.purpose)) ?? false;
   const bgClear = bg?.status === "clear";
@@ -162,173 +192,240 @@ export function ApplicantDetailSheet({
     }
   }
 
-  return (
-    <Sheet open={applicantKey !== null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2 font-mono">
-            {applicantKey}
-            {a && <StatusBadge status={a.status} />}
-          </SheetTitle>
-          <SheetDescription>
-            {p ? (
-              <>
-                {p.legal_name ?? "Unnamed"} · {p.operating_zones?.[0] ?? p.address?.city ?? "No zone"} · Phone:{" "}
-                <span className="font-mono">{p.phone ?? "—"}</span>
-              </>
-            ) : (
-              " "
-            )}
-          </SheetDescription>
-        </SheetHeader>
+  if (!applicantKey) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+        Select an application to see details.
+      </div>
+    );
+  }
 
-        <div className="space-y-5 px-4 pb-6 text-sm">
-          {error && <p className="text-destructive">Could not load this applicant ({error}).</p>}
-          {!detail && !error && <Skeleton className="h-40 w-full" />}
-          {detail && a && (
-            <>
-              {/* Decision panel */}
-              <Section title="Decision">
-                <div className="flex flex-wrap gap-2">
-                  <Button disabled={!canApprove} onClick={() => setApproveOpen(true)}>
-                    <CircleCheck className="size-4" aria-hidden="true" />
-                    Approve
-                  </Button>
-                  <Button variant="outline" disabled={!canDecide} onClick={() => setDecisionAction("waitlist")}>
-                    <PauseCircle className="size-4" aria-hidden="true" />
-                    Waitlist
-                  </Button>
-                  <Button variant="outline" disabled={!canDecide} onClick={() => setDecisionAction("request-changes")}>
-                    <Clock3 className="size-4" aria-hidden="true" />
-                    Request changes
-                  </Button>
-                  <Button variant="outline" disabled={!canDecide} onClick={() => setDecisionAction("reject")}>
-                    <CircleX className="size-4" aria-hidden="true" />
-                    Reject
-                  </Button>
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Header */}
+      <div className="border-b p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm">{applicantKey}</span>
+            {a && <StatusBadge status={a.status} />}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              title="Copy reference"
+              onClick={() => {
+                navigator.clipboard.writeText(applicantKey);
+                toast.success("Copied");
+              }}
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+            </Button>
+            {p?.phone && (
+              <Button type="button" variant="ghost" size="icon" className="size-7" title="Call" asChild>
+                <a href={`tel:${p.phone}`}>
+                  <Phone className="size-3.5" aria-hidden="true" />
+                </a>
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              title="Jump to Activity"
+              onClick={() => setTab("activity")}
+            >
+              <History className="size-3.5" aria-hidden="true" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="size-7" title="Close" onClick={onClose}>
+              <X className="size-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+        {!detail && !error && <Skeleton className="mt-2 h-4 w-48" />}
+        {p && (
+          <p className="mt-1 truncate text-muted-foreground text-xs">
+            {p.legal_name ?? "Unnamed"} · {p.operating_zones?.[0] ?? p.address?.city ?? "No zone"}
+            {p.vehicle?.type ? ` · ${p.vehicle.type}` : ""}
+          </p>
+        )}
+        {detail && (
+          <div className="mt-2 flex items-center gap-1">
+            {STAGES.map((label, i) => {
+              const met = REQUIRED_DOCUMENT_KINDS.filter((rd) =>
+                detail.documents.some(
+                  (d) => d.kind === rd.kind && (d.status === "uploaded" || d.status === "verified"),
+                ),
+              ).length;
+              const idx = stageIndex(a?.status ?? "draft", met, consentOk, bgClear);
+              const done = i <= idx;
+              return (
+                <div key={label} className="flex flex-1 items-center gap-1">
+                  <span
+                    className={`size-1.5 shrink-0 rounded-full ${done ? "bg-primary" : "bg-muted-foreground/30"}`}
+                  />
+                  {i < STAGES.length - 1 && (
+                    <span className={`h-px flex-1 ${done ? "bg-primary" : "bg-muted-foreground/20"}`} />
+                  )}
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {error && <p className="p-4 text-destructive text-sm">Could not load this applicant ({error}).</p>}
+
+      {detail && a && (
+        <>
+          <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
+            <TabsList className="mx-3 mt-2 w-max">
+              <TabsTrigger value="review" className="gap-1.5 text-xs">
+                Review
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5 text-xs">
+                Documents
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="gap-1.5 text-xs">
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="gap-1.5 text-xs">
+                Activity
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              <TabsContent value="review" className="space-y-2">
                 {a.status === "in_review" && !canApprove && (
-                  <p className="mt-2 flex items-start gap-1.5 text-amber-600 text-xs dark:text-amber-400">
+                  <p className="flex items-start gap-1.5 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-amber-600 text-xs dark:text-amber-400">
                     <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                     {!consentOk
                       ? "Authorization missing — can't run a background check yet"
                       : "Background check not yet clear — Approve is disabled until it is"}
                   </p>
                 )}
-                {a.status !== "in_review" && (
-                  <p className="mt-2 text-muted-foreground text-xs">
-                    Decisions are only available while an application is Under Review.
-                  </p>
-                )}
-              </Section>
+                <Panel title="Requirements" defaultOpen>
+                  <RequirementsChecklist detail={detail} />
+                </Panel>
+                <Panel
+                  title="Background check (manual)"
+                  subtitle={bg ? BACKGROUND_CHECK_STATUS_LABEL[bg.status] : "Not started"}
+                >
+                  <BackgroundCheckBlock applicantKey={applicantKey} current={bg} onRecorded={refresh} />
+                </Panel>
+                <Panel title="Consents" subtitle={`${detail.consents.length} accepted`}>
+                  {detail.consents.length === 0 ? (
+                    <Empty>No consents recorded.</Empty>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {detail.consents.map((c) => (
+                        <li key={c.purpose} className="flex items-center gap-2 text-xs">
+                          <CircleCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                          <span>{consentPurposeLabel(c.purpose)}</span>
+                          <span className="text-muted-foreground">
+                            {c.version} · {fmt(c.accepted_at)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+                <Panel title="Decision history" subtitle={`${detail.events.filter(isDecisionEvent).length} decisions`}>
+                  {detail.events.filter(isDecisionEvent).length === 0 ? (
+                    <Empty>No decisions recorded yet.</Empty>
+                  ) : (
+                    <ol className="space-y-1">
+                      {detail.events.filter(isDecisionEvent).map((e) => (
+                        <li key={e.id} className="text-xs">
+                          <span className="text-muted-foreground">{fmt(e.occurred_at)}</span>{" "}
+                          <span className="font-medium">{e.event_type}</span>{" "}
+                          <span className="text-muted-foreground">
+                            by {e.actor}
+                            {e.reason ? ` — ${e.reason}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </Panel>
+              </TabsContent>
 
-              <Section title="Requirements checklist">
-                <RequirementsChecklist detail={detail} />
-              </Section>
+              <TabsContent value="documents">
+                <DocumentsList applicantKey={applicantKey} documents={detail.documents} />
+              </TabsContent>
 
-              <Section title="Profile">
-                {p ? (
-                  <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
-                    <Field k="Name" v={p.legal_name} />
-                    <Field k="Date of birth" v={p.dob} />
-                    <Field k="Phone" v={p.phone} />
-                    <Field k="Email" v={p.email} />
+              <TabsContent value="profile" className="space-y-3">
+                <Panel title="Personal" defaultOpen>
+                  <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+                    <Field k="Name" v={p?.legal_name} />
+                    <Field k="Date of birth" v={p?.dob} />
+                    <Field k="Languages" v={p?.languages?.join(", ") || null} />
+                  </dl>
+                </Panel>
+                <Panel title="Contact" defaultOpen>
+                  <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+                    <Field k="Phone" v={p?.phone} />
+                    <Field k="Email" v={p?.email} />
+                  </dl>
+                </Panel>
+                <Panel title="Address">
+                  <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
                     <Field
                       k="Address"
                       v={
-                        p.address
+                        p?.address
                           ? `${p.address.line1 ?? ""}, ${p.address.city ?? ""}, ${p.address.state ?? ""} ${p.address.zip ?? ""}`
                           : null
                       }
                     />
-                    <Field k="Zone(s)" v={p.operating_zones?.join(", ") || null} />
+                  </dl>
+                </Panel>
+                <Panel title="Vehicle">
+                  <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
                     <Field
                       k="Vehicle"
                       v={
-                        p.vehicle
+                        p?.vehicle
                           ? `${p.vehicle.year ?? ""} ${p.vehicle.make ?? ""} ${p.vehicle.model ?? ""} (${p.vehicle.type ?? "—"})`.trim()
                           : null
                       }
                     />
-                    <Field k="Languages" v={p.languages?.join(", ") || null} />
                   </dl>
-                ) : (
-                  <Empty>Profile not filled in yet.</Empty>
+                </Panel>
+                <Panel title="Zones">
+                  <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
+                    <Field k="Operating zones" v={p?.operating_zones?.join(", ") || null} />
+                  </dl>
+                </Panel>
+                {detail.signals.length > 0 && (
+                  <Panel title="Screening signals" subtitle={`${detail.signals.length}`}>
+                    <ul className="space-y-2">
+                      {detail.signals.map((s) => (
+                        <li key={s.dimension} className="rounded-md border p-2 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{s.dimension}</span>
+                            <Badge variant="outline">{s.state}</Badge>
+                            {s.flag_for_review && (
+                              <span className="inline-flex items-center gap-1 text-amber-600">
+                                <Flag className="size-3.5" aria-hidden="true" />
+                                review
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </Panel>
                 )}
-              </Section>
+              </TabsContent>
 
-              <Section title="Documents (private storage — view via audited signed URL only)">
-                <DocumentsList applicantKey={applicantKey} documents={detail.documents} />
-              </Section>
-
-              <Section title="Screening signals (enrich + flag only — never auto-reject)">
-                {detail.signals.length === 0 ? (
-                  <Empty>No screening yet (runs on submit).</Empty>
-                ) : (
-                  <ul className="space-y-2">
-                    {detail.signals.map((s) => (
-                      <li key={s.dimension} className="rounded-md border p-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{s.dimension}</span>
-                          <Badge variant="outline">{s.state}</Badge>
-                          {s.flag_for_review && (
-                            <span className="inline-flex items-center gap-1 text-amber-600">
-                              <Flag className="size-3.5" aria-hidden="true" />
-                              review
-                            </span>
-                          )}
-                          {s.confidence !== null && <span className="text-muted-foreground">conf {s.confidence}</span>}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Section>
-
-              <Section title="Verifications">
-                {detail.verifications.length === 0 ? (
-                  <Empty>None yet.</Empty>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {detail.verifications.map((v) => (
-                      <Badge key={v.kind} variant="outline">
-                        {v.kind}: {v.state} ({v.source})
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </Section>
-
-              <Section title="Consents">
-                {/* R28 point 1: renders every REAL consent row this applicant actually has, not a
-                 * fixed M1 subset — the admin used to check for purpose names (terms_of_service,
-                 * privacy_policy...) that real applicants (M2/M3 funnels, the driver app) never
-                 * write, so every real consent showed as "not accepted" even when it was. */}
-                {detail.consents.length === 0 ? (
-                  <Empty>No consents recorded.</Empty>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {detail.consents.map((c) => (
-                      <li key={c.purpose} className="flex items-center gap-2">
-                        <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
-                        <span>{consentPurposeLabel(c.purpose)}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {c.version} · {fmt(c.accepted_at)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Section>
-
-              <Section title="Background check (manual)">
-                <BackgroundCheckBlock applicantKey={applicantKey} current={bg} onRecorded={refresh} />
-              </Section>
-
-              <Section title="Event timeline">
-                <ol className="space-y-1">
+              <TabsContent value="activity">
+                <ol className="space-y-1.5">
                   {detail.events.map((e) => (
-                    <li key={e.id} className="flex flex-wrap gap-x-2">
+                    <li key={e.id} className="flex flex-wrap gap-x-2 text-xs">
                       <span className="text-muted-foreground">{fmt(e.occurred_at)}</span>
                       <span className="font-medium">{e.event_type}</span>
                       {e.from_state || e.to_state ? (
@@ -342,11 +439,50 @@ export function ApplicantDetailSheet({
                     </li>
                   ))}
                 </ol>
-              </Section>
-            </>
-          )}
-        </div>
-      </SheetContent>
+              </TabsContent>
+            </div>
+          </Tabs>
+
+          {/* Footer — decisions */}
+          <div className="border-t p-3">
+            <p className="mb-2 text-muted-foreground text-xs">
+              {a.status !== "in_review"
+                ? "Decisions are only available while an application is Under Review."
+                : canApprove
+                  ? "Ready to approve."
+                  : !consentOk
+                    ? "Next: get background-check authorization on file."
+                    : "Next: record a clear background check result."}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button disabled={!canApprove} onClick={() => setApproveOpen(true)} className="gap-1.5">
+                <CircleCheck className="size-4" aria-hidden="true" />
+                Approve
+              </Button>
+              <Button variant="outline" disabled={!canDecide} onClick={() => setDecisionAction("waitlist")}>
+                Waitlist
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!canDecide} className="gap-1">
+                    More <ChevronDown className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setDecisionAction("request-changes")}>
+                    <Clock3 className="size-3.5" aria-hidden="true" />
+                    Request changes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setDecisionAction("reject")} className="text-destructive">
+                    <CircleX className="size-3.5" aria-hidden="true" />
+                    Reject
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Approve confirmation */}
       <Dialog open={approveOpen} onOpenChange={(o) => !busy && setApproveOpen(o)}>
@@ -377,15 +513,18 @@ export function ApplicantDetailSheet({
         </DialogContent>
       </Dialog>
 
-      {/* Waitlist / Reject / Request-changes confirmation */}
       <DecisionDialog
         action={decisionAction}
         applicantKey={applicantKey}
         onClose={() => setDecisionAction(null)}
         onDone={refresh}
       />
-    </Sheet>
+    </div>
   );
+}
+
+function isDecisionEvent(e: { event_type: string }): boolean {
+  return /approve|waitlist|reject|request_changes|request-changes/i.test(e.event_type);
 }
 
 function DecisionDialog({
@@ -422,10 +561,7 @@ function DecisionDialog({
     try {
       const { ok, data } = await postJson(
         `/api/client/driver-applicants/${encodeURIComponent(applicantKey)}/${action}`,
-        {
-          reason_code: reasonCode,
-          note,
-        },
+        { reason_code: reasonCode, note },
       );
       if (!ok) throw new Error(apiErrorMessage(data, `${action} failed`));
       toast.success(`${applicantKey} ${cfg.success}`);
@@ -486,8 +622,6 @@ function DecisionDialog({
 }
 
 function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
-  // R28 point 2: the full document checklist per the real contract — was missing insurance and
-  // registration entirely (only ever showed license front/back + selfie).
   const hasAuth = detail.consents.some((c) =>
     (BACKGROUND_CHECK_CONSENT_PURPOSES as readonly string[]).includes(c.purpose),
   );
@@ -497,33 +631,24 @@ function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
       const ok = doc?.status === "uploaded" || doc?.status === "verified";
       return { label: rd.label, ok, note: doc?.status ?? "missing" };
     }),
-    {
-      label: "Background check authorization",
-      ok: hasAuth,
-      note: hasAuth ? "on file" : "missing",
-    },
+    { label: "Background check authorization", ok: hasAuth, note: hasAuth ? "on file" : "missing" },
     {
       label: "Background check result",
       ok: detail.background_check?.status === "clear",
       note: detail.background_check ? BACKGROUND_CHECK_STATUS_LABEL[detail.background_check.status] : "not started",
     },
-    ...detail.verifications.map((v) => ({
-      label: `Verification: ${v.kind}`,
-      ok: v.state === "verified" || v.state === "clear",
-      note: v.state,
-    })),
   ];
   return (
     <ul className="space-y-1">
       {items.map((it) => (
-        <li key={it.label} className="flex items-center gap-2">
+        <li key={it.label} className="flex items-center gap-2 text-xs">
           {it.ok ? (
             <CircleCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
           ) : (
             <CircleX className="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
           )}
           <span>{it.label}</span>
-          <span className="text-muted-foreground text-xs">({it.note})</span>
+          <span className="text-muted-foreground">({it.note})</span>
         </li>
       ))}
     </ul>
@@ -558,36 +683,40 @@ function DocumentsList({
     }
   }
 
-  if (documents.length === 0) return <Empty>No documents.</Empty>;
+  if (documents.length === 0) return <Empty>No documents yet.</Empty>;
   return (
-    <ul className="space-y-1">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {documents.map((d) => {
         const viewable = d.status === "uploaded" || d.status === "verified" || d.status === "needs_review";
         return (
-          <li key={d.id} className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{DOCUMENT_KIND_LABEL[d.kind] ?? d.kind}</span>
-            <Badge variant="outline">{d.status}</Badge>
-            {d.masked_number && <span className="font-mono text-muted-foreground">{d.masked_number}</span>}
-            {viewable && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 gap-1 px-1.5 text-xs"
-                disabled={loadingId === d.id}
-                onClick={() => view(d.id)}
-              >
-                {loadingId === d.id ? (
-                  <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                ) : (
-                  <ExternalLink className="size-3" aria-hidden="true" />
-                )}
-                View (signed, short-lived)
-              </Button>
-            )}
-          </li>
+          <button
+            key={d.id}
+            type="button"
+            disabled={!viewable || loadingId === d.id}
+            onClick={() => view(d.id)}
+            className="flex items-center justify-between gap-2 rounded-md border p-2.5 text-left text-xs hover:bg-muted/40 disabled:opacity-60"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-medium">{DOCUMENT_KIND_LABEL[d.kind] ?? d.kind}</p>
+              <p className="text-muted-foreground">
+                {d.content_type ?? "unknown format"}
+                {d.masked_number ? ` · ${d.masked_number}` : ""}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Badge variant="outline" className="text-[10px]">
+                {d.status}
+              </Badge>
+              {loadingId === d.id ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                viewable && <ExternalLink className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              )}
+            </div>
+          </button>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -627,8 +756,8 @@ function BackgroundCheckBlock({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border p-2">
-        <p className="text-muted-foreground text-xs">Last recorded</p>
+      <div className="rounded-md border p-2 text-xs">
+        <p className="text-muted-foreground">Last recorded</p>
         {current ? (
           <p>
             <Badge variant={current.status === "clear" ? "default" : "outline"}>
@@ -637,7 +766,7 @@ function BackgroundCheckBlock({
             {current.date && <span>on {current.date} </span>}
             {current.actor && <span className="text-muted-foreground">by {current.actor} </span>}
             {current.external_reference && (
-              <span className="font-mono text-muted-foreground text-xs">ref: {current.external_reference}</span>
+              <span className="font-mono text-muted-foreground">ref: {current.external_reference}</span>
             )}
           </p>
         ) : (
@@ -688,12 +817,29 @@ function BackgroundCheckBlock({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  subtitle,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
   return (
-    <section className="space-y-2">
-      <h3 className="font-semibold text-xs uppercase tracking-wide text-muted-foreground">{title}</h3>
-      {children}
-    </section>
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-md border">
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-2.5 text-left">
+        <span className="font-medium text-xs">{title}</span>
+        <div className="flex items-center gap-2">
+          {subtitle && <span className="text-muted-foreground text-xs">{subtitle}</span>}
+          <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="border-t p-2.5 pt-2">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -707,5 +853,5 @@ function Field({ k, v }: { k: string; v: string | null | undefined }) {
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-muted-foreground">{children}</p>;
+  return <p className="text-muted-foreground text-xs">{children}</p>;
 }

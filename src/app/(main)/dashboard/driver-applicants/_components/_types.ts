@@ -44,6 +44,7 @@ export type ApplicantsListResponse = {
   page: number;
   pageSize: number;
   funnel_steps: readonly string[];
+  bucket_counts: Record<"onboarding" | "under_review" | "approved" | "waitlisted" | "rejected", number>;
 };
 
 export type BackgroundCheck = {

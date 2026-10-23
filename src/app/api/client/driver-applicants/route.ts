@@ -4,6 +4,8 @@ import {
   BACKGROUND_CHECK_CONSENT_PURPOSES,
   REQUIRED_DOCUMENT_KINDS,
   requirementsMet,
+  STATUS_BUCKET,
+  type StatusBucket,
   TOTAL_REQUIREMENTS,
 } from "@/lib/driver-applicants";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -182,11 +184,36 @@ export async function GET(req: NextRequest) {
   const start = (page - 1) * pageSize;
   query = query.range(start, start + pageSize - 1);
 
+  // R29: status-bucket chip counts for the Applications list header ("Onboarding (12)" etc.) —
+  // deliberately tenant + date-range only (ignores the page's own status/completeness/stuck/
+  // zone/vehicle/source/search filters) so the chip row reads as a stable, global queue count
+  // rather than shrinking away or disagreeing with itself as other filters change. 5 cheap
+  // head-only count queries, one per bucket, run in parallel.
+  const bucketCountsPromise = (async () => {
+    const buckets = Array.from(new Set(Object.values(STATUS_BUCKET))) as StatusBucket[];
+    const entries = await Promise.all(
+      buckets.map(async (bucket) => {
+        const statusesInBucket = STATUSES.filter((s) => STATUS_BUCKET[s] === bucket);
+        let q = getSupabaseAdmin()
+          .from("applicants")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
+          .in("status", statusesInBucket);
+        if (from) q = q.gte("created_at", from);
+        if (to) q = q.lte("created_at", to);
+        const { count: c } = await q;
+        return [bucket, c ?? 0] as const;
+      }),
+    );
+    return Object.fromEntries(entries) as Record<StatusBucket, number>;
+  })();
+
   const { data, error, count } = await query;
   if (error) {
     console.error("[driver-applicants GET]", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
+  const bucketCounts = await bucketCountsPromise;
   const now = Date.now();
   const applicants = ((data ?? []) as unknown as Row[]).map((r) => {
     const p = r.applicant_profiles?.[0];
@@ -243,5 +270,6 @@ export async function GET(req: NextRequest) {
     page,
     pageSize,
     funnel_steps: FUNNEL_STEPS,
+    bucket_counts: bucketCounts,
   });
 }

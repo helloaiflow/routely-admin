@@ -58,10 +58,11 @@ import { StatusBadge } from "./status-badge";
 /* R29 — A03 rebuilt as a persistent center-column panel (Stops-style), replacing the Sheet
  * overlay. All the decision/requirements/background-check/consents business logic is unchanged
  * from the previous Sheet version -- only the shell (header/icon bar/stepper/tabs/collapsible
- * panels instead of one long scroll) is new. The Document Visualizer (3rd column, zoom/pan/
- * compare/PDF.js/HEIC decode) is explicitly OUT of scope for this pass -- see
- * MISSION_2026-10-22_R29B_document_visualizer.md; documents still open via the same audited
- * signed-URL window.open() the Sheet version used. */
+ * panels instead of one long scroll) is new.
+ *
+ * R29B: Requirements rows and Documents cards now call onSelectDoc() to open the Document
+ * Visualizer (a sibling 3rd column, see document-visualizer.tsx) instead of window.open()'ing the
+ * raw signed URL. */
 
 const DOCUMENT_KIND_LABEL: Record<string, string> = {
   license_front: "License (front)",
@@ -127,33 +128,47 @@ export function ApplicantDetailPanel({
   applicantKey,
   onClose,
   onChanged,
+  onSelectDoc,
+  onDocumentsLoaded,
 }: {
   applicantKey: string | null;
   onClose: () => void;
   onChanged: () => void;
+  /** R29B: opens a document in the Document Visualizer (3rd column) instead of a raw
+   *  window.open() -- used by both the Requirements rows and the Documents tab. */
+  onSelectDoc: (docId: string) => void;
+  /** R29B: the Visualizer (a sibling column, not a child of this panel) needs this applicant's own
+   *  documents array for its ‹ › navigation -- fired whenever a fresh detail loads. */
+  onDocumentsLoaded: (documents: ApplicantDetail["documents"]) => void;
 }) {
   const [detail, setDetail] = useState<ApplicantDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("review");
 
-  const load = useCallback(async (key: string) => {
-    try {
-      const res = await fetch(`/api/client/driver-applicants/${encodeURIComponent(key)}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setDetail((await res.json()) as ApplicantDetail);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    }
-  }, []);
+  const load = useCallback(
+    async (key: string) => {
+      try {
+        const res = await fetch(`/api/client/driver-applicants/${encodeURIComponent(key)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const next = (await res.json()) as ApplicantDetail;
+        setDetail(next);
+        setError(null);
+        onDocumentsLoaded(next.documents);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load");
+      }
+    },
+    [onDocumentsLoaded],
+  );
 
   useEffect(() => {
     setDetail(null);
     setError(null);
     setTab("review");
+    onDocumentsLoaded([]);
     if (applicantKey) void load(applicantKey);
-  }, [applicantKey, load]);
+  }, [applicantKey, load, onDocumentsLoaded]);
 
   async function refresh() {
     if (applicantKey) await load(applicantKey);
@@ -308,7 +323,7 @@ export function ApplicantDetailPanel({
                   </p>
                 )}
                 <Panel title="Requirements" defaultOpen>
-                  <RequirementsChecklist detail={detail} />
+                  <RequirementsChecklist detail={detail} onSelectDoc={onSelectDoc} />
                 </Panel>
                 <Panel
                   title="Background check (manual)"
@@ -354,7 +369,7 @@ export function ApplicantDetailPanel({
               </TabsContent>
 
               <TabsContent value="documents">
-                <DocumentsList applicantKey={applicantKey} documents={detail.documents} />
+                <DocumentsList documents={detail.documents} onSelectDoc={onSelectDoc} />
               </TabsContent>
 
               <TabsContent value="profile" className="space-y-3">
@@ -621,7 +636,13 @@ function DecisionDialog({
   );
 }
 
-function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
+function RequirementsChecklist({
+  detail,
+  onSelectDoc,
+}: {
+  detail: ApplicantDetail;
+  onSelectDoc: (docId: string) => void;
+}) {
   const hasAuth = detail.consents.some((c) =>
     (BACKGROUND_CHECK_CONSENT_PURPOSES as readonly string[]).includes(c.purpose),
   );
@@ -629,26 +650,37 @@ function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
     ...REQUIRED_DOCUMENT_KINDS.map((rd) => {
       const doc = detail.documents.find((d) => d.kind === rd.kind);
       const ok = doc?.status === "uploaded" || doc?.status === "verified";
-      return { label: rd.label, ok, note: doc?.status ?? "missing" };
+      const viewable =
+        Boolean(doc) && (doc?.status === "uploaded" || doc?.status === "verified" || doc?.status === "needs_review");
+      return { label: rd.label, ok, note: doc?.status ?? "missing", docId: viewable ? doc?.id : undefined };
     }),
-    { label: "Background check authorization", ok: hasAuth, note: hasAuth ? "on file" : "missing" },
+    { label: "Background check authorization", ok: hasAuth, note: hasAuth ? "on file" : "missing", docId: undefined },
     {
       label: "Background check result",
       ok: detail.background_check?.status === "clear",
       note: detail.background_check ? BACKGROUND_CHECK_STATUS_LABEL[detail.background_check.status] : "not started",
+      docId: undefined,
     },
   ];
   return (
     <ul className="space-y-1">
       {items.map((it) => (
-        <li key={it.label} className="flex items-center gap-2 text-xs">
-          {it.ok ? (
-            <CircleCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
-          ) : (
-            <CircleX className="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
-          )}
-          <span>{it.label}</span>
-          <span className="text-muted-foreground">({it.note})</span>
+        <li key={it.label}>
+          <button
+            type="button"
+            disabled={!it.docId}
+            onClick={it.docId ? () => onSelectDoc(it.docId as string) : undefined}
+            className="flex w-full items-center gap-2 rounded text-left text-xs enabled:cursor-pointer enabled:hover:bg-muted/40 disabled:cursor-default"
+          >
+            {it.ok ? (
+              <CircleCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+            ) : (
+              <CircleX className="size-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+            )}
+            <span>{it.label}</span>
+            <span className="text-muted-foreground">({it.note})</span>
+            {it.docId && <ChevronDown className="ml-auto size-3 shrink-0 rotate-[-90deg] text-muted-foreground" />}
+          </button>
         </li>
       ))}
     </ul>
@@ -656,33 +688,12 @@ function RequirementsChecklist({ detail }: { detail: ApplicantDetail }) {
 }
 
 function DocumentsList({
-  applicantKey,
   documents,
+  onSelectDoc,
 }: {
-  applicantKey: string | null;
   documents: ApplicantDetail["documents"];
+  onSelectDoc: (docId: string) => void;
 }) {
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-
-  async function view(docId: string) {
-    if (!applicantKey) return;
-    setLoadingId(docId);
-    try {
-      const res = await fetch(
-        `/api/client/driver-applicants/${encodeURIComponent(applicantKey)}/documents/${encodeURIComponent(docId)}/url`,
-      );
-      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!res.ok) throw new Error(apiErrorMessage(data, "Could not get a viewing link"));
-      const url = data.url as string | undefined;
-      if (!url) throw new Error("No URL returned");
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not open document");
-    } finally {
-      setLoadingId(null);
-    }
-  }
-
   if (documents.length === 0) return <Empty>No documents yet.</Empty>;
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -692,8 +703,8 @@ function DocumentsList({
           <button
             key={d.id}
             type="button"
-            disabled={!viewable || loadingId === d.id}
-            onClick={() => view(d.id)}
+            disabled={!viewable}
+            onClick={() => onSelectDoc(d.id)}
             className="flex items-center justify-between gap-2 rounded-md border p-2.5 text-left text-xs hover:bg-muted/40 disabled:opacity-60"
           >
             <div className="min-w-0">
@@ -707,11 +718,7 @@ function DocumentsList({
               <Badge variant="outline" className="text-[10px]">
                 {d.status}
               </Badge>
-              {loadingId === d.id ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                viewable && <ExternalLink className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              )}
+              {viewable && <ExternalLink className="size-3.5 text-muted-foreground" aria-hidden="true" />}
             </div>
           </button>
         );

@@ -232,7 +232,7 @@ export function ApplicantDetailPanel({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm">{applicantKey}</span>
-            {a && <StatusBadge status={a.status} />}
+            {a && <StatusBadge status={a.status} waitlistedByStaff={a.waitlisted_by_staff} />}
           </div>
           <div className="flex items-center gap-1">
             <Button

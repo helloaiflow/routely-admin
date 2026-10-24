@@ -4,6 +4,7 @@ import {
   BACKGROUND_CHECK_CONSENT_PURPOSES,
   REQUIRED_DOCUMENT_KINDS,
   requirementsMet,
+  STAFF_ACTOR_TYPE,
   STATUS_BUCKET,
   type StatusBucket,
   TOTAL_REQUIREMENTS,
@@ -42,6 +43,7 @@ const STATUSES = [
 ];
 const STUCK_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_PAGE_SIZE = 100;
+const WAITLIST_EVENTS_LIMIT = 10_000;
 
 type ProfileRow = {
   legal_name: string | null;
@@ -113,6 +115,43 @@ function funnelStepOf(
  *  values that may not match what the funnel actually writes. */
 function sourceCategory(acquisitionSource: string): "app" | "web" {
   return acquisitionSource.toLowerCase().includes("app") ? "app" : "web";
+}
+
+/* R34 A6 (2026-10-24): the staff-vs-automatic waitlist split (see lib/driver-applicants.ts for the
+ * contract). READ-ONLY: one select over applicant_events, nothing is ever written here.
+ *
+ * Returns the ids of the applicants whose MOST RECENT to_state='waitlisted' event was made by a
+ * staff actor — i.e. a real, terminal waitlist decision. Every other waitlisted applicant was
+ * flipped there automatically by the lite web funnel before any document existed and still belongs
+ * in the Onboarding bucket.
+ *
+ * Done as ONE tenant-wide query rather than per-page, because the bucket chip counts need the
+ * global split too, and it keeps the page rows and the counts derived from the exact same set.
+ * Rows are ordered oldest→newest and reduced last-write-wins per applicant, which is the same
+ * `order by occurred_at desc limit 1` the Postgres function app_driver_status_v2() does. Bounded by
+ * the number of waitlist transitions ever recorded (62 in production at time of writing), not by
+ * total event volume. */
+async function staffWaitlistedApplicantIds(): Promise<Set<string>> {
+  const { data, error } = await getSupabaseAdmin()
+    .from("applicant_events")
+    .select("applicant_id, actor_type, occurred_at")
+    .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
+    .eq("to_state", "waitlisted")
+    .order("occurred_at", { ascending: true })
+    .limit(WAITLIST_EVENTS_LIMIT);
+  if (error) {
+    // Never fail the list over this: degrade to "no staff waitlist known", which is the same
+    // conservative answer app_driver_status_v2() gives when no event row exists.
+    console.error("[driver-applicants GET] waitlist events", error);
+    return new Set<string>();
+  }
+  const latestActorByApplicant = new Map<string, string>();
+  for (const e of (data ?? []) as { applicant_id: string; actor_type: string }[]) {
+    latestActorByApplicant.set(e.applicant_id, e.actor_type);
+  }
+  return new Set(
+    [...latestActorByApplicant.entries()].filter(([, actorType]) => actorType === STAFF_ACTOR_TYPE).map(([id]) => id),
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -208,12 +247,31 @@ export async function GET(req: NextRequest) {
     return Object.fromEntries(entries) as Record<StatusBucket, number>;
   })();
 
+  const staffWaitlistedIdsPromise = staffWaitlistedApplicantIds();
+
   const { data, error, count } = await query;
   if (error) {
     console.error("[driver-applicants GET]", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
-  const bucketCounts = await bucketCountsPromise;
+  const [bucketCounts, staffWaitlistedIds] = await Promise.all([bucketCountsPromise, staffWaitlistedIdsPromise]);
+
+  /* R34 A6: the chip counts must agree with the pills the rows actually render, so the
+   * automatically-waitlisted applicants move from the Waitlisted count into the Onboarding one —
+   * otherwise "Waitlisted (62)" would sit above 62 rows every one of which reads "Onboarding". */
+  if (bucketCounts.waitlisted > 0) {
+    let q = getSupabaseAdmin()
+      .from("applicants")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
+      .eq("status", "waitlisted");
+    if (from) q = q.gte("created_at", from);
+    if (to) q = q.lte("created_at", to);
+    const byStaffCount = staffWaitlistedIds.size > 0 ? ((await q.in("id", [...staffWaitlistedIds])).count ?? 0) : 0;
+    bucketCounts.onboarding += bucketCounts.waitlisted - byStaffCount;
+    bucketCounts.waitlisted = byStaffCount;
+  }
+
   const now = Date.now();
   const applicants = ((data ?? []) as unknown as Row[]).map((r) => {
     const p = r.applicant_profiles?.[0];
@@ -245,6 +303,10 @@ export async function GET(req: NextRequest) {
       next_action: r.next_action,
       acquisition_source: r.acquisition_source,
       source_category: sourceCategory(r.acquisition_source),
+      // R34 A6: null for any non-waitlisted status, exactly like app_driver_status_v2()'s own
+      // column — the UI derives its bucket from status + this (lib/driver-applicants.ts
+      // derivedStatusBucketOf).
+      waitlisted_by_staff: r.status === "waitlisted" ? staffWaitlistedIds.has(r.id) : null,
       name: p?.legal_name ?? null,
       zone: p?.operating_zones?.[0] || [p?.address?.city, p?.address?.state].filter(Boolean).join(", ") || null,
       operating_zones: p?.operating_zones ?? [],

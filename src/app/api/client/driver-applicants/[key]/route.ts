@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { waitlistedByStaff } from "@/lib/driver-applicants";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
 
@@ -125,8 +126,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
   const rawPhone = profile.data?.phone || driverAccount.data?.phone_e164 || null;
   const maskedProfile = profile.data ? { ...profile.data, phone: maskPhone(rawPhone) } : null;
   const backgroundVerification = (verifications.data ?? []).find((v) => v.kind === "background");
+  /* R34 A6: the staff-vs-automatic waitlist split, derived READ-ONLY from the audit timeline this
+   * route already loads (no extra query, nothing written). Same discriminator as the list route and
+   * as Postgres's app_driver_status_v2() — see lib/driver-applicants.ts. null for any other status,
+   * matching v2's own column. */
+  const waitlistedByStaffFlag = applicant.status === "waitlisted" ? waitlistedByStaff(events.data ?? []) : null;
   return NextResponse.json({
-    applicant,
+    applicant: { ...applicant, waitlisted_by_staff: waitlistedByStaffFlag },
     profile: maskedProfile,
     documents: documents.data ?? [],
     consents: consents.data ?? [],

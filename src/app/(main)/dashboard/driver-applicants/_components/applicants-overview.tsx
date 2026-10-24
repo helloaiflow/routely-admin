@@ -11,7 +11,12 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 import { type DateRange, DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_BUCKET_COLORS, STATUS_BUCKET_LABEL, type StatusBucket, statusBucketOf } from "@/lib/driver-applicants";
+import {
+  derivedStatusBucketOf,
+  STATUS_BUCKET_COLORS,
+  STATUS_BUCKET_LABEL,
+  type StatusBucket,
+} from "@/lib/driver-applicants";
 
 import type { ApplicantRow, ApplicantsListResponse } from "./_types";
 
@@ -97,7 +102,11 @@ export function ApplicantsOverview({
       : 0;
 
     const approved = rows.filter((r) => r.status === "approved_applicant").length;
-    const waitlisted = rows.filter((r) => r.status === "waitlisted").length;
+    // R34 A6: only a real staff waitlist decision counts — the lite funnel's automatic
+    // `waitlisted` rows are still onboarding applicants, not a waitlist queue.
+    const waitlisted = rows.filter(
+      (r) => derivedStatusBucketOf(r.status, r.waitlisted_by_staff) === "waitlisted",
+    ).length;
     const rejected = rows.filter((r) => r.status === "rejected").length;
 
     const complete = rows.filter((r) => r.complete);
@@ -160,9 +169,11 @@ export function ApplicantsOverview({
 
     // R28 point 7: bucketed (Onboarding/Under Review/Approved/Waitlisted/Rejected), not the raw
     // 8-value status, so this card matches the same 5-bucket contract everywhere else in the module.
+    // R34 A6: the DERIVED bucket — an applicant the lite web funnel auto-waitlisted before any
+    // document existed counts as Onboarding here too, exactly as its pill reads in the list.
     const byBucket = new Map<StatusBucket, number>();
     for (const r of rows) {
-      const b = statusBucketOf(r.status);
+      const b = derivedStatusBucketOf(r.status, r.waitlisted_by_staff);
       byBucket.set(b, (byBucket.get(b) ?? 0) + 1);
     }
 

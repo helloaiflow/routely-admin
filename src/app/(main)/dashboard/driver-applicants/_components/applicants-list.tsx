@@ -9,7 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_BUCKET, STATUS_BUCKET_COLORS, STATUS_BUCKET_LABEL, type StatusBucket } from "@/lib/driver-applicants";
+import {
+  derivedStatusBucketOf,
+  STATUS_BUCKET,
+  STATUS_BUCKET_COLORS,
+  STATUS_BUCKET_LABEL,
+  type StatusBucket,
+} from "@/lib/driver-applicants";
 
 import { type ApplicantStatus, type ApplicantsListResponse, fmtDate } from "./_types";
 
@@ -100,9 +106,12 @@ export function ApplicantsList({
   // Multi-status buckets (onboarding, under_review) aren't filterable server-side by a single
   // `status` param (see buildQuery's own note) — filter client-side on the fetched page for those
   // so the chip still does something useful without a server contract change.
+  // R34 A6: the filter now runs for EVERY bucket, on the DERIVED bucket — `waitlisted` is no longer
+  // a pure status filter either (an auto-waitlisted lite-funnel applicant reads as Onboarding), so
+  // the server-side `status=waitlisted` narrowing still happens, and this drops the automatic ones.
   const visibleRows =
-    filters.bucket !== "all" && statusesForBucket(filters.bucket).length > 1
-      ? rows.filter((r) => STATUS_BUCKET[r.status] === filters.bucket)
+    filters.bucket !== "all"
+      ? rows.filter((r) => derivedStatusBucketOf(r.status, r.waitlisted_by_staff) === filters.bucket)
       : rows;
   const docsFlaggedRows = filters.docsFlagged ? visibleRows.filter((r) => r.docs_needs_review) : visibleRows;
   const total = data?.total ?? 0;
@@ -221,7 +230,7 @@ export function ApplicantsList({
         ) : (
           <ul>
             {docsFlaggedRows.map((r) => {
-              const c = STATUS_BUCKET_COLORS[STATUS_BUCKET[r.status] ?? "onboarding"];
+              const c = STATUS_BUCKET_COLORS[derivedStatusBucketOf(r.status, r.waitlisted_by_staff)];
               const selected = r.application_ref === selectedKey;
               return (
                 <li key={r.id}>

@@ -159,6 +159,42 @@ export function statusBucketOf(status: string): StatusBucket {
   return STATUS_BUCKET[status] ?? "onboarding";
 }
 
+/* R34 A6 (2026-10-24): `applicants.status = 'waitlisted'` means TWO different things, and only one
+ * of them is a real waitlist:
+ *   1. the automatic "lite funnel" waitlist — the system flips a bare web submission to
+ *      `waitlisted` immediately, BEFORE any document exists. The applicant is still onboarding.
+ *   2. a staff decision — a human moved a complete application out of Under Review. Terminal.
+ * The discriminator is the SAME one Postgres's own app_driver_status_v2() uses (and therefore the
+ * same `waitlisted_by_staff` boolean the routely-driver app consumes): the most recent
+ * applicant_events row with to_state = 'waitlisted' (order by occurred_at desc limit 1), staff iff
+ * its actor_type is 'staff'. No such row at all ⇒ not staff ⇒ automatic.
+ * applicant_events.actor_type's real vocabulary is fixed by a CHECK constraint in prod:
+ * 'applicant' | 'staff' | 'service' | 'system' — 'staff' is the only human/staff one. */
+export const STAFF_ACTOR_TYPE = "staff";
+
+export type WaitlistEvent = { actor_type: string; to_state: string | null; occurred_at: string };
+
+/** Read-only derivation. Never mutates and never implies a state change — the admin only ever
+ *  *reads* this signal; every real transition still goes through routely-api. */
+export function waitlistedByStaff(events: WaitlistEvent[]): boolean {
+  let latest: WaitlistEvent | undefined;
+  for (const e of events) {
+    if (e.to_state !== "waitlisted") continue;
+    if (!latest || new Date(e.occurred_at).getTime() >= new Date(latest.occurred_at).getTime()) latest = e;
+  }
+  return latest?.actor_type === STAFF_ACTOR_TYPE;
+}
+
+/** The display bucket, after the waitlist split. `byStaff` is the server-provided
+ *  `waitlisted_by_staff` (null/undefined for any non-waitlisted status, exactly like v2's column).
+ *  Anything short of an explicit `true` on a waitlisted applicant is the automatic lite-funnel
+ *  waitlist, which belongs in Onboarding. */
+export function derivedStatusBucketOf(status: string, byStaff: boolean | null | undefined): StatusBucket {
+  const bucket = statusBucketOf(status);
+  if (bucket === "waitlisted" && byStaff !== true) return "onboarding";
+  return bucket;
+}
+
 /* R28 points 2/4/8: ONE shared definition of "requirements met" — the Approve-readiness checklist
  * (A03), the "Complete" KPI (A01), and the Requirements x/7 column (A02) must never compute this 3
  * different ways. 7 = the 5 document kinds + the background-check-authorization consent + a

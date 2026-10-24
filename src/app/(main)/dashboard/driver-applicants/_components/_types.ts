@@ -23,6 +23,11 @@ export type ApplicantRow = {
   next_action: string;
   acquisition_source: string;
   source_category: SourceCategory;
+  /* R34 A6: only meaningful when status === "waitlisted" (null otherwise, like
+   * app_driver_status_v2()'s own column). true = a staff member really waitlisted this complete
+   * application; false = the lite web funnel flipped it there automatically before any document
+   * existed, so it is still Onboarding. Always go through derivedStatusBucketOf(). */
+  waitlisted_by_staff: boolean | null;
   name: string | null;
   zone: string | null;
   operating_zones: string[];

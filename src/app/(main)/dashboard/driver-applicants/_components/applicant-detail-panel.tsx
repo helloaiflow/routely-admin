@@ -327,17 +327,38 @@ export function ApplicantDetailPanel({
                 {a.status === "in_review" && !canApprove && (
                   <p className="flex items-start gap-1.5 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-amber-600 text-xs dark:text-amber-400">
                     <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                    {!consentOk
-                      ? "Authorization missing — can't run a background check yet"
-                      : "Background check not yet clear — Approve is disabled until it is"}
+                    {!consentOk ? (
+                      "Authorization missing — can't run a background check yet"
+                    ) : (
+                      <span>
+                        Background check not yet clear — Approve is disabled until it is.{" "}
+                        {/* R36 point 4c: links straight to the section instead of a dead end. */}
+                        <button
+                          type="button"
+                          className="underline underline-offset-2 hover:no-underline"
+                          onClick={() =>
+                            document
+                              .getElementById("background-check-panel")
+                              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                          }
+                        >
+                          Record result
+                        </button>
+                      </span>
+                    )}
                   </p>
                 )}
                 <Panel title="Requirements" defaultOpen>
                   <RequirementsChecklist detail={detail} onSelectDoc={onSelectDoc} />
                 </Panel>
                 <Panel
+                  id="background-check-panel"
                   title="Background check (manual)"
                   subtitle={bg ? BACKGROUND_CHECK_STATUS_LABEL[bg.status] : "Not started"}
+                  // R36 point 4c: opens on its own the moment it's the thing blocking Approve
+                  // (consent already on file, result just isn't clear yet) -- never for the OTHER
+                  // precondition (missing authorization), which this panel can't fix on its own.
+                  forceOpen={a.status === "in_review" && !canApprove && consentOk && !bgClear}
                 >
                   <BackgroundCheckBlock applicantKey={applicantKey} current={bg} onRecorded={refresh} />
                 </Panel>
@@ -747,7 +768,9 @@ function BackgroundCheckBlock({
   onRecorded: () => void;
 }) {
   const [status, setStatus] = useState<string>("requested");
-  const [date, setDate] = useState("");
+  // R36 point 4c (2026-10-25): today by default, not blank -- the staff member almost always means
+  // "today" and the API already validates/accepts YYYY-MM-DD either way.
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [externalRef, setExternalRef] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -761,7 +784,7 @@ function BackgroundCheckBlock({
       );
       if (!ok) throw new Error(apiErrorMessage(data, "Could not record background check"));
       toast.success("Background check recorded");
-      setDate("");
+      setDate(new Date().toISOString().slice(0, 10));
       setExternalRef("");
       onRecorded();
     } catch (e) {
@@ -835,19 +858,29 @@ function BackgroundCheckBlock({
 }
 
 function Panel({
+  id,
   title,
   subtitle,
   defaultOpen,
+  forceOpen,
   children,
 }: {
+  id?: string;
   title: string;
   subtitle?: string;
   defaultOpen?: boolean;
+  /** R36 point 4c (2026-10-25): when true, the panel opens itself and stays open even if the staff
+   *  member had collapsed it — used so the Background check panel opens on its own the moment it's
+   *  what's blocking Approve, instead of staying collapsed behind "Not started". */
+  forceOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const [open, setOpen] = useState(Boolean(defaultOpen) || Boolean(forceOpen));
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-md border">
+    <Collapsible id={id} open={open} onOpenChange={setOpen} className="rounded-md border">
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-2.5 text-left">
         <span className="font-medium text-xs">{title}</span>
         <div className="flex items-center gap-2">

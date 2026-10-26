@@ -44,3 +44,4 @@ IMPECCABLE_SETUP.md
 skills-lock.json
 assets/
 samples/
+.env*

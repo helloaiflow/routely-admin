@@ -192,11 +192,13 @@ export const sidebarItems: NavGroup[] = [
             comingSoon: true,
           },
           {
+            // R26a Part B (A09, 2026-10-25): real page now exists — KPIs,
+            // per-driver table, Add route earning, hold/adjustment, dry-run +
+            // Run Monday payouts. See CODE_REPORT.md.
             title: "Payouts",
             url: "/dashboard/driver-applicants/payouts",
             icon: Wallet,
             adminOnly: true,
-            comingSoon: true,
           },
           {
             title: "Job offers",

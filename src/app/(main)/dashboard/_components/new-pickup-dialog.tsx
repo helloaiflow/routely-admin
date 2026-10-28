@@ -575,7 +575,6 @@ export function NewPickupDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     >
                       <span className="text-base">{"\u26A1"}</span>
                       <span className="font-semibold text-xs">Same Day</span>
-                      <span className="font-medium text-10 text-amber-600">+$49.99</span>
                       {!sameDayAvailable && <span className="text-10 text-muted-foreground">After 2 PM</span>}
                     </button>
                     <button

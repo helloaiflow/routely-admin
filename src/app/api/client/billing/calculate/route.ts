@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
-const SAME_DAY_FEE = 49.99;
-
 export async function POST(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,7 +35,9 @@ export async function POST(request: Request) {
 
   const stopsCost = stops * pricePerStop;
   const milesCost = miles * pricePerMile;
-  const sameDayFee = delivery_type === "same_day" ? SAME_DAY_FEE : 0;
+  // Same-day has no surcharge (CEO, 2026-10-28 — DECISIONS D50). A future
+  // surcharge is a billing_rates rule in routely-api, never a constant here.
+  const sameDayFee = 0;
   const total = Math.round((stopsCost + milesCost + sameDayFee) * 100) / 100;
 
   return NextResponse.json({

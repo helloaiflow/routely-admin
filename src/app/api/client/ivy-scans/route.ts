@@ -75,7 +75,8 @@ export async function GET(request: Request) {
         stop_id: r.stop_id ? String(r.stop_id) : "",
         spoke_delivery_id: r.spoke_delivery_id ? String(r.spoke_delivery_id) : "",
         route: r.route ? String(r.route) : "",
-        image_url: r.image_url ? String(r.image_url) : "",
+        // Never the raw Telegram reference — the session-gated proxy resolves it.
+        image_url: r.image_url && Number(r.rtscan_id) ? `/api/client/ivy-scans/${Number(r.rtscan_id)}/image` : "",
         started_at: r.started_at ? new Date(r.started_at as string).toISOString() : "",
         completed_at: r.completed_at ? new Date(r.completed_at as string).toISOString() : "",
         processing_time_ms: Number(r.processing_time_ms) || 0,

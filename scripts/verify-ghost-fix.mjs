@@ -38,9 +38,6 @@ function bulkHandleItem(gateResult) {
     // consume the draft (approve with the failed stop's id) + count spokeFailed
     return { outcome: "spokeFailed", draft: "approved", stopVisible: "failed" };
   }
-  if (gateResult.httpStatus === 202 || gateResult.dispatch_status === "backup_queued") {
-    return { outcome: "queued", draft: "kept", stopVisible: "none" };
-  }
   return { outcome: "failed", draft: "kept", stopVisible: "none" };
 }
 

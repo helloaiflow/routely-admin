@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { logExternalCall } from "@/lib/api-log";
-import { fireN8nBackup, genTracking, type OrderBody } from "@/lib/create-order";
+import { genTracking, type OrderBody } from "@/lib/create-order";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 // Member-system Phase 5: the actor reference stamped on created stops.
@@ -398,17 +398,13 @@ export async function POST(request: Request) {
       actor: actor?.name ?? null,
       draft_id: String((body as Record<string, unknown>).created_from_draft_id ?? "") || null,
     });
-    try {
-      await fireN8nBackup(tenantId, body);
-      return NextResponse.json(
-        { ok: false, error: "Primary failed — queued to backup.", dispatch_status: "backup_queued" },
-        { status: 202 },
-      );
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: err instanceof Error ? err.message : "Order creation failed" },
-        { status: 500 },
-      );
-    }
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Order service unavailable — the stop was NOT created. Please retry.",
+        dispatch_status: "failed",
+      },
+      { status: 502 },
+    );
   }
 }

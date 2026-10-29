@@ -54,9 +54,9 @@ export type OrderBody = {
   stripe_payment_intent_id?: string;
   stripe_checkout_session_id?: string;
   tracking_id?: string;
-  /** Idempotency key — links a backup-queued order back to its draft so the
-   *  n8n backup workflow can dedupe against FastAPI and bind the resulting
-   *  stop to the originating draft (mirrors FastAPI's dedupe key). */
+  /** Idempotency key — FastAPI dedupes on it so a retried submit of the same
+   *  draft resolves to the same stop pair, and binds the resulting stop to the
+   *  originating draft. */
   created_from_draft_id?: string;
   tenant_id?: number;
 };
@@ -66,7 +66,7 @@ export type CreateOrderResult = {
   rtscan_id: number;
   rtstop_id: number;
   tracking_number: string;
-  dispatch_status: "dispatched" | "spoke_error" | "backup_queued" | "blocked";
+  dispatch_status: "dispatched" | "spoke_error" | "blocked";
   spoke_stop_id?: string;
   total_amount: number;
   label_url: string;
@@ -632,61 +632,4 @@ export async function repostStopToSpoke(
     );
     return { status: "spoke_error" };
   }
-}
-
-// ─────────────────────────────────────────────────────────
-// n8n backup — fires when primary flow fails
-// ─────────────────────────────────────────────────────────
-
-export async function fireN8nBackup(tenantId: number, body: OrderBody): Promise<void> {
-  const webhookUrl = process.env.N8N_CLIENT_ORDER_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.warn("[n8n-backup] N8N_CLIENT_ORDER_WEBHOOK_URL not set — skipping");
-    return;
-  }
-
-  const phoneE164 = normalizePhoneE164(String(body.recipient_phone || ""));
-
-  const payload = {
-    rtscan_id: Date.now(),
-    tenant_id: tenantId,
-    full_name: String(body.recipient_name || "").trim(),
-    address_line1: String(body.delivery_address || "").trim(),
-    city: String(body.delivery_city || "").trim(),
-    state: String(body.delivery_state || "FL").trim(),
-    zip_code: String(body.delivery_zip || "").trim(),
-    phone_e164: phoneE164,
-    email: String(body.recipient_email || ""),
-    note: String(body.notes || ""),
-    gate_code: String(body.gate_code || ""),
-    RxPharmaID: String(body.rx_number || "").trim(),
-    ClientID: String(tenantId),
-    DeliveryToday: body.delivery_type === "same_day" ? "Yes" : "No",
-    requireSignature: body.requires_signature ? "Yes" : "No",
-    package_type: String(body.package_type || "rx"),
-    pickup_address: String(body.pickup_address || ""),
-    // Idempotency + linkage: carry the draft id and any pre-assigned tracking
-    // id into the backup so the n8n workflow can dedupe (against a retry or a
-    // partially-succeeded FastAPI call) and bind the resulting stop to its draft.
-    created_from_draft_id: body.created_from_draft_id ? String(body.created_from_draft_id) : null,
-    tracking_id: body.tracking_id ? String(body.tracking_id) : null,
-    source: "client_portal_backup",
-    payment_status: String(body.payment_status || "paid"),
-    stripe_payment_intent_id: body.stripe_payment_intent_id ?? null,
-    total_amount: Number(body.total_amount || 0),
-  };
-
-  console.warn(`[n8n-backup] → firing backup for tenant=${tenantId}`);
-
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    throw new Error(`n8n backup webhook returned ${res.status}`);
-  }
-
-  console.warn("[n8n-backup] ✓ backup queued");
 }

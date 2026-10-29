@@ -4231,14 +4231,13 @@ function StopDetailPanel({
       };
       // Idempotent submit with one retry. orders/create dedupes on
       // created_from_draft_id, so re-POSTing the same draft never creates a
-      // duplicate — it resolves to the same pickup+delivery pair. A 202
-      // ("backup_queued") means FastAPI was unreachable and the order was
-      // handed to the n8n backup; that is NOT a confirmed canonical stop, so we
-      // keep the draft and let the user retry rather than marking it approved.
+      // duplicate — it resolves to the same pickup+delivery pair. A 502 means
+      // FastAPI was unreachable and NO stop was created; it takes the 5xx path
+      // below (one retry), and if that also fails we keep the draft so the user
+      // can retry rather than marking it approved.
       let data: Record<string, unknown> = {};
       let httpStatus = 0;
       let created = false;
-      let queued = false;
       let spokeUnconfirmed = false;
       for (let attempt = 0; attempt < 2 && !created; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 600));
@@ -4256,13 +4255,6 @@ function StopDetailPanel({
           }
           if (res.ok && data.ok !== false) {
             created = true;
-            break;
-          }
-          // 202 = the n8n backup ALREADY fired (FastAPI was unreachable). Do not
-          // retry — a retry that reaches FastAPI would create a second order
-          // alongside the queued backup. Keep the draft; the user retries later.
-          if (res.status === 202 || data.dispatch_status === "backup_queued") {
-            queued = true;
             break;
           }
           // 409 = FastAPI created the stop but Spoke never accepted it (ghost
@@ -4297,11 +4289,7 @@ function StopDetailPanel({
           onNoLongerUnassigned?.();
           return;
         }
-        setSubmitError(
-          queued
-            ? "We couldn’t reach the dispatch service, so this order was queued for backup processing. Your draft is safe — please tap Submit again in a moment."
-            : String(data.error || `Server error ${httpStatus || ""}`.trim()),
-        );
+        setSubmitError(String(data.error || `Server error ${httpStatus || ""}`.trim()));
         return;
       }
       // Follow-up PATCH on the freshly-created submitted stop. orders/create
@@ -7506,9 +7494,6 @@ export default function StopsPage() {
     setBulkProgress({ done: 0, total: ids.length });
     let ok = 0;
     let failed = 0;
-    // Drafts whose FastAPI submit was unreachable and fell to the (untrusted)
-    // n8n backup. NOT counted as success — kept as drafts, surfaced separately.
-    let queuedCount = 0;
     // Drafts that reached FastAPI but Spoke never accepted (ghost prevented):
     // the stop was saved as submit_failed, the draft consumed — recoverable from
     // the Failed tab via Q-RETRY. Reported distinctly, never as "submitted".
@@ -7590,14 +7575,11 @@ export default function StopsPage() {
         // POST the order. orders/create is idempotent on created_from_draft_id,
         // so retrying a transient 5xx/network failure is safe (resolves to the
         // same pickup+delivery pair via the idempotency key, never a duplicate).
-        // A 202 ("backup_queued") means FastAPI was unreachable and the n8n
-        // backup ALREADY fired — n8n is an UNTRUSTED fallback, NOT a confirmed
-        // stop, so we must NOT retry (a retry that reaches a recovered FastAPI
-        // would create a second order beside the queued backup) and must NOT
-        // approve the draft. Leave it as a draft so it stays submit-ready.
+        // A 502 means FastAPI was unreachable and NO stop was created — it takes
+        // the 5xx path (one retry); if that also fails the draft is kept as-is
+        // so it stays submit-ready.
         let data: Record<string, unknown> = {};
         let created = false;
-        let draftQueued = false;
         let spokeUnconfirmed = false;
         for (let attempt = 0; attempt < 2 && !created; attempt++) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 600));
@@ -7614,11 +7596,6 @@ export default function StopsPage() {
             }
             if (res.ok && data.ok !== false) {
               created = true;
-              break;
-            }
-            // 202/backup-queued: untrusted fallback fired — stop here, keep draft.
-            if (res.status === 202 || data.dispatch_status === "backup_queued") {
-              draftQueued = true;
               break;
             }
             // 409/spoke-unconfirmed: FastAPI created the stop but Spoke never
@@ -7653,8 +7630,7 @@ export default function StopsPage() {
             spokeFailed++;
             return;
           }
-          if (draftQueued) queuedCount++;
-          else failed++;
+          failed++;
           return;
         }
         const newStopId = String(data.tracking_number ?? data.stop_id ?? "");
@@ -7772,23 +7748,14 @@ export default function StopsPage() {
     // separate Submitted-tab list to also refresh.
     loadStops();
     loadDrafts();
-    // Queued = dispatch service unreachable, handed to the untrusted n8n backup.
-    // Those drafts are intentionally KEPT and remain submit-ready — report them
-    // distinctly so the user knows to retry, never as "submitted".
-    const queuedNote = queuedCount > 0 ? ` · ${queuedCount} queued — retry shortly` : "";
     // Spoke-unconfirmed = saved as a draft (not submitted). Surface honestly so
     // the user retries them from Drafts; never silently a "success".
     const spokeNote = spokeFailed > 0 ? ` · ${spokeFailed} not accepted by Spoke — retry from Drafts` : "";
-    if (ok > 0 && failed === 0 && queuedCount === 0 && spokeFailed === 0)
-      toast.success(`${ok} stop${ok > 1 ? "s" : ""} submitted`);
-    else if (ok > 0) toast.success(`${ok} submitted${failed > 0 ? `, ${failed} failed` : ""}${spokeNote}${queuedNote}`);
+    if (ok > 0 && failed === 0 && spokeFailed === 0) toast.success(`${ok} stop${ok > 1 ? "s" : ""} submitted`);
+    else if (ok > 0) toast.success(`${ok} submitted${failed > 0 ? `, ${failed} failed` : ""}${spokeNote}`);
     else if (spokeFailed > 0)
       toast.error(
         `${spokeFailed} stop${spokeFailed > 1 ? "s" : ""} not accepted by Spoke — saved as drafts. Find them in Drafts to retry.`,
-      );
-    else if (queuedCount > 0)
-      toast.warning(
-        `Dispatch service unreachable — ${queuedCount} draft${queuedCount > 1 ? "s" : ""} queued and kept. Please retry shortly.`,
       );
     else toast.error("Could not submit the selected drafts");
   }, [selectedIds, bulkSubmitting, drafts, locations, loadStops, loadDrafts]);

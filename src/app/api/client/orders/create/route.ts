@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { logExternalCall } from "@/lib/api-log";
 import { genTracking, type OrderBody } from "@/lib/create-order";
+import { releaseUnusedReservation } from "@/lib/reservation-release";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 // Member-system Phase 5: the actor reference stamped on created stops.
@@ -404,6 +405,14 @@ export async function POST(request: Request) {
     // created_from_draft_id). Either way no stop was created.
     const message = err instanceof Error ? err.message : String(err);
     const rejected = /^FastAPI 4\d\d:/.test(message);
+    // The fund was reserved above — release it now, not after the 48h sweep.
+    await releaseUnusedReservation({
+      base: FASTAPI_BASE,
+      secret: FASTAPI_SECRET,
+      tenantId,
+      stopId,
+      reason: rejected ? "create_rejected" : "create_failed",
+    });
     return NextResponse.json(
       {
         ok: false,

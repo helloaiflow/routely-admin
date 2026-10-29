@@ -398,13 +398,21 @@ export async function POST(request: Request) {
       actor: actor?.name ?? null,
       draft_id: String((body as Record<string, unknown>).created_from_draft_id ?? "") || null,
     });
+    // FastAPI 4xx = it rejected THIS order (validation) — surface its reason
+    // as a 422 (the UI treats 4xx as deterministic, no retry). Anything else
+    // (unreachable / 5xx) is a 502 the UI retries once (idempotent on
+    // created_from_draft_id). Either way no stop was created.
+    const message = err instanceof Error ? err.message : String(err);
+    const rejected = /^FastAPI 4\d\d:/.test(message);
     return NextResponse.json(
       {
         ok: false,
-        error: "Order service unavailable — the stop was NOT created. Please retry.",
+        error: rejected
+          ? `Order rejected — the stop was NOT created: ${message.replace(/^FastAPI \d+: /, "")}`
+          : "Order service unavailable — the stop was NOT created. Please retry.",
         dispatch_status: "failed",
       },
-      { status: 502 },
+      { status: rejected ? 422 : 502 },
     );
   }
 }

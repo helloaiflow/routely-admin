@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
+import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 /* ── /api/client/stops/reconcile-ghosts ──────────────────────────────────────
@@ -33,6 +34,10 @@ function ghostQuery(tenantId: number): Record<string, unknown> {
 export async function GET() {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Spoke off: every Routely stop is "unassigned" without a Spoke id by design — not a ghost.
+  if (!spokeDispatchEnabled()) {
+    return NextResponse.json({ count: 0, ghosts: [], spoke_dispatch_enabled: false, message: SPOKE_DISABLED_MESSAGE });
+  }
 
   const db = await getDb();
   const tenantId = Number(ctx.tenantId);
@@ -57,6 +62,12 @@ export async function GET() {
 export async function POST(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!spokeDispatchEnabled()) {
+    return NextResponse.json(
+      { ok: false, error: SPOKE_DISABLED_MESSAGE, dispatch_status: "spoke_disabled" },
+      { status: 409 },
+    );
+  }
 
   const db = await getDb();
   const tenantId = Number(ctx.tenantId);

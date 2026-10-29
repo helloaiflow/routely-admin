@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
+import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
 
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
@@ -30,6 +31,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ st
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { stop_id } = await params;
+  if (!spokeDispatchEnabled()) {
+    return NextResponse.json(
+      { ok: false, error: SPOKE_DISABLED_MESSAGE, dispatch_status: "spoke_disabled" },
+      { status: 409 },
+    );
+  }
   if (!FASTAPI_SECRET) {
     return NextResponse.json({ error: "Retry unavailable" }, { status: 503 });
   }

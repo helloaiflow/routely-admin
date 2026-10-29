@@ -1,6 +1,7 @@
 import type { Db, ObjectId } from "mongodb";
 
 import { logExternalCall } from "@/lib/api-log";
+import { spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { getDb } from "@/lib/tenant";
 
 // ─────────────────────────────────────────────────────────
@@ -336,6 +337,11 @@ async function dispatchToSpoke(params: {
   collectCod: boolean;
   collectAmount: string;
 }): Promise<{ status: "dispatched" | "spoke_error"; spoke_stop_id?: string }> {
+  // Misión 8 (D56): Spoke dispatch off — the stop stays in Routely only.
+  if (!spokeDispatchEnabled()) {
+    console.warn("[Spoke] SPOKE_DISPATCH_ENABLED=false — not posting rtscan", params.rtscan_id);
+    return { status: "spoke_error" };
+  }
   const spokeKey = process.env.SPOKE_API_KEY ?? "";
   if (!spokeKey) {
     console.error("[Spoke] SPOKE_API_KEY missing");
@@ -487,6 +493,11 @@ export async function repostStopToSpoke(
   const stopId = String(stop.stop_id ?? "");
   const tenantId = Number(stop.tenant_id);
   if (!stopId || !Number.isFinite(tenantId)) return { status: "spoke_error" };
+  // Misión 8 (D56): Spoke dispatch off — never post (callers already refuse first).
+  if (!spokeDispatchEnabled()) {
+    console.warn("[repost] SPOKE_DISPATCH_ENABLED=false — not posting", stopId);
+    return { status: "spoke_error" };
+  }
 
   const spokeKey = process.env.SPOKE_API_KEY ?? "";
   if (!spokeKey) {

@@ -28,6 +28,7 @@ export async function GET() {
     .from("hubs")
     .select("id, tenant_id, name, address, geo, timezone, is_default, external_circuit_id, route_defaults, visibility, tenant_ids, created_at, updated_at")
     .eq("tenant_id", ROUTELY_OPS_TENANT_ID)
+    .is("archived_at", null) // M13: archived hubs live in the client's "Archivados" filter
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
   if (error) {

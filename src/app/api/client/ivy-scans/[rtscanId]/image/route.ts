@@ -25,12 +25,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rts
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const stored = data.image_url ? String(data.image_url) : "";
-  const img =
-    (await fetchPhiObject(ivyPhotoKey(Number(data.tenant_id), id))) ??
-    (stored ? await fetchTelegramImage(stored) : null);
+  let source = "r2";
+  let img = await fetchPhiObject(ivyPhotoKey(Number(data.tenant_id), id));
+  if (!img) {
+    source = "telegram";
+    console.warn(`[ivy-image] rtscan ${id}: not in routely-phi, falling back to Telegram`);
+    img = stored ? await fetchTelegramImage(stored) : null;
+  }
   if (!img) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return new NextResponse(img.body, {
-    headers: { "Content-Type": img.contentType, "Cache-Control": "private, max-age=3600" },
+    headers: { "Content-Type": img.contentType, "Cache-Control": "private, max-age=3600", "X-Photo-Source": source },
   });
 }

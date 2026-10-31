@@ -47,6 +47,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
   // lagging PG→Mongo mirror. reviveStopDoc converts jsonb ISO strings back to Dates
   // so the shapers' .toISOString() calls keep working.
   let doc: Record<string, unknown> | null = null;
+  if (scopeAll) {
+    // Supabase is the stop authority; the Mongo mirror froze on 2026-07-17.
+    const { data: row, error } = await getSupabaseAdmin()
+      .from("stops")
+      .select("doc")
+      .eq("stop_id", stop_id)
+      .limit(1)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
+    if (row) doc = reviveStopDoc(row.doc as Record<string, unknown>);
+  }
   if (FASTAPI_SECRET && !scopeAll) {
     try {
       const upstream = await fetch(
@@ -158,54 +169,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { stop_id } = await params;
-    // Admin cross-tenant: operate as the STOP's real tenant so any tenant's stop
-    // can be edited and dispatch/charging stay correct.
-    let tenantId = Number(ctx.tenantId);
-    if (ctx.isAdmin) {
-      try {
-        const dbc = await getDb();
-        const owner = await dbc.collection("stops").findOne({ stop_id }, { projection: { tenant_id: 1 } });
-        if (owner?.tenant_id != null) tenantId = Number(owner.tenant_id);
-      } catch {
-        /* keep current scope tenant */
-      }
+    // Supabase is the stop authority; the Mongo `stops` mirror froze on 2026-07-17,
+    // so a Mongo lookup 404s every newer stop. Admin operates as the stop's real tenant
+    // so any tenant's stop can be edited and dispatch/charging stay correct.
+    const { data: row, error } = await getSupabaseAdmin()
+      .from("stops")
+      .select("tenant_id, doc")
+      .eq("stop_id", stop_id)
+      .limit(1)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
+    if (!row || (!ctx.isAdmin && Number(row.tenant_id) !== Number(ctx.tenantId))) {
+      return NextResponse.json({ error: "Stop not found" }, { status: 404 });
     }
+    const tenantId = Number(row.tenant_id);
+    const probe = row.doc as Record<string, unknown>;
     const body = (await request.json()) as Record<string, unknown>;
     const rec = (body.recipient ?? {}) as Record<string, unknown>;
-
-    // ── Classify the stop (ALWAYS) — unassigned edits delegate to FastAPI. ──
-    // Mongo probe first; on an Atlas flap (or a mirror miss) fall back to the
-    // FastAPI/PG read so a Mongo outage can't break the guard.
-    let dbConn: Awaited<ReturnType<typeof getDb>> | null = null;
-    let probe: Record<string, unknown> | null = null;
-    let mongoDown = false;
-    try {
-      dbConn = await getDb();
-      probe = (await dbConn
-        .collection("stops")
-        .findOne({ stop_id, tenant_id: tenantId }, { projection: { status: 1, assignment: 1 } })) as Record<
-        string,
-        unknown
-      > | null;
-    } catch {
-      mongoDown = true;
-    }
-    if (!probe && FASTAPI_SECRET) {
-      try {
-        const upstream = await fetch(
-          `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`,
-          { headers: { "X-API-Key": FASTAPI_SECRET }, signal: AbortSignal.timeout(10000) },
-        );
-        if (upstream.ok) probe = (await upstream.json()) as Record<string, unknown>;
-      } catch {
-        /* handled below */
-      }
-    }
-    if (!probe) {
-      return mongoDown
-        ? NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 })
-        : NextResponse.json({ error: "Stop not found" }, { status: 404 });
-    }
 
     // ── UNASSIGNED: delegate the FULL editable set to FastAPI, which writes
     // PG (what the panel reads), mirrors Mongo, and appends the timeline —
@@ -304,7 +284,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
 
     // ── NON-unassigned: legacy Mongo-direct path (ALLOWED whitelist, geocode,
     // local timeline) — intact. This path genuinely needs Mongo.
-    const db = dbConn ?? (await getDb());
+    const db = await getDb();
 
     const updates: Record<string, unknown> = { updated_at: new Date() };
     for (const [section, field] of ALLOWED) {
@@ -382,7 +362,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       .collection("stops")
       .updateOne({ stop_id, tenant_id: tenantId }, { $set: updates });
 
-    if (result.matchedCount === 0) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Only unassigned stops can be edited" }, { status: 409 });
+    }
 
     if (fieldChanges.length > 0) {
       const a = actorFor(ctx);

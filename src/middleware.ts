@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+
+import { readSupabaseSession, withSessionCookies } from "@/lib/auth/middleware-session";
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTELY ADMIN middleware. Reuses client's Clerk login UI (/login) but gates
@@ -43,9 +46,13 @@ function safeRedirectPath(raw: string | null): string | null {
   return raw;
 }
 
-export default clerkMiddleware(async (auth, req) => {
-  const { userId, sessionClaims } = await auth();
+// Provider-neutral gate: same policy for a Clerk or a Supabase session (D62).
+async function gate(req: NextRequest, userId: string | null, meta: Record<string, unknown> | undefined) {
   const path = req.nextUrl.pathname;
+
+  if (USE_SUPABASE_AUTH && path.startsWith("/register")) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
 
   if (userId && path === "/login") {
     const dest = safeRedirectPath(req.nextUrl.searchParams.get("redirect_url"));
@@ -69,7 +76,6 @@ export default clerkMiddleware(async (auth, req) => {
   // CEO safety net: allowlisted ids bypass ALL role gating.
   if (CEO_ALLOWLIST.includes(userId)) return;
 
-  const meta = sessionClaims?.metadata as Record<string, unknown> | undefined;
   const role = meta?.role as string | undefined;
 
   // Admin portal is admin-only.
@@ -77,7 +83,19 @@ export default clerkMiddleware(async (auth, req) => {
     if (path.startsWith("/api/")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
+}
+
+const clerkGate = clerkMiddleware(async (auth, req) => {
+  const { userId, sessionClaims } = await auth();
+  return gate(req, userId, sessionClaims?.metadata as Record<string, unknown> | undefined);
 });
+
+async function supabaseGate(req: NextRequest) {
+  const { res, userId, meta } = await readSupabaseSession(req);
+  return withSessionCookies(res, await gate(req, userId, meta));
+}
+
+export default USE_SUPABASE_AUTH ? supabaseGate : clerkGate;
 
 export const config = {
   matcher: [

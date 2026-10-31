@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 import { Bell, Layers, MapPin, Plug, User, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

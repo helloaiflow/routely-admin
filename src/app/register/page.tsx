@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import { SignUp } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
+
 /* ── /register — member-invitation acceptance ─────────────────────────────────
  * Member-system Phase 3 (2026-06-11). This page exists ONLY to accept Clerk
  * invitations: the owner invites a member from Settings → Team, Clerk emails a
@@ -18,6 +20,11 @@ import { useSearchParams } from "next/navigation";
  * ─────────────────────────────────────────────────────────────────────────── */
 
 function RegisterInner() {
+  if (USE_SUPABASE_AUTH) return null;
+  return <ClerkRegister />;
+}
+
+function ClerkRegister() {
   const params = useSearchParams();
   const ticket = params.get("__clerk_ticket");
 

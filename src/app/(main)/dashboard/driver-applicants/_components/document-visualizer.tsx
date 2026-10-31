@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 import {
   ChevronLeft,
   ChevronRight,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 
 import { useSupabaseBrowser } from "@/lib/supabase-browser";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/auth/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission } from "@/lib/tenant";

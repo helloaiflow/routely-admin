@@ -5,7 +5,7 @@ import { getTenantContext } from "@/lib/tenant";
 
 /* ── /api/client/hubs ─────────────────────────────────────────────────────────
  * Command Center · Fleet (CC1). Hubs = Routely's dispatch origins (depots).
- * The fleet belongs to Routely OPS (tenant_id=1 = Routely LLC), shared across
+ * The fleet belongs to Routely OPS (tenant_id=34 = Routely LLC), shared across
  * client pharmacies — NOT per-pharmacy — so we scope to the ops tenant.
  * READS come straight from Supabase (fast, work immediately). WRITES proxy to
  * FastAPI /v1/hubs so the domain mutation emits its outbox event (single source
@@ -15,7 +15,7 @@ import { getTenantContext } from "@/lib/tenant";
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
 // Routely LLC = the ops tenant that owns the courier fleet.
-export const ROUTELY_OPS_TENANT_ID = 1;
+export const ROUTELY_OPS_TENANT_ID = 34; // Routely LLC (D60); applicants and payouts stay on tenant 1
 
 // ── GET — list hubs (Supabase, ops tenant) ──────────────────────────────────
 export async function GET() {

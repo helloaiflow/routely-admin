@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 import { Camera, Loader2, Lock, ShieldCheck } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

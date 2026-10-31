@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 import { IconArrowUp, IconMessageCircle2, IconX } from "@tabler/icons-react";
 import { createPortal } from "react-dom";
 

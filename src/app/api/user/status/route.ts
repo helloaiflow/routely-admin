@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, ownTenantFilter } from "@/lib/auth/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -13,7 +13,7 @@ export async function GET() {
     const { data: row } = await supabase
       .from("tenants")
       .select("*")
-      .eq("clerk_user_id", userId)
+      .eq(...(await ownTenantFilter(userId)))
       .maybeSingle();
 
     const t = (row?.doc ?? {}) as Record<string, any>;

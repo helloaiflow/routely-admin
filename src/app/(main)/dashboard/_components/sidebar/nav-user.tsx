@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useClerk } from "@clerk/nextjs";
+import { useClerk } from "@/lib/auth/client";
 import {
   CircleUser,
   Code2,

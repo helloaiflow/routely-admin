@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, ownTenantFilter } from "@/lib/auth/server";
 
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -11,7 +11,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data: row } = await supabase.from("tenants").select("*").eq("clerk_user_id", userId).maybeSingle();
+    const { data: row } = await supabase.from("tenants").select("*").eq(...(await ownTenantFilter(userId))).maybeSingle();
     if (!row) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
 
     const tenant = (row.doc ?? {}) as Record<string, unknown>;
@@ -64,13 +64,13 @@ export async function PUT(req: Request) {
     const { paymentTerm, paymentType } = body;
 
     const supabase = getSupabaseAdmin();
-    const { data: row } = await supabase.from("tenants").select("doc").eq("clerk_user_id", userId).maybeSingle();
+    const { data: row } = await supabase.from("tenants").select("doc").eq(...(await ownTenantFilter(userId))).maybeSingle();
 
     const doc = { ...((row?.doc ?? {}) as Record<string, unknown>) };
     if (paymentTerm) doc.payment_term = paymentTerm;
     if (paymentType) doc.payment_type = paymentType;
 
-    await supabase.from("tenants").update({ doc, updated_at: new Date().toISOString() }).eq("clerk_user_id", userId);
+    await supabase.from("tenants").update({ doc, updated_at: new Date().toISOString() }).eq(...(await ownTenantFilter(userId)));
 
     return NextResponse.json({ success: true });
   } catch (err) {

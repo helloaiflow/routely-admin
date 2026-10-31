@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 
 /* ── usePagePermissions ──────────────────────────────────────────────────────
  * Client-side view of the member-system page permissions (Phase 4).

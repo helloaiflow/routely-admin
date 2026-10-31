@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-import { useClerk } from "@clerk/nextjs";
+import { useClerk } from "@/lib/auth/client";
 
 const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 

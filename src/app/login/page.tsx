@@ -6,8 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import { useAuth, useClerk } from "@clerk/nextjs";
-import { useSignIn } from "@clerk/nextjs/legacy";
+import { useAuth, useClerk } from "@/lib/auth/client";
+import { useSignIn } from "@/lib/auth/client";
 import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";

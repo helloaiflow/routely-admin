@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser, ownTenantFilter } from "@/lib/auth/server";
 
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -18,7 +18,7 @@ export async function POST() {
     const { data: tenant } = await supabase
       .from("tenants")
       .select("tenant_id, stripe_customer_id, doc")
-      .eq("clerk_user_id", userId)
+      .eq(...(await ownTenantFilter(userId)))
       .maybeSingle();
 
     const existingCustomerId =
@@ -37,7 +37,7 @@ export async function POST() {
     await supabase
       .from("tenants")
       .update({ stripe_customer_id: customer.id, doc, updated_at: new Date().toISOString() })
-      .eq("clerk_user_id", userId);
+      .eq(...(await ownTenantFilter(userId)));
 
     return NextResponse.json({ customerId: customer.id });
   } catch (err) {

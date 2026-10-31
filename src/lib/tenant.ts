@@ -1,5 +1,7 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
-import type { User } from "@clerk/nextjs/server";
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
+import { auth, currentUser, profileToUser } from "@/lib/auth/server";
+import { getSessionProfile } from "@/lib/auth/supabase-server";
+import type { User } from "@/lib/auth/server";
 import { cookies } from "next/headers";
 
 import clientPromise from "./mongodb";
@@ -80,7 +82,33 @@ export type TenantContext = {
  * tenant currently has exactly one user. Once a members table exists,
  * the role will be looked up from there instead.
  * ─────────────────────────────────────────────────────────────────────────── */
+// Admin console scope: the tenant picked in the header selector, or "all".
+async function adminTenantScope(): Promise<number | "all"> {
+  try {
+    const sel = (await cookies()).get("admin_tenant")?.value;
+    if (sel && /^\d+$/.test(sel)) return Number(sel);
+  } catch {
+    /* cookies() may be unavailable in some render contexts — default to "all" */
+  }
+  return "all";
+}
+
 export async function getTenantContext(): Promise<TenantContext | null> {
+  // D62: only is_platform_admin reaches this console; user_profiles is the only source.
+  if (USE_SUPABASE_AUTH) {
+    const profile = await getSessionProfile();
+    if (!profile?.is_platform_admin) return null;
+    const tenantScope = await adminTenantScope();
+    return {
+      userId: profile.user_id,
+      tenantId: tenantScope === "all" ? 0 : tenantScope,
+      tenantScope,
+      isAdmin: true,
+      role: "admin",
+      user: profileToUser(profile),
+    };
+  }
+
   const { userId } = await auth();
   if (!userId) return null;
 
@@ -101,13 +129,7 @@ export async function getTenantContext(): Promise<TenantContext | null> {
   const isAdmin = CEO_ALLOWLIST.includes(userId) || systemRole === "routely_admin" || systemRole === "dispatcher";
 
   if (isAdmin) {
-    let tenantScope: number | "all" = "all";
-    try {
-      const sel = (await cookies()).get("admin_tenant")?.value;
-      if (sel && /^\d+$/.test(sel)) tenantScope = Number(sel);
-    } catch {
-      /* cookies() may be unavailable in some render contexts — default to "all" */
-    }
+    const tenantScope = await adminTenantScope();
     return {
       userId,
       tenantId: tenantScope === "all" ? 0 : tenantScope,

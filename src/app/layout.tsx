@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { ClerkProvider } from "@clerk/nextjs";
+import { AppAuthProvider } from "@/lib/auth/client";
 import type { Metadata, Viewport } from "next";
 
 import { SWRProvider } from "@/components/swr-provider";
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font } =
     PREFERENCE_DEFAULTS;
   return (
-    <ClerkProvider>
+    <AppAuthProvider>
       <html
         lang="en"
         data-theme-mode={theme_mode}
@@ -61,6 +61,6 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           </TooltipProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </AppAuthProvider>
   );
 }

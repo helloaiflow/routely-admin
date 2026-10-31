@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { clerkClient } from "@clerk/nextjs/server";
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
+import { clerkClient } from "@/lib/auth/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
@@ -126,6 +127,46 @@ export async function POST(req: NextRequest) {
       { error: "This email is already a member or has a pending invite" },
       { status: 409 },
     );
+  }
+
+  if (USE_SUPABASE_AUTH) {
+    const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${APP_URL}/auth/accept`,
+    });
+    if (inviteError || !invited.user) {
+      console.error("[members] invite failed:", inviteError);
+      return NextResponse.json({ error: "Invitation failed" }, { status: 502 });
+    }
+    const now = new Date().toISOString();
+    const userId = invited.user.id;
+    const { error: profileError } = await supabase.from("user_profiles").insert({
+      user_id: userId,
+      email,
+      tenant_id: ctx.tenantId,
+      tenant_role: "member",
+      page_permissions: perms,
+      invited_by: ctx.userId,
+      invited_at: now,
+    });
+    const { error: memberError } = await supabase.from("tenant_members").insert({
+      tenant_id: ctx.tenantId,
+      clerk_user_id: userId,
+      email,
+      role: "member",
+      active: false,
+      invited_by: ctx.userId,
+      invitation_id: userId,
+      invitation_status: "pending",
+      page_permissions: perms,
+      doc: {},
+      created_at: now,
+      updated_at: now,
+    });
+    if (profileError || memberError) {
+      console.error("[members POST] invite rows failed:", profileError ?? memberError);
+      return NextResponse.json({ error: "Invite email sent, but recording the member failed" }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, invitation_id: userId }, { status: 201 });
   }
 
   // Create the Clerk invitation. The metadata anchors the invitee to THIS

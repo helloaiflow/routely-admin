@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/lib/auth/client";
 import { LayoutDashboard, PackageOpen, Plus } from "lucide-react";
 import useSWR from "swr";
 

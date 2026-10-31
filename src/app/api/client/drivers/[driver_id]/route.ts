@@ -10,7 +10,7 @@ import { getTenantContext } from "@/lib/tenant";
 
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
-const ROUTELY_OPS_TENANT_ID = 1;
+const ROUTELY_OPS_TENANT_ID = 34; // Routely LLC (D60); applicants and payouts stay on tenant 1
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ driver_id: string }> }) {
   const ctx = await getTenantContext();

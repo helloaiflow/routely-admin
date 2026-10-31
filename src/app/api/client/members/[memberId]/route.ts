@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { clerkClient } from "@clerk/nextjs/server";
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
+import { clerkClient } from "@/lib/auth/server";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
@@ -96,8 +97,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ me
         return NextResponse.json({ error: "No pending invitation to revoke" }, { status: 400 });
       }
       try {
-        const clerk = await clerkClient();
-        await clerk.invitations.revokeInvitation(row.invitation_id);
+        // Under Supabase the DB trigger on tenant_members deactivates the profile.
+        if (!USE_SUPABASE_AUTH) {
+          const clerk = await clerkClient();
+          await clerk.invitations.revokeInvitation(row.invitation_id);
+        }
       } catch (err) {
         console.error("[members] revokeInvitation failed:", err);
         return NextResponse.json({ error: "Clerk revoke failed" }, { status: 502 });

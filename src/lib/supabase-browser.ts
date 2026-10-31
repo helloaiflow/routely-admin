@@ -5,6 +5,9 @@ import { useMemo } from "react";
 import { useSession } from "@clerk/nextjs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { getBrowserSupabase, useUser } from "@/lib/auth/client";
+import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -21,7 +24,15 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
  * Returns null when the NEXT_PUBLIC_SUPABASE_* envs are absent or there is
  * no session yet — callers treat that as "realtime disabled", never a crash.
  */
-export function useSupabaseBrowser(): SupabaseClient | null {
+export const useSupabaseBrowser = USE_SUPABASE_AUTH ? useSupabaseAuthBrowser : useClerkBrowser;
+
+// D62: the Supabase session already carries the web claims, so the shared browser client is enough.
+function useSupabaseAuthBrowser(): SupabaseClient | null {
+  const { user } = useUser();
+  return user ? getBrowserSupabase() : null;
+}
+
+function useClerkBrowser(): SupabaseClient | null {
   const { session } = useSession();
   // Keyed on the session ID (stable per login), NOT the session object: Clerk
   // hands back a new session ref on every ~60s token refresh, and memoizing on

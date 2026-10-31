@@ -27,15 +27,15 @@ type Settings = {
 };
 
 const OPTIMIZER_LABELS: Record<OptimizerEngine, { label: string; desc: string }> = {
-  google: { label: "Google Route Optimization", desc: "Managed · default. VRP con ventanas de tiempo." },
-  ortools: { label: "OR-Tools (self-hosted)", desc: "Sin costo por uso. Máximo control." },
-  mapbox: { label: "Mapbox Optimization", desc: "Alterno managed." },
+  google: { label: "Google Route Optimization", desc: "Managed · default. VRP with time windows." },
+  ortools: { label: "OR-Tools (self-hosted)", desc: "No per-use cost. Maximum control." },
+  mapbox: { label: "Mapbox Optimization", desc: "Managed alternative." },
 };
 
 const SMS_LABELS: Record<SmsProvider, { label: string; desc: string }> = {
-  telnyx: { label: "Telnyx", desc: "Principal · más económico." },
-  twilio: { label: "Twilio", desc: "Alterno · estándar de industria." },
-  clicksend: { label: "ClickSend", desc: "Alterno." },
+  telnyx: { label: "Telnyx", desc: "Primary · lowest cost." },
+  twilio: { label: "Twilio", desc: "Alternative · industry standard." },
+  clicksend: { label: "ClickSend", desc: "Alternative." },
 };
 
 export function IntegrationsTab() {
@@ -90,10 +90,10 @@ export function IntegrationsTab() {
     return (
       <Card className="max-w-3xl">
         <CardContent className="flex flex-col items-start gap-1 py-4">
-          <p className="font-medium text-sm">Selecciona un tenant</p>
+          <p className="font-medium text-sm">Select a tenant</p>
           <p className="text-muted-foreground text-sm">
-            La configuración de integraciones es por tenant. Elige un tenant en el selector del
-            header (no &quot;All&quot;) para editar su motor de optimización y proveedor de SMS.
+            Integration settings are per tenant. Pick a tenant in the header selector (not &quot;All&quot;) to edit its
+            optimization engine and SMS provider.
           </p>
         </CardContent>
       </Card>
@@ -104,7 +104,7 @@ export function IntegrationsTab() {
     return (
       <Card className="max-w-3xl">
         <CardContent className="py-4 text-muted-foreground text-sm">
-          No se pudo cargar la configuración de integraciones.
+          Couldn't load the integration settings.
         </CardContent>
       </Card>
     );
@@ -122,7 +122,7 @@ export function IntegrationsTab() {
             Route optimization
           </CardTitle>
           <p className="text-muted-foreground text-sm">
-            Motor que ordena las paradas y calcula ETAs al armar una ruta.
+            Engine that orders stops and calculates ETAs when building a route.
           </p>
         </CardHeader>
         <CardContent className="space-y-2 pt-0">
@@ -164,9 +164,7 @@ export function IntegrationsTab() {
             </span>
             SMS provider
           </CardTitle>
-          <p className="text-muted-foreground text-sm">
-            Proveedor principal para SMS del cliente. Email usa Resend.
-          </p>
+          <p className="text-muted-foreground text-sm">Primary provider for customer SMS. Email uses Resend.</p>
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
           <div className="flex items-center justify-between gap-4">
@@ -209,18 +207,20 @@ export function IntegrationsTab() {
             <span className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
               <Waypoints className="size-4" aria-hidden="true" />
             </span>
-            Circuit (transición)
+            Circuit (transition)
           </CardTitle>
           <p className="text-muted-foreground text-sm">
-            Mientras migramos al dispatch propio, Circuit queda como fallback. Apágalo por tenant
-            cuando el sistema propio esté probado.
+            While we migrate to our own dispatch, Circuit stays as a fallback. Turn it off per tenant once our own
+            system is proven.
           </p>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4 pt-0">
           <div className="min-w-0">
             <p className="font-medium text-sm leading-tight">Circuit fallback</p>
             <p className="text-muted-foreground text-xs">
-              {settings.circuit_enabled ? "Encendido — sync/despacho vía Circuit disponible." : "Apagado — dispatch 100% Routely."}
+              {settings.circuit_enabled
+                ? "On — sync/dispatch through Circuit is available."
+                : "Off — dispatch is 100% Routely."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export function IntegrationsTab() {
         </CardContent>
       </Card>
 
-      <p className="text-muted-foreground text-xs">Los cambios se guardan automáticamente · por tenant.</p>
+      <p className="text-muted-foreground text-xs">Changes save automatically · per tenant.</p>
     </div>
   );
 }

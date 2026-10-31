@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveDriverNames, reviveStopDoc, shapeStopForDetail } from "@/lib/spoke-fields";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
 
 // FastAPI (VPS) owns all dispatch (Spoke) writes — basic-field edits and
@@ -427,18 +428,20 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { stop_id } = await params;
-    const db = await getDb();
-    // Admin cross-tenant: operate as the STOP's real tenant.
-    let tenantId = Number(ctx.tenantId);
-    if (ctx.isAdmin) {
-      const owner = await db.collection("stops").findOne({ stop_id }, { projection: { tenant_id: 1 } });
-      if (owner?.tenant_id != null) tenantId = Number(owner.tenant_id);
+    // Supabase is the stop authority; the Mongo `stops` mirror froze on 2026-07-17,
+    // so a Mongo lookup 404s every newer stop. Admin operates as the stop's real tenant.
+    const { data: row, error } = await getSupabaseAdmin()
+      .from("stops")
+      .select("tenant_id, doc")
+      .eq("stop_id", stop_id)
+      .limit(1)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
+    if (!row || (!ctx.isAdmin && Number(row.tenant_id) !== Number(ctx.tenantId))) {
+      return NextResponse.json({ error: "Stop not found" }, { status: 404 });
     }
-
-    const doc = await db
-      .collection("stops")
-      .findOne({ stop_id, tenant_id: tenantId }, { projection: { status: 1, assignment: 1 } });
-    if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+    const tenantId = Number(row.tenant_id);
+    const doc = row.doc as Record<string, unknown>;
 
     if (isUnassignedDoc(doc) && FASTAPI_SECRET) {
       let upstream: Response;
@@ -465,11 +468,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
 
     // Legacy path (non-unassigned): Mongo-only soft delete, unchanged.
+    const db = await getDb();
     const result = await db
       .collection("stops")
       .updateOne({ stop_id, tenant_id: tenantId }, { $set: { status: "deleted", updated_at: new Date() } });
 
-    if (result.matchedCount === 0) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "Only unassigned stops can be deleted" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true, stop_id });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

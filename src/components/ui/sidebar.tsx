@@ -26,14 +26,14 @@ import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "15rem"
+const SIDEBAR_WIDTH = "240px"
 // Mobile drawer width. Applied INLINE on the Sheet content (see below) because
 // shadcn's SheetContent sets the width via `data-[side=…]:w-3/4` (75vw) — a
 // variant selector with higher CSS specificity than a plain `w-(--sidebar-width)`
 // class, so a className alone is overridden and the drawer renders ~75vw. Inline
-// `width` wins the cascade. ~85vw on small phones, capped at 18rem — clearly not
-// full-width.
-const SIDEBAR_WIDTH_MOBILE = "min(85vw, 18rem)"
+// `width` wins the cascade. ~85vw on small phones, capped at the same 240px as
+// the desktop sidebar.
+const SIDEBAR_WIDTH_MOBILE = "min(85vw, 240px)"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 

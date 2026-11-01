@@ -736,7 +736,7 @@ function LoginContent() {
         <span className="pointer-events-auto">
           Don&apos;t have an account?{" "}
           <Link
-            href="https://routelypro.com/register"
+            href="https://app.routelypro.com/signup"
             className="font-medium text-foreground underline-offset-4 hover:underline"
           >
             Register
@@ -941,7 +941,7 @@ function LoginContent() {
                 <p className="mt-6 text-center text-muted-foreground text-sm lg:hidden">
                   Don&apos;t have an account?{" "}
                   <Link
-                    href="https://routelypro.com/register"
+                    href="https://app.routelypro.com/signup"
                     className="font-medium underline-offset-4 hover:underline"
                     style={{ color: "var(--primary)" }}
                   >

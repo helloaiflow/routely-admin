@@ -173,7 +173,7 @@ function LoginContent() {
           <div className="absolute top-5 right-6 hidden text-muted-foreground text-sm lg:block">
             Don&apos;t have an account?{" "}
             <Link
-              href="https://routelypro.com/register"
+              href="https://app.routelypro.com/signup"
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
               Register
@@ -341,7 +341,7 @@ function LoginContent() {
                 <p className="mt-5 text-center text-muted-foreground text-sm lg:hidden">
                   Don&apos;t have an account?{" "}
                   <Link
-                    href="https://routelypro.com/register"
+                    href="https://app.routelypro.com/signup"
                     className="font-medium underline-offset-4 hover:underline"
                     style={{ color: "var(--primary)" }}
                   >

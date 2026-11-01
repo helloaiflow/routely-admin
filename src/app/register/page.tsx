@@ -30,7 +30,7 @@ function ClerkRegister() {
 
   if (!ticket) {
     if (typeof window !== "undefined") {
-      window.location.replace("https://routelypro.com/register");
+      window.location.replace("https://app.routelypro.com/signup");
     }
     return null;
   }

@@ -143,8 +143,12 @@ const supabaseSignIn: SignInApi = {
       const supabase = getBrowserSupabase();
       if (strategy === "reset_password_email_code") {
         resetEmail = identifier;
-        const { error } = await supabase.auth.resetPasswordForEmail(identifier);
-        if (error) throw fail(error.message);
+        const res = await fetch("/api/auth/forgot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: identifier }),
+        }).catch(() => null);
+        if (!res?.ok) throw fail("We could not send the code. Try again.");
         return { status: "needs_first_factor" };
       }
       const { error } = await supabase.auth.signInWithPassword({ email: identifier, password: password ?? "" });

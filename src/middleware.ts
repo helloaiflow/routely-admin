@@ -23,6 +23,7 @@ const ADMIN_ROLES = ["routely_admin", "dispatcher"];
 const isPublicRoute = createRouteMatcher([
   "/login(.*)",
   "/auth(.*)",
+  "/api/auth/forgot(.*)",
   "/unauthorized(.*)",
   "/api/webhooks(.*)",
   // Stripe's webhook lives at /api/stripe/webhook (not /api/webhooks/*) — the

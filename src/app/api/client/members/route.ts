@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
 import { clerkClient } from "@/lib/auth/server";
-
+import { inviterName, sendTeamInvite } from "@/lib/email/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
 
@@ -130,15 +130,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (USE_SUPABASE_AUTH) {
-    const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${APP_URL}/auth/accept`,
+    const { data: tenantRow } = await supabase
+      .from("tenants")
+      .select("company_name")
+      .eq("tenant_id", ctx.tenantId)
+      .maybeSingle();
+    const userId = await sendTeamInvite({
+      email,
+      company: tenantRow?.company_name || "your team",
+      role: "Team member",
+      inviter: await inviterName(ctx.userId),
     });
-    if (inviteError || !invited.user) {
-      console.error("[members] invite failed:", inviteError);
-      return NextResponse.json({ error: "Invitation failed" }, { status: 502 });
-    }
+    if (!userId) return NextResponse.json({ error: "Invitation failed" }, { status: 502 });
     const now = new Date().toISOString();
-    const userId = invited.user.id;
     const { error: profileError } = await supabase.from("user_profiles").insert({
       user_id: userId,
       email,

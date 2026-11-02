@@ -12,7 +12,7 @@ import { getTenantContext } from "@/lib/tenant";
  *   action: "deactivate"   → active:false (+timestamp). Member keeps Clerk
  *                            account but every permission gate resolves null.
  *   action: "reactivate"   → active:true (accepted members only)
- *   action: "revoke"       → revoke a PENDING Clerk invitation + mark row
+ *   action: "revoke"       → revoke a PENDING invitation + mark row
  * Owner rows are untouchable from this endpoint.
  * NOTE: memberId is the Postgres uuid (`tenant_members.id`), returned by GET.
  * ─────────────────────────────────────────────────────────────────────────── */
@@ -97,8 +97,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ me
         return NextResponse.json({ error: "No pending invitation to revoke" }, { status: 400 });
       }
       try {
-        // Under Supabase the DB trigger on tenant_members deactivates the profile.
-        if (!USE_SUPABASE_AUTH) {
+        // Under Supabase the DB trigger on tenant_members deactivates the profile of an old invite, and the link of a
+        // current one stops working here: a pending invitations row would also block inviting this email again. A
+        // failure is not fatal: /invite/{token} also refuses a row that is not pending.
+        if (USE_SUPABASE_AUTH) {
+          const { error } = await supabase
+            .from("invitations")
+            .update({ status: "revoked" })
+            .eq("id", row.invitation_id)
+            .eq("tenant_id", row.tenant_id)
+            .eq("status", "pending");
+          if (error) console.error("[members] invitation revoke failed:", error.message);
+        } else {
           const clerk = await clerkClient();
           await clerk.invitations.revokeInvitation(row.invitation_id);
         }

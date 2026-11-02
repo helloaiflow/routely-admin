@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /* ── Settings → Team (member-system Phase 3, owner-only) ─────────────────────
- * Invite members by email (Clerk invitation link), see pending/active/
+ * Invite members by email (7-day invitation link), see pending/active/
  * deactivated members, toggle page permissions inline, revoke pending invites,
  * deactivate/reactivate members. Never hard-deletes (audit). The server
  * enforces owner-only on every endpoint — this UI is convenience, not security.

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
 import { clerkClient } from "@/lib/auth/server";
-import { inviterName, sendTeamInvite } from "@/lib/email/auth";
+import { createTeamInvitation } from "@/lib/email/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
 
@@ -20,6 +20,10 @@ import { getTenantContext } from "@/lib/tenant";
  * (placeholder) because the real id doesn't exist until acceptance and the
  * {tenant_id, clerk_user_id} unique index forbids null duplicates. The Clerk
  * user.created webhook swaps in the real id and flips active:true on accept.
+ *
+ * Under Supabase Auth the invitation is the routely-client one: 7 days, a row in
+ * invitations, and the same pending row, which POST /api/invite/{token} on
+ * app.routelypro.com activates. Old invites keep working through /auth/accept.
  * ─────────────────────────────────────────────────────────────────────────── */
 
 // Invite redirect base. Hardened (2026-06-12): the prod env var held a
@@ -91,7 +95,7 @@ export async function GET() {
   });
 }
 
-// ── POST — invite a member (Clerk invitation email) ─────────────────────────
+// ── POST — invite a member ──────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const ctx = await getTenantContext();
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -130,47 +134,29 @@ export async function POST(req: NextRequest) {
   }
 
   if (USE_SUPABASE_AUTH) {
+    // /invite/{token} creates the account, so an email that has one could never accept.
+    const { data: account } = await supabase.from("user_profiles").select("user_id").eq("email", email).maybeSingle();
+    if (account) {
+      return NextResponse.json({ error: "This email already has a Routely account" }, { status: 409 });
+    }
     const { data: tenantRow } = await supabase
       .from("tenants")
-      .select("company_name")
+      .select("company_name, doc")
       .eq("tenant_id", ctx.tenantId)
       .maybeSingle();
-    const userId = await sendTeamInvite({
+    const tenantDoc = (tenantRow?.doc ?? {}) as Record<string, unknown>;
+    const invited = await createTeamInvitation({
+      tenantId: ctx.tenantId,
+      invitedBy: ctx.userId,
+      company: String(tenantRow?.company_name || tenantDoc.company_name || tenantDoc.business_name || "your team"),
       email,
-      company: tenantRow?.company_name || "your team",
-      role: "Team member",
-      inviter: await inviterName(ctx.userId),
+      permissions: perms,
     });
-    if (!userId) return NextResponse.json({ error: "Invitation failed" }, { status: 502 });
-    const now = new Date().toISOString();
-    const { error: profileError } = await supabase.from("user_profiles").insert({
-      user_id: userId,
-      email,
-      tenant_id: ctx.tenantId,
-      tenant_role: "member",
-      page_permissions: perms,
-      invited_by: ctx.userId,
-      invited_at: now,
-    });
-    const { error: memberError } = await supabase.from("tenant_members").insert({
-      tenant_id: ctx.tenantId,
-      clerk_user_id: userId,
-      email,
-      role: "member",
-      active: false,
-      invited_by: ctx.userId,
-      invitation_id: userId,
-      invitation_status: "pending",
-      page_permissions: perms,
-      doc: {},
-      created_at: now,
-      updated_at: now,
-    });
-    if (profileError || memberError) {
-      console.error("[members POST] invite rows failed:", profileError ?? memberError);
-      return NextResponse.json({ error: "Invite email sent, but recording the member failed" }, { status: 500 });
+    if (invited.duplicate) {
+      return NextResponse.json({ error: "This email is already a member or has a pending invite" }, { status: 409 });
     }
-    return NextResponse.json({ success: true, invitation_id: userId }, { status: 201 });
+    if (!invited.ok) return NextResponse.json({ error: "Invitation failed" }, { status: 502 });
+    return NextResponse.json({ success: true, invitation_id: invited.id }, { status: 201 });
   }
 
   // Create the Clerk invitation. The metadata anchors the invitee to THIS

@@ -24,6 +24,8 @@ const isPublicRoute = createRouteMatcher([
   "/login(.*)",
   "/auth(.*)",
   "/api/auth/forgot(.*)",
+  "/staff-invite(.*)",
+  "/api/staff-invite(.*)",
   "/unauthorized(.*)",
   "/api/webhooks(.*)",
   // Stripe's webhook lives at /api/stripe/webhook (not /api/webhooks/*) — the

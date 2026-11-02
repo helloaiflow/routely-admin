@@ -7,296 +7,230 @@ import { IconLoader2, IconMailForward, IconUserPlus } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-/* ── Settings → Team (member-system Phase 3, owner-only) ─────────────────────
- * Invite members by email (7-day invitation link), see pending/active/
- * deactivated members, toggle page permissions inline, revoke pending invites,
- * deactivate/reactivate members. Never hard-deletes (audit). The server
- * enforces owner-only on every endpoint — this UI is convenience, not security.
+/* ── Settings → Team: RoutelyPro staff only ───────────────────────────────────
+ * Lists and manages the people with a platform_role. Each tenant's users are
+ * read-only under Tenants and managed from app.routelypro.com. The server
+ * enforces every rule here; this UI is convenience, not security.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-type PagePerms = { orders: boolean; billing: boolean; reports: boolean; settings: boolean };
+type Role = "super_admin" | "admin" | "support";
+type Member = { user_id: string; email: string; full_name: string | null; platform_role: Role; active: boolean };
+type Invitation = { id: string; email: string; platform_role: Role; expired: boolean };
 
-type Member = {
-  id: string;
-  email: string;
-  role: "owner" | "member";
-  active: boolean;
-  pending: boolean;
-  invitation_status: string | null;
-  page_permissions: PagePerms;
-};
-
-const PERM_KEYS: Array<{ key: keyof PagePerms; label: string }> = [
-  { key: "orders", label: "Orders" },
-  { key: "billing", label: "Billing" },
-  { key: "reports", label: "Reports" },
-  { key: "settings", label: "Settings" },
+const ROLES: Array<{ value: Role; label: string }> = [
+  { value: "super_admin", label: "Super admin" },
+  { value: "admin", label: "Admin" },
+  { value: "support", label: "Support" },
 ];
-
-const DEFAULT_INVITE_PERMS: PagePerms = { orders: true, billing: false, reports: false, settings: false };
+const roleLabel = (role: Role) => ROLES.find((r) => r.value === role)?.label ?? role;
 
 export function TeamSection() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [me, setMe] = useState<{ user_id: string; platform_role: Role } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePerms, setInvitePerms] = useState<PagePerms>(DEFAULT_INVITE_PERMS);
-  const [inviting, setInviting] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<Role>("support");
+  const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/client/members");
-      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-      const data = await res.json();
-      setMembers(data.members ?? []);
+    const res = await fetch("/api/admin/staff").catch(() => null);
+    const body = await res?.json().catch(() => null);
+    if (!res?.ok) setError(body?.error ?? "Could not load the team.");
+    else {
       setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load team");
-    } finally {
-      setLoading(false);
+      setMembers(body.members ?? []);
+      setInvitations(body.invitations ?? []);
+      setMe(body.me);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
-    void load();
+    load();
   }, [load]);
 
-  const invite = async () => {
-    setInviting(true);
+  async function call(key: string, url: string, method: string, payload: unknown, done: string) {
+    setBusy(key);
     setError(null);
     setNotice(null);
-    try {
-      const res = await fetch("/api/client/members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, page_permissions: invitePerms }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setNotice(`Invitation sent to ${inviteEmail.trim().toLowerCase()}.`);
-      setInviteEmail("");
-      setInvitePerms(DEFAULT_INVITE_PERMS);
-      setInviteOpen(false);
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    const body = await res?.json().catch(() => null);
+    if (res?.ok) {
+      setNotice(done);
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Invite failed");
-    } finally {
-      setInviting(false);
-    }
-  };
+    } else setError(body?.error ?? "That didn't work. Try again.");
+    setBusy(null);
+    return Boolean(res?.ok);
+  }
 
-  const patchMember = async (id: string, payload: Record<string, unknown>) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/client/members/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed");
-    } finally {
-      setBusyId(null);
-    }
-  };
+  async function invite() {
+    if (await call("invite", "/api/admin/staff", "POST", { email, platform_role: role }, "Invitation sent.")) setEmail("");
+  }
 
-  const togglePerm = (m: Member, key: keyof PagePerms) => {
-    const next = { ...m.page_permissions, [key]: !m.page_permissions[key] };
-    // Optimistic paint; server result reconciles via load().
-    setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, page_permissions: next } : x)));
-    void patchMember(m.id, { action: "permissions", page_permissions: next });
-  };
-
-  const statusBadge = (m: Member) => {
-    if (m.role === "owner") return <Badge>Owner</Badge>;
-    if (m.pending) return <Badge variant="outline">Pending invite</Badge>;
-    if (m.invitation_status === "revoked") return <Badge variant="secondary">Revoked</Badge>;
-    if (!m.active) return <Badge variant="secondary">Deactivated</Badge>;
-    return <Badge variant="default">Active</Badge>;
-  };
+  const canManage = me?.platform_role === "super_admin" || me?.platform_role === "admin";
+  const assignable = ROLES.filter((r) => r.value !== "super_admin" || me?.platform_role === "super_admin");
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="type-section-title">Team</h3>
-          <p className="text-muted-foreground text-sm">
-            Invite members and control which pages they can access. Every order they create belongs to
-            your organization.
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">RoutelyPro team</CardTitle>
+        <p className="text-muted-foreground text-sm">
+          Staff with access to this console. Tenant users are under Tenants and are managed from app.routelypro.com.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <p role="alert" className="text-destructive text-sm">
+            {error}
           </p>
-        </div>
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button className="h-9 shrink-0">
-              <IconUserPlus className="size-4" /> Invite member
+        )}
+        {notice && <p className="text-muted-foreground text-sm">{notice}</p>}
+
+        {canManage && (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-56 flex-1 space-y-1.5">
+              <Label htmlFor="staff-email">Email</Label>
+              <Input
+                id="staff-email"
+                type="email"
+                spellCheck={false}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="w-40 space-y-1.5">
+              <Label>Role</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignable.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={invite} disabled={!email || busy === "invite"}>
+              {busy === "invite" ? <IconLoader2 className="mr-2 size-4 animate-spin" /> : <IconUserPlus className="mr-2 size-4" />}
+              Invite
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Invite a member</DialogTitle>
-              <DialogDescription>They&apos;ll get an email link to join your workspace.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="invite-email" className="font-medium text-sm">
-                  Email address
-                </Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  placeholder="member@company.com"
-                  className="h-9"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-medium text-sm">Page access</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {PERM_KEYS.map(({ key, label }) => (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-muted/40"
-                    >
-                      <Switch
-                        checked={invitePerms[key]}
-                        onCheckedChange={(v) => setInvitePerms((p) => ({ ...p, [key]: v === true }))}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              {error && <p className="text-destructive text-sm">{error}</p>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviting}>
-                Cancel
-              </Button>
-              <Button onClick={invite} disabled={inviting || inviteEmail.trim() === ""}>
-                {inviting ? <IconLoader2 className="size-4 animate-spin" /> : <IconMailForward className="size-4" />}
-                Send invitation
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </div>
+        )}
 
-      {notice && <p className="text-success text-sm">{notice}</p>}
-
-      {/* Members card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-13">Members</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {loading ? (
-            <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
-              <IconLoader2 className="size-4 animate-spin" /> Loading team…
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    {PERM_KEYS.map(({ key, label }) => (
-                      <TableHead key={key} className="text-center">
-                        {label}
-                      </TableHead>
-                    ))}
-                    <TableHead className="text-right">Actions</TableHead>
+        {loading ? (
+          <IconLoader2 className="size-5 animate-spin text-muted-foreground" />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((m) => {
+                const locked = !canManage || (m.platform_role === "super_admin" && me?.platform_role !== "super_admin");
+                return (
+                  <TableRow key={m.user_id}>
+                    <TableCell>{m.full_name ?? "—"}</TableCell>
+                    <TableCell>{m.email}</TableCell>
+                    <TableCell>
+                      {locked ? (
+                        roleLabel(m.platform_role)
+                      ) : (
+                        <Select
+                          value={m.platform_role}
+                          onValueChange={(v) =>
+                            call(m.user_id, `/api/admin/staff/${m.user_id}`, "PATCH", { platform_role: v }, "Role updated.")
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-36">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {assignable.map((r) => (
+                              <SelectItem key={r.value} value={r.value}>
+                                {r.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {!locked && m.user_id !== me?.user_id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === m.user_id}
+                          onClick={() =>
+                            call(m.user_id, `/api/admin/staff/${m.user_id}`, "PATCH", { platform_role: null }, "Removed from the team.")
+                          }
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {members.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="font-medium">{m.email}</TableCell>
-                      <TableCell>{statusBadge(m)}</TableCell>
-                      {PERM_KEYS.map(({ key }) => (
-                        <TableCell key={key} className="text-center">
-                          {m.role === "owner" ? (
-                            <span className="text-muted-foreground text-xs">Full</span>
-                          ) : (
-                            <Switch
-                              checked={m.page_permissions[key]}
-                              disabled={busyId === m.id || m.invitation_status === "revoked"}
-                              onCheckedChange={() => togglePerm(m, key)}
-                            />
-                          )}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-right">
-                        {m.role === "owner" ? null : m.pending ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8"
-                            disabled={busyId === m.id}
-                            onClick={() => void patchMember(m.id, { action: "revoke" })}
-                          >
-                            Revoke invite
-                          </Button>
-                        ) : m.active ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8"
-                            disabled={busyId === m.id}
-                            onClick={() => void patchMember(m.id, { action: "deactivate" })}
-                          >
-                            Deactivate
-                          </Button>
-                        ) : m.invitation_status === "revoked" ? null : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8"
-                            disabled={busyId === m.id}
-                            onClick={() => void patchMember(m.id, { action: "reactivate" })}
-                          >
-                            Reactivate
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {members.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="py-10 text-center text-muted-foreground text-sm">
-                        No team members yet — send your first invitation above.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                );
+              })}
+              {invitations.map((i) => (
+                <TableRow key={i.id}>
+                  <TableCell>
+                    <Badge variant="outline">{i.expired ? "Invite expired" : "Pending invite"}</Badge>
+                  </TableCell>
+                  <TableCell>{i.email}</TableCell>
+                  <TableCell>{roleLabel(i.platform_role)}</TableCell>
+                  <TableCell className="text-right">
+                    {canManage && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === i.id}
+                          onClick={() =>
+                            call(i.id, `/api/admin/staff/invitations/${i.id}`, "PATCH", { action: "resend" }, "Invitation sent again.")
+                          }
+                        >
+                          <IconMailForward className="mr-1 size-4" />
+                          Resend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy === i.id}
+                          onClick={() =>
+                            call(i.id, `/api/admin/staff/invitations/${i.id}`, "PATCH", { action: "revoke" }, "Invitation revoked.")
+                          }
+                        >
+                          Revoke
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

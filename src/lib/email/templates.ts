@@ -121,6 +121,18 @@ export function teamInvite(a: {
   });
 }
 
+export function staffInvite(a: { role: string; inviter?: string | null; url: string; expires: string }) {
+  const from = a.inviter || "Routely";
+  return render({
+    subject: `${from} invited you to the Routely admin console`,
+    title: "Join the RoutelyPro team",
+    body: `${from} invited you to the Routely admin console as ${/^[AEIOU]/.test(a.role) ? "an" : "a"} ${a.role}.`,
+    rows: [["Role", a.role]],
+    cta: { label: "Accept invitation", href: a.url },
+    note: a.expires,
+  });
+}
+
 export function welcome(a: {
   name?: string | null;
   company: string;

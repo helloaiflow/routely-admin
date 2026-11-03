@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requirePagePermission } from "@/lib/tenant";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!.trim(), {
   apiVersion: "2026-03-25.dahlia",
 });
 
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       client_secret: paymentIntent.client_secret,
-      publishable_key: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      publishable_key: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim(),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Stripe error";

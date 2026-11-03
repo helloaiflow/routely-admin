@@ -137,7 +137,7 @@ export function StripePaymentElement({
 
       // Brand color resolved from CSS --primary (Stripe may not accept oklch strings)
       const brand = resolvedPrimary();
-      const publishableKey = data.publishable_key ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+      const publishableKey = data.publishable_key ?? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? "";
       const stripeInstance = await getStripe(publishableKey);
       if (!stripeInstance) throw new Error("Stripe failed to load");
       setStripe(stripeInstance);

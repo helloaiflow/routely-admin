@@ -12,8 +12,8 @@ import { USE_SUPABASE_AUTH } from "./provider";
 let browserClient: SupabaseClient | null = null;
 export function getBrowserSupabase(): SupabaseClient {
   browserClient ??= createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() as string,
   );
   return browserClient;
 }

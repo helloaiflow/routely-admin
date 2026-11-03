@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "label_email disabled" });
   }
   const to = tenant?.email;
-  const resendKey = process.env.RESEND_API_KEY;
+  const resendKey = process.env.RESEND_API_KEY?.trim();
   if (!resendKey || !to) return NextResponse.json({ ok: false, error: "resend/email unavailable" });
 
   const { data: rows } = await supabase

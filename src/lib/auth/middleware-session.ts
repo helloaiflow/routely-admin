@@ -7,8 +7,8 @@ import { createServerClient } from "@supabase/ssr";
 export async function readSupabaseSession(req: NextRequest) {
   let res = NextResponse.next({ request: req });
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() as string,
     {
       cookies: {
         getAll: () => req.cookies.getAll(),

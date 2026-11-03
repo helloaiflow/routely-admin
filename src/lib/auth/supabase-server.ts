@@ -22,8 +22,8 @@ export type UserProfile = {
 export async function createSupabaseServer() {
   const store = await cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() as string,
     {
       cookies: {
         getAll: () => store.getAll(),

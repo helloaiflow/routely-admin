@@ -499,7 +499,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const resendKey = process.env.RESEND_API_KEY;
+    const resendKey = process.env.RESEND_API_KEY?.trim();
     const clientEmail = ctx.user?.emailAddresses?.[0]?.emailAddress;
     if (resendKey && clientEmail) {
       const recipientName = String(doc.recipient_name ?? "").trim();

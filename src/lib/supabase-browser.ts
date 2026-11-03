@@ -8,8 +8,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBrowserSupabase, useUser } from "@/lib/auth/client";
 import { USE_SUPABASE_AUTH } from "@/lib/auth/provider";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 /**
  * Browser Supabase client wired to Clerk via the NATIVE third-party-auth

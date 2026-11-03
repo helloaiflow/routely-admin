@@ -4,10 +4,10 @@ let _stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
   if (!_stripe) {
-    if (!process.env.STRIPE_SECRET_KEY) {
+    if (!process.env.STRIPE_SECRET_KEY?.trim()) {
       throw new Error("STRIPE_SECRET_KEY is not set");
     }
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY?.trim(), {
       apiVersion: "2026-03-25.dahlia",
       // Identifies THIS app in Stripe's request logs. Must stay distinct from
       // routely-client's own appInfo — otherwise a charge originating in the
@@ -19,4 +19,4 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-export const isLiveMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ?? false;
+export const isLiveMode = process.env.STRIPE_SECRET_KEY?.trim()?.startsWith("sk_live_") ?? false;

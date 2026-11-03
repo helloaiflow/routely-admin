@@ -12,8 +12,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * so existing field-mapping code keeps working unchanged.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secretKey = process.env.SUPABASE_SECRET_KEY;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
 
 if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not defined");
 if (!secretKey) throw new Error("SUPABASE_SECRET_KEY is not defined");

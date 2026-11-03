@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       .eq("order_id", order_id);
 
     // ── 4 · Notify the recipient (best-effort — never blocks the purchase) ──
-    const resendKey = process.env.RESEND_API_KEY;
+    const resendKey = process.env.RESEND_API_KEY?.trim();
     const recipientEmail = String(order.to_address?.email ?? "").trim();
     if (resendKey && recipientEmail) {
       const provider = String(order.rate?.provider ?? "");

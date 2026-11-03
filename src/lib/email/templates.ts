@@ -8,8 +8,9 @@ import type { Email } from "./send";
 const APP_URL = "https://app.routelypro.com";
 const SITE_URL = "https://www.routelypro.com";
 const LOGO_URL = "https://nnjvcvthgzbwmqhquinn.supabase.co/storage/v1/object/public/email-assets/routely-logo-blue.png";
-const PHONE_DISPLAY = "888-920-1907";
-const PHONE_TEL = "8889201907";
+// Customer support line from SUPPORT_PHONE (Vercel), never written in the templates. Unset → the emails only say "Reply".
+const PHONE_TEL = (process.env.SUPPORT_PHONE ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+const PHONE_DISPLAY = /^\d{10}$/.test(PHONE_TEL) ? `${PHONE_TEL.slice(0, 3)}-${PHONE_TEL.slice(3, 6)}-${PHONE_TEL.slice(6)}` : "";
 
 const PAGE_BG = "#F5F7FA";
 const INK = "#0A1024";
@@ -140,10 +141,12 @@ const smallCenter = (html: string) =>
   `<p style="margin:10px 0 24px;font-size:12.5px;line-height:1.5;color:${TEXT3};text-align:center;font-family:${FONT};overflow-wrap:anywhere;">${html}</p>`;
 
 function help() {
-  const tel = `<a href="tel:${PHONE_TEL}" style="color:${BLUE};text-decoration:none;font-weight:600;white-space:nowrap;">${PHONE_DISPLAY}</a>`;
+  const tel = PHONE_DISPLAY
+    ? ` or call <a href="tel:+1${PHONE_TEL}" style="color:${BLUE};text-decoration:none;font-weight:600;white-space:nowrap;">${PHONE_DISPLAY}</a>`
+    : ".";
   return `<tr><td style="border-top:1px solid ${LINE};background:${FAINT_BG};padding:20px 36px;">
 <p style="margin:0;font-size:14.5px;font-weight:650;color:${INK};font-family:${FONT};">Questions? We’re here.</p>
-<p style="margin:2px 0 0;font-size:13.5px;color:${TEXT2};font-family:${FONT};">Reply to this email or call ${tel}</p>
+<p style="margin:2px 0 0;font-size:13.5px;color:${TEXT2};font-family:${FONT};">Reply to this email${tel}</p>
 </td></tr>`;
 }
 
@@ -215,7 +218,7 @@ ${footer(m.reason)}
     ...(m.note ? ["", m.note] : []),
     "",
     "--",
-    `Questions? Reply to this email or call ${PHONE_DISPLAY}.`,
+    `Questions? Reply to this email${PHONE_DISPLAY ? ` or call ${PHONE_DISPLAY}` : ""}.`,
     "Routely LLC · 1817 Mears Pkwy, Margate, FL 33063",
     m.reason,
   ].join("\n");

@@ -5,7 +5,7 @@ import { getTenantContext } from "@/lib/tenant";
 
 type Params = { params: Promise<{ id: string }> };
 
-/* Read-only: tenant users are managed from app.routelypro.com. */
+/* Read-only: tenant users are managed from app.routelypro.com. A tenant in review is approved with ./approve. */
 export async function GET(_req: Request, { params }: Params) {
   const ctx = await getTenantContext();
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: Params) {
 
   const supabase = getSupabaseAdmin();
   const [{ data: tenant }, { data: members }, { data: profiles }] = await Promise.all([
-    supabase.from("tenants").select("tenant_id, company_name").eq("tenant_id", tenantId).maybeSingle(),
+    supabase.from("tenants").select("tenant_id, company_name, status, doc").eq("tenant_id", tenantId).maybeSingle(),
     supabase
       .from("tenant_members")
       .select("clerk_user_id, email, role, active, invitation_status, doc")
@@ -41,5 +41,9 @@ export async function GET(_req: Request, { params }: Params) {
       };
     }),
   );
-  return NextResponse.json({ tenant: { id: tenant.tenant_id, name: tenant.company_name }, users });
+  const review = tenant.doc?.review ?? null;
+  return NextResponse.json({
+    tenant: { id: tenant.tenant_id, name: tenant.company_name, status: tenant.status, review },
+    users,
+  });
 }

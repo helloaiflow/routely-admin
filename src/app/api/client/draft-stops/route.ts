@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { BRAND_PRIMARY } from "@/lib/brand";
+import { reviewBlock, reviewRefusal } from "@/lib/review";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { requirePagePermission } from "@/lib/tenant";
 
@@ -96,6 +97,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const inReview = await reviewBlock(Number(ctx.tenantId));
+  if (inReview) return inReview;
   const body = await request.json();
 
   // Fail-closed: a draft MUST have a complete delivery address. Even when Google
@@ -222,6 +225,8 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    const refused = reviewRefusal(error);
+    if (refused) return refused;
     console.error("[draft-stops POST]", error);
     return NextResponse.json({ ok: false, error: String(error.message ?? error) }, { status: 500 });
   }

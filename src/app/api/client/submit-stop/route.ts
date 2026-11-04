@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { reviewBlock } from "@/lib/review";
 import { patchStopDoc } from "@/lib/stops-store";
 import { requirePagePermission } from "@/lib/tenant";
 
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
 
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const inReview = await reviewBlock(Number(ctx.tenantId));
+  if (inReview) return inReview;
 
   const body = (await request.json()) as Record<string, unknown>;
 

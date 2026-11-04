@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { logExternalCall } from "@/lib/api-log";
 import { genTracking, type OrderBody } from "@/lib/create-order";
 import { releaseUnusedReservation } from "@/lib/reservation-release";
+import { reviewBlock } from "@/lib/review";
 import { patchStopDoc } from "@/lib/stops-store";
 import { requirePagePermission } from "@/lib/tenant";
 
@@ -78,6 +79,8 @@ export async function POST(request: Request) {
       tenant_role: ctx.role,
     };
   }
+  const inReview = await reviewBlock(tenantId);
+  if (inReview) return inReview;
 
   // Required field validation before hitting FastAPI
   const recipientName = String(body.recipient_name ?? "").trim();

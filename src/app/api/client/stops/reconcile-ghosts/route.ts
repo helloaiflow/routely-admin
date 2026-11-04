@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
+import { mongoEnabled } from "@/lib/mongodb";
 import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 /* ── /api/client/stops/reconcile-ghosts ──────────────────────────────────────
@@ -31,6 +33,22 @@ function ghostQuery(tenantId: number): Record<string, unknown> {
   };
 }
 
+/** M18: the same ghosts as ghostQuery(), read from public.stops. */
+async function ghostDocs(tenantId: number, stopId: string | null): Promise<Record<string, unknown>[]> {
+  let q = getSupabaseAdmin()
+    .from("stops")
+    .select("doc")
+    .eq("tenant_id", tenantId)
+    .in("status", IN_SPOKE_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (stopId) q = q.eq("stop_id", stopId);
+  const { data } = await q;
+  return (data ?? [])
+    .map((row) => row.doc as Record<string, unknown>)
+    .filter((d) => !(d.assignment as Record<string, unknown> | undefined)?.spoke_stop_id);
+}
+
 export async function GET() {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,14 +57,15 @@ export async function GET() {
     return NextResponse.json({ count: 0, ghosts: [], spoke_dispatch_enabled: false, message: SPOKE_DISABLED_MESSAGE });
   }
 
-  const db = await getDb();
   const tenantId = Number(ctx.tenantId);
-  const docs = await db
-    .collection("stops")
-    .find(ghostQuery(tenantId), { projection: { stop_id: 1, status: 1, created_at: 1, "recipient.name": 1 } })
-    .sort({ created_at: -1 })
-    .limit(200)
-    .toArray();
+  const docs = mongoEnabled()
+    ? await (await getDb())
+        .collection("stops")
+        .find(ghostQuery(tenantId), { projection: { stop_id: 1, status: 1, created_at: 1, "recipient.name": 1 } })
+        .sort({ created_at: -1 })
+        .limit(200)
+        .toArray()
+    : await ghostDocs(tenantId, null);
 
   return NextResponse.json({
     count: docs.length,
@@ -69,7 +88,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const db = await getDb();
+  const db = mongoEnabled() ? await getDb() : null;
   const tenantId = Number(ctx.tenantId);
 
   // Optional: target a single stop_id (e.g. the one stuck today); otherwise heal
@@ -85,7 +104,9 @@ export async function POST(request: Request) {
   const query = ghostQuery(tenantId);
   if (onlyStopId) query.stop_id = onlyStopId;
 
-  const docs = await db.collection("stops").find(query).limit(200).toArray();
+  const docs = db
+    ? await db.collection("stops").find(query).limit(200).toArray()
+    : await ghostDocs(tenantId, onlyStopId);
 
   let healed = 0;
   let failed = 0;

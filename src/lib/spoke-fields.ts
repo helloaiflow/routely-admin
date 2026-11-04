@@ -7,7 +7,7 @@
 //      (`assignment.*` with `delivery_leg.*` fallback; `service.*` with
 //      `delivery.*` fallback). Canonical = what FastAPI writes today.
 //      Fallback = what legacy IVY/n8n flows still write to.
-//   2. resolveDriverNames(): shared driver-name lookup against `spoke_drivers`
+//   2. (moved) driver names: resolveDriverNames() in @/lib/stops-store reads public.drivers
 //   3. shape* functions: build API response objects for each consumer
 //
 // Field naming policy
@@ -23,8 +23,6 @@
 // `spoke.history[]` is internal raw audit log and is NEVER exposed in API
 // responses or rendered in the UI. When we eventually migrate away from
 // Spoke, this rule keeps the UI untouched — only the writer changes.
-
-import type { Db } from "mongodb";
 
 import { type ClassifiableStop, phaseOf } from "@/lib/status";
 
@@ -215,39 +213,7 @@ export function readTimeline(d: Stop): Array<Record<string, any>> {
 
 // ── Driver name resolution ──────────────────────────────────────────────────
 
-/**
- * Resolves driver names from the `spoke_drivers` collection for a batch
- * of stop docs. Returns a Map keyed by both `spoke_driver_id` and
- * `driver_id` so callers can look up by whichever ID they have.
- *
- * Reads driver_id from canonical `assignment.driver_id` first, then
- * falls back to legacy `delivery_leg.driver_id`.
- */
-export async function resolveDriverNames(db: Db, docs: Stop[]): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  const driverIds = [
-    ...new Set(docs.map((d) => d.assignment?.driver_id ?? d.delivery_leg?.driver_id).filter(Boolean) as string[]),
-  ];
-  if (driverIds.length === 0) return map;
-  try {
-    const drs = await db
-      .collection("spoke_drivers")
-      .find({
-        $or: [{ spoke_driver_id: { $in: driverIds } }, { driver_id: { $in: driverIds } }],
-      })
-      .project({ spoke_driver_id: 1, driver_id: 1, full_name: 1, name: 1 })
-      .toArray();
-    for (const dr of drs) {
-      const name = dr.full_name ?? dr.name ?? null;
-      if (!name) continue;
-      if (dr.spoke_driver_id) map.set(String(dr.spoke_driver_id), name);
-      if (dr.driver_id) map.set(String(dr.driver_id), name);
-    }
-  } catch {
-    // Non-fatal — list still rendered without driver names
-  }
-  return map;
-}
+// M18: driver names come from Supabase public.drivers — see resolveDriverNames in @/lib/stops-store.
 
 // ── Shapers ─────────────────────────────────────────────────────────────────
 

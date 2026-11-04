@@ -1,8 +1,8 @@
-import type { Db, ObjectId } from "mongodb";
+import type { Db } from "mongodb";
 
 import { logExternalCall } from "@/lib/api-log";
 import { spokeDispatchEnabled } from "@/lib/spoke-dispatch";
-import { getDb } from "@/lib/tenant";
+import { patchStopDoc } from "@/lib/stops-store";
 
 // ─────────────────────────────────────────────────────────
 // Types
@@ -62,33 +62,6 @@ export type OrderBody = {
   tenant_id?: number;
 };
 
-export type CreateOrderResult = {
-  ok: boolean;
-  rtscan_id: number;
-  rtstop_id: number;
-  tracking_number: string;
-  dispatch_status: "dispatched" | "spoke_error" | "blocked";
-  spoke_stop_id?: string;
-  total_amount: number;
-  label_url: string;
-  message: string;
-};
-
-// ─────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────
-
-async function nextRtstop(db: Db): Promise<number> {
-  const result = await db
-    .collection("counters")
-    .findOneAndUpdate(
-      { _id: "rtstop" as unknown as ObjectId },
-      { $inc: { seq: 1 } },
-      { upsert: true, returnDocument: "after" },
-    );
-  return (result?.seq as number) ?? 1;
-}
-
 export function genTracking(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let r = "RTL-";
@@ -103,370 +76,9 @@ function normalizePhoneE164(raw: string): string | null {
   return null;
 }
 
-function normalizeText(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim();
-}
-
 // ─────────────────────────────────────────────────────────
 // Main: create order with Mongo writes + Spoke dispatch
 // ─────────────────────────────────────────────────────────
-
-export async function createOrder(tenantId: number, body: OrderBody): Promise<CreateOrderResult> {
-  const db = await getDb();
-  const tenant = await db.collection("tenants").findOne({ tenant_id: tenantId });
-  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
-
-  const now = new Date();
-  const rtscan_id = Date.now();
-  const rtstop_id = await nextRtstop(db);
-  // Use provided tracking_id (from draft) or generate a new one
-  const tracking_number = body.tracking_id ? String(body.tracking_id) : genTracking();
-
-  // Normalize inputs
-  const recipientName = String(body.recipient_name || "").trim();
-  const recipientPhone = String(body.recipient_phone || "").replace(/\D/g, "");
-  const recipientEmail = String(body.recipient_email || "").trim();
-  const pickupAddr = String(body.pickup_address || "").trim();
-  const deliveryAddr = String(body.delivery_address || "").trim();
-  const deliveryCity = String(body.delivery_city || "").trim();
-  const deliveryState = String(body.delivery_state || "FL").trim();
-  const deliveryZip = String(body.delivery_zip || "").trim();
-  const packageType = String(body.package_type || "rx");
-  const rxNumber = String(body.rx_number || "").trim();
-  const gateCode = String(body.gate_code || "");
-  const notes = String(body.notes || "");
-  const deliveryDate = String(body.delivery_date || "");
-  const deliveryType = String(body.delivery_type || "next_day");
-  const paymentStatus = String(body.payment_status || "paid");
-  const sameDayFee = Number(body.same_day_fee || 0);
-  const stops = Number(body.stops || 2);
-  const actualMiles = Number(body.miles || body.estimated_miles || 0);
-  const totalAmount = Number(body.total_amount || 0);
-
-  const full_address = `${deliveryAddr}, ${deliveryCity}, ${deliveryState} ${deliveryZip}`;
-  const rx_pharma_id = rxNumber || `RT-${rtscan_id}`;
-
-  // 1. package_scans
-  await db.collection("package_scans").insertOne({
-    rtscan_id,
-    tracking_number,
-    tenant_id: tenantId,
-    client_id: tenantId,
-    full_name: recipientName,
-    phone: recipientPhone,
-    email: recipientEmail,
-    dob: "01/01/1900",
-    address: deliveryAddr,
-    city: deliveryCity,
-    state: deliveryState,
-    zipcode: deliveryZip,
-    full_address,
-    address_normalized: normalizeText(full_address),
-    name_normalized: normalizeText(recipientName),
-    rx_pharma_id,
-    rx_creation_date: now.toISOString(),
-    type: packageType,
-    package_type: packageType,
-    gate_code: gateCode,
-    note: notes,
-    client_location: pickupAddr || tenant.address?.street || "",
-    pickup_address: pickupAddr,
-    delivery_date: deliveryDate,
-    delivery_type: deliveryType,
-    same_day_fee: sameDayFee,
-    requires_signature: Boolean(body.requires_signature),
-    collect_cod: Boolean(body.collect_cod),
-    collect_amount: body.collect_amount || "",
-    label_status: "pending",
-    route_status: "pending",
-    dispatch_status: paymentStatus === "paid" ? "ready" : "blocked",
-    payment_status: paymentStatus,
-    total_amount: totalAmount,
-    stripe_payment_intent_id: body.stripe_payment_intent_id || null,
-    stripe_checkout_session_id: body.stripe_checkout_session_id || null,
-    source: "client_portal",
-    created_at: now,
-    updated_at: now,
-  });
-
-  // 2. stops — nested structure read by client portal + admin portal
-  await db.collection("stops").insertOne({
-    stop_id: tracking_number,
-    stop_type: "delivery",
-    status: paymentStatus === "paid" ? "unassigned" : "blocked",
-    order_ref: rx_pharma_id,
-    total_price: totalAmount,
-    tenant_id: tenantId,
-    rtscan_id,
-    rtstop_id,
-    recipient: {
-      name: recipientName,
-      phone: recipientPhone,
-      email: recipientEmail || null,
-      dob: null,
-    },
-    address: {
-      street: deliveryAddr,
-      city: deliveryCity,
-      state: deliveryState,
-      zip: deliveryZip,
-      gate_code: gateCode || null,
-      drop_preference: null,
-      lat: null,
-      lng: null,
-    },
-    package: {
-      type: packageType,
-      rx_number: rxNumber || null,
-      dp_note: null,
-      notes: notes || null,
-      cold_chain: false,
-      requires_signature: Boolean(body.requires_signature),
-      weight_oz: 8,
-      length_in: 10,
-      width_in: 7,
-      height_in: 2,
-    },
-    service: {
-      type: deliveryType === "same_day" ? "same_day" : deliveryType === "on_demand" ? "on_demand" : "local",
-      date: deliveryDate || null,
-      collect_payment: Boolean(body.collect_cod),
-      cod_amount: body.collect_cod ? parseFloat(String(body.collect_amount || "0")) : 0,
-      return_to_sender: false,
-    },
-    assignment: {
-      driver_name: null,
-      route_title: null,
-      eta_at: null,
-    },
-    rates: { ups: null, usps: null, fedex: null, selected: null },
-    pickup_address: pickupAddr,
-    dispatch_status: paymentStatus === "paid" ? "ready" : "blocked",
-    payment_status: paymentStatus,
-    source: "client_portal",
-    created_at: now,
-    updated_at: now,
-  });
-
-  // 4. Update tenant stats
-  await db.collection("tenants").updateOne(
-    { tenant_id: tenantId },
-    {
-      $inc: { packages_this_month: stops, miles_this_month: actualMiles },
-      $set: { updated_at: now },
-    },
-  );
-
-  // 5. Dispatch to Spoke (primary path)
-  let dispatch_status: CreateOrderResult["dispatch_status"] = "blocked";
-  let spoke_stop_id: string | undefined;
-
-  if (paymentStatus === "paid") {
-    const dispatchResult = await dispatchToSpoke({
-      db,
-      tenant,
-      rtscan_id,
-      recipientName,
-      recipientPhone,
-      recipientEmail,
-      deliveryAddr,
-      deliveryCity,
-      deliveryState,
-      deliveryZip,
-      notes,
-      gateCode,
-      deliveryType,
-      rx_pharma_id,
-      rxNumber,
-      tenantId,
-      requiresSignature: Boolean(body.requires_signature),
-      collectCod: Boolean(body.collect_cod),
-      collectAmount: String(body.collect_amount || "0.00"),
-    });
-    dispatch_status = dispatchResult.status;
-    spoke_stop_id = dispatchResult.spoke_stop_id;
-  }
-
-  const label_url = `https://app.routelypro.com/api/labels/${rtscan_id}`;
-
-  console.log(`[orders/create] ✓ rtscan=${rtscan_id} tracking=${tracking_number} dispatch=${dispatch_status}`);
-
-  return {
-    ok: true,
-    rtscan_id,
-    rtstop_id,
-    tracking_number,
-    dispatch_status,
-    spoke_stop_id,
-    total_amount: totalAmount,
-    label_url,
-    message:
-      paymentStatus === "paid"
-        ? dispatch_status === "dispatched"
-          ? "Order created and dispatched"
-          : "Order created — Spoke dispatch pending"
-        : "Order created — awaiting payment",
-  };
-}
-
-// ─────────────────────────────────────────────────────────
-// Spoke API dispatch
-// ─────────────────────────────────────────────────────────
-
-async function dispatchToSpoke(params: {
-  db: Db;
-  tenant: Record<string, unknown>;
-  rtscan_id: number;
-  recipientName: string;
-  recipientPhone: string;
-  recipientEmail: string;
-  deliveryAddr: string;
-  deliveryCity: string;
-  deliveryState: string;
-  deliveryZip: string;
-  notes: string;
-  gateCode: string;
-  deliveryType: string;
-  rx_pharma_id: string;
-  rxNumber: string;
-  tenantId: number;
-  requiresSignature: boolean;
-  collectCod: boolean;
-  collectAmount: string;
-}): Promise<{ status: "dispatched" | "spoke_error"; spoke_stop_id?: string }> {
-  // Misión 8 (D56): Spoke dispatch off — the stop stays in Routely only.
-  if (!spokeDispatchEnabled()) {
-    console.warn("[Spoke] SPOKE_DISPATCH_ENABLED=false — not posting rtscan", params.rtscan_id);
-    return { status: "spoke_error" };
-  }
-  const spokeKey = process.env.SPOKE_API_KEY ?? "";
-  if (!spokeKey) {
-    console.error("[Spoke] SPOKE_API_KEY missing");
-    await params.db
-      .collection("stops")
-      .updateOne({ rtscan_id: params.rtscan_id }, { $set: { dispatch_status: "spoke_error", updated_at: new Date() } });
-    return { status: "spoke_error" };
-  }
-
-  try {
-    const SPOKE_BASE = "https://api.getcircuit.com/public/v0.2b";
-    const spokeAuth = `Basic ${Buffer.from(`${spokeKey}:`).toString("base64")}`;
-
-    const deliveryLines: string[] = [];
-    if (params.deliveryType === "same_day") deliveryLines.push("📦 Delivery Today: YES");
-    if (params.requiresSignature) deliveryLines.push("✍️ Signature Required");
-    if (params.gateCode) deliveryLines.push(`Gate Code: ${params.gateCode}`);
-    if (params.collectCod) deliveryLines.push(`💵 Collect on Delivery: $${params.collectAmount || "0.00"}`);
-
-    const extraNote = deliveryLines.length > 0 ? `\n\n${deliveryLines.join("\n")}` : "";
-    const finalNote = (params.notes + extraNote).trim() || null;
-
-    const phoneE164 = normalizePhoneE164(params.recipientPhone);
-
-    const spokePayload: Record<string, unknown> = {
-      address: {
-        addressLineOne: params.deliveryAddr,
-        city: params.deliveryCity,
-        state: params.deliveryState,
-        zip: params.deliveryZip,
-        country: "US",
-      },
-      recipient: {
-        name: params.recipientName,
-        ...(phoneE164 ? { phone: phoneE164 } : {}),
-        ...(params.recipientEmail ? { email: params.recipientEmail } : {}),
-      },
-      orderInfo: {
-        sellerOrderId: params.rx_pharma_id,
-        sellerName: String(params.tenantId),
-        products: params.rxNumber ? [`Rx: ${params.rxNumber}`] : [],
-      },
-      notes: finalNote,
-      barcodes: [],
-      packageCount: 1,
-      activity: "delivery",
-      proofOfAttemptRequirements: { enabled: true },
-    };
-
-    console.log("[Spoke] payload:", JSON.stringify(spokePayload, null, 2));
-
-    const startedSpoke = Date.now();
-    const res = await fetch(`${SPOKE_BASE}/unassignedStops`, {
-      method: "POST",
-      headers: { Authorization: spokeAuth, "Content-Type": "application/json" },
-      body: JSON.stringify(spokePayload),
-    });
-
-    if (res.ok) {
-      const spokeStop = (await res.json()) as { id: string };
-      logExternalCall({
-        provider: "spoke",
-        operation: "spoke.create_stop",
-        method: "POST",
-        status_code: res.status,
-        ok: true,
-        latency_ms: Date.now() - startedSpoke,
-        tenant_id: params.tenantId,
-        stop_id: spokeStop.id,
-        request_summary: { packageCount: 1, sameDay: params.deliveryType === "same_day" },
-      });
-      await params.db.collection("stops").updateOne(
-        { rtscan_id: params.rtscan_id },
-        {
-          $set: {
-            "assignment.spoke_stop_id": spokeStop.id,
-            dispatch_status: "dispatched",
-            status: "unassigned",
-            updated_at: new Date(),
-          },
-        },
-      );
-      await params.db.collection("package_scans").updateOne(
-        { rtscan_id: params.rtscan_id },
-        {
-          $set: {
-            spoke_stop_id: spokeStop.id,
-            dispatch_status: "dispatched",
-            updated_at: new Date(),
-          },
-        },
-      );
-      console.log(`[Spoke] ✓ dispatched stop ${spokeStop.id}`);
-      return { status: "dispatched", spoke_stop_id: spokeStop.id };
-    }
-
-    const errText = await res.text();
-    // AUDIT: the real Spoke status + body — this is what tells us 429 (rate
-    // limit) vs 401 (auth) vs 422 (validation) for a failed post.
-    logExternalCall({
-      provider: "spoke",
-      operation: "spoke.create_stop",
-      method: "POST",
-      status_code: res.status,
-      ok: false,
-      error_message: errText,
-      latency_ms: Date.now() - startedSpoke,
-      tenant_id: params.tenantId,
-    });
-    console.error(`[Spoke] ✗ status=${res.status} body=${errText}`);
-    await params.db
-      .collection("stops")
-      .updateOne(
-        { rtscan_id: params.rtscan_id },
-        { $set: { dispatch_status: "spoke_error", spoke_error: errText.slice(0, 500), updated_at: new Date() } },
-      );
-    return { status: "spoke_error" };
-  } catch (err) {
-    console.error("[Spoke] exception:", err);
-    await params.db
-      .collection("stops")
-      .updateOne({ rtscan_id: params.rtscan_id }, { $set: { dispatch_status: "spoke_error", updated_at: new Date() } });
-    return { status: "spoke_error" };
-  }
-}
 
 // ─────────────────────────────────────────────────────────
 // Repost an EXISTING stop to Spoke (ghost recovery / retry fallback)
@@ -483,7 +95,7 @@ async function dispatchToSpoke(params: {
 // spoke id if already present) and only flips status→unassigned on a VERIFIED
 // Spoke acceptance.
 export async function repostStopToSpoke(
-  db: Db,
+  db: Db | null,
   stop: Record<string, unknown>,
 ): Promise<{ status: "dispatched" | "spoke_error" | "already"; spoke_stop_id?: string }> {
   const assignment = (stop.assignment as Record<string, unknown> | undefined) ?? {};
@@ -493,6 +105,11 @@ export async function repostStopToSpoke(
   const stopId = String(stop.stop_id ?? "");
   const tenantId = Number(stop.tenant_id);
   if (!stopId || !Number.isFinite(tenantId)) return { status: "spoke_error" };
+  // M18: writes go to public.stops; a Mongo handle is passed only with MONGO_ENABLED=true (rollback).
+  const saveFields = async (set: Record<string, unknown>) => {
+    if (db) await db.collection("stops").updateOne({ stop_id: stopId, tenant_id: tenantId }, { $set: set });
+    else await patchStopDoc(stopId, tenantId, set);
+  };
   // Misión 8 (D56): Spoke dispatch off — never post (callers already refuse first).
   if (!spokeDispatchEnabled()) {
     console.warn("[repost] SPOKE_DISPATCH_ENABLED=false — not posting", stopId);
@@ -584,18 +201,13 @@ export async function repostStopToSpoke(
         stop_id: stopId,
       });
       // Verified acceptance — NOW it is truly in Spoke. Flip status honestly.
-      await db.collection("stops").updateOne(
-        { stop_id: stopId, tenant_id: tenantId },
-        {
-          $set: {
-            "assignment.spoke_stop_id": spokeStop.id,
-            dispatch_status: "dispatched",
-            status: "unassigned",
-            spoke_unconfirmed: false,
-            updated_at: new Date(),
-          },
-        },
-      );
+      await saveFields({
+        "assignment.spoke_stop_id": spokeStop.id,
+        dispatch_status: "dispatched",
+        status: "unassigned",
+        spoke_unconfirmed: false,
+        updated_at: new Date(),
+      });
       console.log(`[repost] ✓ healed ghost ${stopId} → spoke ${spokeStop.id}`);
       return { status: "dispatched", spoke_stop_id: spokeStop.id };
     }
@@ -613,34 +225,24 @@ export async function repostStopToSpoke(
       stop_id: stopId,
     });
     console.error(`[repost] ✗ stop=${stopId} status=${res.status} body=${errText.slice(0, 300)}`);
-    await db.collection("stops").updateOne(
-      { stop_id: stopId, tenant_id: tenantId },
-      {
-        $set: {
-          // Honesty rule: a failed re-post is NOT in Spoke → fall back to draft +
-          // submit_error so it's recoverable in the Drafts flow, not stranded.
-          status: "draft",
-          submit_error: { at: new Date(), reason: errText.slice(0, 300), spoke_status: res.status, attempt_count: 1 },
-          dispatch_status: "spoke_error",
-          spoke_error: errText.slice(0, 500),
-          updated_at: new Date(),
-        },
-      },
-    );
+    await saveFields({
+      // Honesty rule: a failed re-post is NOT in Spoke → fall back to draft +
+      // submit_error so it's recoverable in the Drafts flow, not stranded.
+      status: "draft",
+      submit_error: { at: new Date(), reason: errText.slice(0, 300), spoke_status: res.status, attempt_count: 1 },
+      dispatch_status: "spoke_error",
+      spoke_error: errText.slice(0, 500),
+      updated_at: new Date(),
+    });
     return { status: "spoke_error" };
   } catch (err) {
     console.error("[repost] exception:", err);
-    await db.collection("stops").updateOne(
-      { stop_id: stopId, tenant_id: tenantId },
-      {
-        $set: {
-          status: "draft",
-          submit_error: { at: new Date(), reason: String(err).slice(0, 300), spoke_status: null, attempt_count: 1 },
-          dispatch_status: "spoke_error",
-          updated_at: new Date(),
-        },
-      },
-    );
+    await saveFields({
+      status: "draft",
+      submit_error: { at: new Date(), reason: String(err).slice(0, 300), spoke_status: null, attempt_count: 1 },
+      dispatch_status: "spoke_error",
+      updated_at: new Date(),
+    });
     return { status: "spoke_error" };
   }
 }

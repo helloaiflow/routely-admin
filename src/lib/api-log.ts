@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/tenant";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 /* ── api_logs — external-API audit log (lean, PHI-safe, auto-expiring) ────────
  * ONE choke-point helper every outbound external call (OpenAI, Spoke, Google,
@@ -14,12 +14,10 @@ import { getDb } from "@/lib/tenant";
  *  - NON-BLOCKING: logExternalCall() is fire-and-forget. It never throws and
  *    never awaits in the caller's critical path — a failed log write must NEVER
  *    break or slow the real API call.
- *  - AUTO-EXPIRING: TTL index drops docs RETENTION_DAYS after created_at (same
- *    pattern as failed_scans) so the collection never grows unbounded.
+ *  - RETENTION: Mongo dropped docs after RETENTION_DAYS with a TTL index. Since M18 the rows
+ *    live in public.api_logs, which has no purge yet (pending, see ROS M18).
  *  - LEAN: this is an audit log + TTL + a read path. Not a metrics platform.
  * ─────────────────────────────────────────────────────────────────────────── */
-
-const RETENTION_DAYS = 10; // 7–14d window; recent-debugging retention, not forever.
 
 export type ApiLogEntry = {
   provider: "openai" | "spoke" | "google_places" | "telnyx" | (string & {});
@@ -39,27 +37,6 @@ export type ApiLogEntry = {
   batch_id?: string | null;
 };
 
-let indexesEnsured = false;
-async function ensureIndexes(db: Awaited<ReturnType<typeof getDb>>) {
-  if (indexesEnsured) return;
-  try {
-    await db.collection("api_logs").createIndexes([
-      // TTL — Mongo auto-deletes a doc RETENTION_DAYS after created_at. The field
-      // MUST be a real BSON Date for the TTL monitor to act on it.
-      { key: { created_at: 1 }, name: "ttl_created_at", expireAfterSeconds: RETENTION_DAYS * 86400 },
-      // Read path: "failed spoke calls for this tenant in the last hour".
-      { key: { tenant_id: 1, provider: 1, created_at: -1 }, name: "idx_tenant_provider_created" },
-    ]);
-    indexesEnsured = true;
-  } catch (err) {
-    // Non-fatal: a parallel cold start may race; createIndexes is idempotent.
-    console.error("[api-log ensureIndexes]", err instanceof Error ? err.message : err);
-  }
-}
-
-// Defensive PHI scrub on provider error bodies (auth/rate errors rarely carry
-// PHI, but never assume): redact emails, long digit runs (phones/zips/ids), and
-// US-phone-shaped strings. Keeps the error meaning, drops anything PHI-like.
 function scrubPHI(s: string): string {
   return s
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
@@ -74,9 +51,8 @@ function scrubPHI(s: string): string {
 export function logExternalCall(entry: ApiLogEntry): void {
   void (async () => {
     try {
-      const db = await getDb();
-      await ensureIndexes(db);
-      await db.collection("api_logs").insertOne({
+      // M18: public.api_logs (tenant_id + doc), the table /api/client/api-logs reads.
+      const doc = {
         provider: entry.provider,
         operation: entry.operation,
         method: entry.method ?? null,
@@ -93,8 +69,12 @@ export function logExternalCall(entry: ApiLogEntry): void {
           draft_id: entry.draft_id ?? null,
           batch_id: entry.batch_id ?? null,
         },
-        created_at: new Date(),
-      });
+        created_at: new Date().toISOString(),
+      };
+      const { error } = await getSupabaseAdmin()
+        .from("api_logs")
+        .insert({ tenant_id: entry.tenant_id ?? null, doc, created_at: doc.created_at });
+      if (error) throw new Error(error.message);
     } catch (err) {
       // A failed audit write must NEVER affect the real operation.
       console.error("[api-log] write failed (non-fatal):", err instanceof Error ? err.message : err);

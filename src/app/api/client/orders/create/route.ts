@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { logExternalCall } from "@/lib/api-log";
 import { genTracking, type OrderBody } from "@/lib/create-order";
+import { mongoEnabled } from "@/lib/mongodb";
 import { releaseUnusedReservation } from "@/lib/reservation-release";
+import { patchStopDoc } from "@/lib/stops-store";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
 // Member-system Phase 5: the actor reference stamped on created stops.
@@ -266,13 +268,19 @@ export async function POST(request: Request) {
     if (actor) {
       const stopIds = [deliveryStopId, String(pickupStopId ?? "")].filter(Boolean);
       try {
-        const db = await getDb();
-        await db
-          .collection("stops")
-          .updateMany(
-            { stop_id: { $in: stopIds }, tenant_id: tenantId },
-            { $set: { created_by: { ...actor, source: "client_portal", stamped_at: new Date() } } },
-          );
+        if (mongoEnabled()) {
+          const db = await getDb();
+          await db
+            .collection("stops")
+            .updateMany(
+              { stop_id: { $in: stopIds }, tenant_id: tenantId },
+              { $set: { created_by: { ...actor, source: "client_portal", stamped_at: new Date() } } },
+            );
+        } else {
+          // M18: the stamp lands on public.stops.doc, the copy every reader uses.
+          const createdBy = { ...actor, source: "client_portal", stamped_at: new Date().toISOString() };
+          for (const sid of stopIds) await patchStopDoc(sid, tenantId, { created_by: createdBy });
+        }
       } catch (stampErr) {
         console.error("[orders/create] created_by stamp failed (non-fatal):", stampErr);
       }
@@ -322,28 +330,30 @@ export async function POST(request: Request) {
         // UI shows it in Drafts to retry — the reverse PG→Mongo mirror is not wired, so
         // this write keeps the UI honest for real ghosts. (Remove once client reads PG.)
         console.error("[orders/create] GHOST PREVENTED — Spoke unconfirmed for", deliveryStopId);
-        try {
-          const db = await getDb();
-          await db.collection("stops").updateOne(
-            { stop_id: deliveryStopId, tenant_id: tenantId },
-            {
-              $set: {
-                status: "draft",
-                submit_error: {
-                  at: new Date(),
-                  reason: "Dispatch (Spoke) did not confirm this stop",
-                  spoke_status: null,
-                  attempt_count: 1,
+        // M18: Postgres already holds the draft + submit_error; the Mongo copy is written only on rollback.
+        if (mongoEnabled())
+          try {
+            const db = await getDb();
+            await db.collection("stops").updateOne(
+              { stop_id: deliveryStopId, tenant_id: tenantId },
+              {
+                $set: {
+                  status: "draft",
+                  submit_error: {
+                    at: new Date(),
+                    reason: "Dispatch (Spoke) did not confirm this stop",
+                    spoke_status: null,
+                    attempt_count: 1,
+                  },
+                  dispatch_status: "spoke_error",
+                  spoke_unconfirmed: true,
+                  updated_at: new Date(),
                 },
-                dispatch_status: "spoke_error",
-                spoke_unconfirmed: true,
-                updated_at: new Date(),
               },
-            },
-          );
-        } catch (markErr) {
-          console.error("[orders/create] ghost-guard mark failed:", markErr);
-        }
+            );
+          } catch (markErr) {
+            console.error("[orders/create] ghost-guard mark failed:", markErr);
+          }
         return NextResponse.json(
           {
             ok: false,

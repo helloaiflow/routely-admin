@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { currentUser } from "@/lib/auth/server";
-
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
 
-// FastAPI (VPS) owns internal notes on STOPS (F6b): it writes PG — what the
-// detail panel reads — and mirrors to Mongo. A Mongo-direct note here was
-// invisible to the panel and doomed to be wiped by the full-doc reverse
-// mirror on the next edit. Drafts moved to Supabase public.draft_stops on
-// 2026-06-22 (commit 975852a) — this fallback was left querying Mongo
-// draft_stops after that migration and has been 404ing on any draft made
-// since (found live 2026-08-19/20, Mongo Inventory report). Repointed here.
+// FastAPI (VPS) owns internal notes on STOPS (F6b) and writes public.stops — what the detail panel reads.
+// Drafts live in public.draft_stops (since 2026-06-22). M18: no Mongo path is left here.
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
 
@@ -73,16 +67,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ sto
     role: "client" as const,
     created_at: new Date().toISOString(),
   };
-
-  // ── Stops fallback when FastAPI is not configured (Mongo — dev-only path,
-  // stops itself stays on Mongo per standing instruction) ──
-  if (!FASTAPI_SECRET) {
-    // biome-ignore lint/suspicious/noExplicitAny: MongoDB $push type inference
-    const pushOp = { $push: { internal_notes: note }, $set: { updated_at: new Date() } } as any;
-    const db = await getDb();
-    const result = await db.collection("stops").updateOne({ stop_id, tenant_id: tenantId }, pushOp);
-    if (result.matchedCount > 0) return NextResponse.json({ ok: true, note });
-  }
 
   // ── Drafts — Supabase public.draft_stops (jsonb doc, no $push — read,
   // mutate the JS object, write the whole doc back, same pattern

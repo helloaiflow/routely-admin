@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
+import { mongoEnabled } from "@/lib/mongodb";
 import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
+import { loadStopDoc } from "@/lib/stops-store";
 import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
 
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
@@ -66,9 +68,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ st
   // real Spoke re-post ourselves via repostStopToSpoke. Only a verified
   // spoke_stop_id counts as submitted — otherwise the stop stays submit_failed.
   try {
-    const db = await getDb();
+    const db = mongoEnabled() ? await getDb() : null;
     const tenantId = Number(ctx.tenantId);
-    const doc = await db.collection("stops").findOne({ stop_id, tenant_id: tenantId });
+    const doc = db
+      ? await db.collection("stops").findOne({ stop_id, tenant_id: tenantId })
+      : await loadStopDoc(stop_id, tenantId);
     if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
 
     let spokeId = (doc.assignment as Record<string, unknown> | undefined)?.spoke_stop_id;

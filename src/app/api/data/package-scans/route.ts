@@ -6,8 +6,8 @@
  * must send this header on every call now; it previously had none at all.
  * MIGRATED: now writes/reads Supabase `public.ivy_scans` (was Mongo
  * `package_scans`). Same URL + response contract so the n8n workflow is
- * UNCHANGED. The old Mongo collection is left intact as a backup and is copied
- * over by POST /api/data/package-scans/migrate.
+ * UNCHANGED. M18: the Mongo history (1,082 scans only Mongo had) was loaded
+ * into ivy_scans and the migrate route removed; Mongo is in the M18 backup.
  *
  * Lifecycle per scan (unchanged):
  *   PROCESSING → SPOKE_OK → SUCCESS   (or ERROR at any node)

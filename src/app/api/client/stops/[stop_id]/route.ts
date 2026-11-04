@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { resolveDriverNames, reviveStopDoc, shapeStopForDetail } from "@/lib/spoke-fields";
+import { mongoEnabled } from "@/lib/mongodb";
+import { reviveStopDoc, shapeStopForDetail } from "@/lib/spoke-fields";
+import { loadStopDoc, patchStopDoc, resolveDriverNames } from "@/lib/stops-store";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
 
@@ -14,9 +16,7 @@ const UNASSIGNED_STATUSES = ["pending", "approved", "paid", "unassigned", "creat
 
 function isUnassignedDoc(doc: Record<string, unknown>): boolean {
   const a = (doc.assignment ?? {}) as Record<string, unknown>;
-  return (
-    UNASSIGNED_STATUSES.includes(String(doc.status ?? "").toLowerCase()) && !a.driver_id && !a.route_id
-  );
+  return UNASSIGNED_STATUSES.includes(String(doc.status ?? "").toLowerCase()) && !a.driver_id && !a.route_id;
 }
 
 // Rich human actor forwarded to FastAPI so edit/delete land in the stop's
@@ -60,10 +60,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
   }
   if (FASTAPI_SECRET && !scopeAll) {
     try {
-      const upstream = await fetch(
-        `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`,
-        { headers: { "X-API-Key": FASTAPI_SECRET }, signal: AbortSignal.timeout(10000) },
-      );
+      const upstream = await fetch(`${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`, {
+        headers: { "X-API-Key": FASTAPI_SECRET },
+        signal: AbortSignal.timeout(10000),
+      });
       if (upstream.ok) doc = reviveStopDoc((await upstream.json()) as Record<string, unknown>);
       // 404/5xx → fall through to Mongo fallback (un-backfilled stops + transient errors)
     } catch {
@@ -74,13 +74,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
   // Mongo is FALLBACK only. 2026-07-02: an unconditional getDb() here 500'd every
   // detail read while Atlas was down (ReplicaSetNoPrimary) even though PG had
   // already answered — the exact failure the PG repoint exists to survive.
+  // M18: public.stops answered above (or FastAPI did); Mongo is consulted only with MONGO_ENABLED=true (rollback).
+  if (!doc && !mongoEnabled()) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
   let db: Awaited<ReturnType<typeof getDb>> | null = null;
   if (!doc) {
     try {
       db = await getDb();
-      doc = (await db
-        .collection("stops")
-        .findOne(scopeAll ? { stop_id } : { stop_id, tenant_id: tenantId })) as Record<string, unknown> | null;
+      doc = (await db.collection("stops").findOne(scopeAll ? { stop_id } : { stop_id, tenant_id: tenantId })) as Record<
+        string,
+        unknown
+      > | null;
     } catch {
       return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
     }
@@ -92,7 +95,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
     return NextResponse.json({ error: "Stop not found" }, { status: 404 });
   }
 
-  // Driver names live in Mongo (spoke_drivers) and only matter for ASSIGNED stops.
+  // Driver names (public.drivers) only matter for ASSIGNED stops.
   // Optional + capped at 2.5s: shapeStopForDetail falls back to the driver_name
   // already stored on assignment when the map is missing.
   const a = (doc.assignment ?? {}) as Record<string, unknown>;
@@ -101,7 +104,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
   if (a.driver_id || legacyLeg.driver_id) {
     try {
       driverMap = await Promise.race([
-        (async () => resolveDriverNames(db ?? (await getDb()), [doc]))(),
+        resolveDriverNames([doc]),
         new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 2500)),
       ]);
     } catch {
@@ -282,9 +285,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       return NextResponse.json({ stop_id, ...out });
     }
 
-    // ── NON-unassigned: legacy Mongo-direct path (ALLOWED whitelist, geocode,
-    // local timeline) — intact. This path genuinely needs Mongo.
-    const db = await getDb();
+    // ── NON-unassigned: portal-direct path (ALLOWED whitelist, geocode, local timeline). Since M18 it writes
+    // public.stops.doc; MONGO_ENABLED=true restores the old Mongo write (rollback only).
+    const db = mongoEnabled() ? await getDb() : null;
 
     const updates: Record<string, unknown> = { updated_at: new Date() };
     for (const [section, field] of ALLOWED) {
@@ -343,12 +346,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     const auditKeys = Object.keys(updates).filter((k) => !AUDIT_EXCLUDED.has(k));
     let fieldChanges: Array<{ field: string; old_value: unknown; new_value: unknown }> = [];
     if (auditKeys.length > 0) {
-      const current = await db
-        .collection("stops")
-        .findOne(
-          { stop_id, tenant_id: tenantId },
-          { projection: Object.fromEntries(auditKeys.map((k) => [k, 1])) },
-        );
+      const current = db
+        ? await db
+            .collection("stops")
+            .findOne({ stop_id, tenant_id: tenantId }, { projection: Object.fromEntries(auditKeys.map((k) => [k, 1])) })
+        : await loadStopDoc(stop_id, tenantId);
       if (current) {
         const oldVal = (k: string) =>
           k.split(".").reduce<unknown>((o, p) => (o as Record<string, unknown> | null | undefined)?.[p], current);
@@ -358,38 +360,46 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       }
     }
 
-    const result = await db
-      .collection("stops")
-      .updateOne({ stop_id, tenant_id: tenantId }, { $set: updates });
+    const a = actorFor(ctx);
+    const timelineEntry = {
+      event: "stop.field_changed",
+      timestamp: new Date(),
+      actor: a.type,
+      actor_name: a.name || "Client portal",
+      note: "Edited from client portal",
+      actor_id: a.clerk_user_id,
+      metadata: {
+        field_changes: fieldChanges,
+        tenant_id: tenantId,
+        tenant_role: a.tenant_role,
+      },
+      visibility: "customer",
+    };
+
+    if (!db) {
+      const saved = await patchStopDoc(
+        stop_id,
+        tenantId,
+        updates,
+        fieldChanges.length > 0
+          ? { timeline: { ...timelineEntry, timestamp: timelineEntry.timestamp.toISOString() } }
+          : {},
+      );
+      if (!saved) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+      return NextResponse.json({ ok: true, stop_id });
+    }
+
+    const result = await db.collection("stops").updateOne({ stop_id, tenant_id: tenantId }, { $set: updates });
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: "Only unassigned stops can be edited" }, { status: 409 });
     }
 
     if (fieldChanges.length > 0) {
-      const a = actorFor(ctx);
       try {
-        await db.collection("stops").updateOne(
-          { stop_id, tenant_id: tenantId },
-          {
-            $push: {
-              timeline: {
-                event: "stop.field_changed",
-                timestamp: new Date(),
-                actor: a.type,
-                actor_name: a.name || "Client portal",
-                note: "Edited from client portal",
-                actor_id: a.clerk_user_id,
-                metadata: {
-                  field_changes: fieldChanges,
-                  tenant_id: tenantId,
-                  tenant_role: a.tenant_role,
-                },
-                visibility: "customer",
-              },
-            },
-          } as never,
-        );
+        await db
+          .collection("stops")
+          .updateOne({ stop_id, tenant_id: tenantId }, { $push: { timeline: timelineEntry } } as never);
       } catch (tlErr) {
         console.error("[stops PATCH] timeline append failed (non-fatal):", tlErr);
       }
@@ -428,14 +438,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (isUnassignedDoc(doc) && FASTAPI_SECRET) {
       let upstream: Response;
       try {
-        upstream = await fetch(
-          `${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`,
-          {
-            method: "DELETE",
-            headers: { "X-API-Key": FASTAPI_SECRET, "Content-Type": "application/json" },
-            body: JSON.stringify({ actor: actorFor(ctx) }),
-          },
-        );
+        upstream = await fetch(`${FASTAPI_BASE}/v1/stops/${encodeURIComponent(stop_id)}?tenant_id=${tenantId}`, {
+          method: "DELETE",
+          headers: { "X-API-Key": FASTAPI_SECRET, "Content-Type": "application/json" },
+          body: JSON.stringify({ actor: actorFor(ctx) }),
+        });
       } catch {
         return NextResponse.json({ error: "Dispatch service unreachable — stop NOT deleted" }, { status: 502 });
       }
@@ -449,7 +456,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       return NextResponse.json({ ok: true, stop_id, ...payload });
     }
 
-    // Legacy path (non-unassigned): Mongo-only soft delete, unchanged.
+    // Non-unassigned stops are on a route: they are not deleted from here. Before M18 this soft-deleted only the
+    // Mongo copy, which nothing read since the July cutover. MONGO_ENABLED=true restores that (rollback only).
+    if (!mongoEnabled()) {
+      return NextResponse.json(
+        { error: "This stop is already on a route and can't be deleted here." },
+        { status: 409 },
+      );
+    }
     const db = await getDb();
     const result = await db
       .collection("stops")

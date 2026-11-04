@@ -1,16 +1,19 @@
-import { currentUser } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 
+import { currentUser } from "@/lib/auth/server";
+import { mongoEnabled } from "@/lib/mongodb";
 import { getDb, requirePagePermission } from "@/lib/tenant";
+
+/* M18: gate codes lived in Mongo. Domis parked them for the stops mission (they move to public.gate_codes there).
+ * Until then, with Mongo off the panel shows no saved codes and saving one says so — no 500s. */
+const GATE_CODES_PAUSED =
+  "Saved gate codes are paused while they move to the new system. Add the code to the stop notes for now.";
 
 /** Strip unit suffix from street so "123 Main St Apt 4" matches "123 Main St Suite 100" */
 function baseStreet(street: string): string {
   return street
     .toUpperCase()
-    .replace(
-      /[\s,]+(APT|APARTMENT|SUITE|STE|UNIT|#|BLDG|BUILDING|FL|FLOOR|RM|ROOM|LOT|SPC|SPACE)\s*[\w-]*\.?\s*$/i,
-      "",
-    )
+    .replace(/[\s,]+(APT|APARTMENT|SUITE|STE|UNIT|#|BLDG|BUILDING|FL|FLOOR|RM|ROOM|LOT|SPC|SPACE)\s*[\w-]*\.?\s*$/i, "")
     .trim();
 }
 
@@ -18,28 +21,25 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ stop_id: string }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ stop_id: string }> }) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { stop_id } = await params;
+  if (!mongoEnabled()) return NextResponse.json({ codes: [], street: "", zip: "", paused: true });
   const db = await getDb();
 
   const stop = await db
     .collection("stops")
-    .findOne(
-      { stop_id, tenant_id: Number(ctx.tenantId) },
-      { projection: { "address.street": 1, "address.zip": 1 } },
-    );
+    .findOne({ stop_id, tenant_id: Number(ctx.tenantId) }, { projection: { "address.street": 1, "address.zip": 1 } });
 
   const draft = !stop
-    ? await db.collection("draft_stops").findOne(
-        { $or: [{ draft_id: stop_id }, { stop_id }], tenant_id: Number(ctx.tenantId) },
-        { projection: { delivery_address: 1, delivery_zip: 1 } },
-      )
+    ? await db
+        .collection("draft_stops")
+        .findOne(
+          { $or: [{ draft_id: stop_id }, { stop_id }], tenant_id: Number(ctx.tenantId) },
+          { projection: { delivery_address: 1, delivery_zip: 1 } },
+        )
     : null;
 
   const street = stop?.address?.street ?? draft?.delivery_address ?? "";
@@ -70,14 +70,12 @@ export async function GET(
   return NextResponse.json({ codes, street: base, zip });
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ stop_id: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ stop_id: string }> }) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { stop_id } = await params;
+  if (!mongoEnabled()) return NextResponse.json({ error: GATE_CODES_PAUSED }, { status: 503 });
   const db = await getDb();
 
   const body = (await request.json()) as { code?: string; notes?: string };
@@ -92,10 +90,12 @@ export async function POST(
       { projection: { "address.street": 1, "address.zip": 1, "address.city": 1, "address.state": 1 } },
     );
   const draft = !stop
-    ? await db.collection("draft_stops").findOne(
-        { $or: [{ draft_id: stop_id }, { stop_id }], tenant_id: Number(ctx.tenantId) },
-        { projection: { delivery_address: 1, delivery_zip: 1, delivery_city: 1, delivery_state: 1 } },
-      )
+    ? await db
+        .collection("draft_stops")
+        .findOne(
+          { $or: [{ draft_id: stop_id }, { stop_id }], tenant_id: Number(ctx.tenantId) },
+          { projection: { delivery_address: 1, delivery_zip: 1, delivery_city: 1, delivery_state: 1 } },
+        )
     : null;
 
   const street = stop?.address?.street ?? draft?.delivery_address ?? "";
@@ -106,9 +106,7 @@ export async function POST(
 
   const user = await currentUser();
   const author = user
-    ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() ||
-      user.emailAddresses[0]?.emailAddress ||
-      "Client"
+    ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.emailAddresses[0]?.emailAddress || "Client"
     : "Client";
 
   const doc = {

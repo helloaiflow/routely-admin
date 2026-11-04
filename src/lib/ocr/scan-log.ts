@@ -1,10 +1,9 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getDb } from "@/lib/tenant";
 
 const ROLLUP_FIELD_KEYS = ["name", "phone", "street", "city", "state", "zip", "dob"] as const;
 
 /** Long-term daily rollup in Supabase (permanent; survives the raw TTL).
- *  Fire-and-forget, fully independent of the Mongo write. */
+ *  Fire-and-forget, fully independent of the raw row write. */
 function bumpDailyRollup(entry: OcrScanLogEntry): void {
   if (entry.tenant_id == null) return; // rollup is keyed by tenant
   void (async () => {
@@ -34,8 +33,6 @@ function bumpDailyRollup(entry: OcrScanLogEntry): void {
   })();
 }
 
-const OCR_SCAN_RETENTION_SECONDS = 48 * 60 * 60;
-
 type ImageMeta = {
   mime: string | null;
   approx_bytes: number;
@@ -60,23 +57,6 @@ export type OcrScanLogEntry = {
   fields: Record<string, unknown>;
 };
 
-let indexesEnsured = false;
-
-async function ensureOcrScanIndexes(db: Awaited<ReturnType<typeof getDb>>) {
-  if (indexesEnsured) return;
-  try {
-    await db.collection("ocr_scan_logs").createIndexes([
-      { key: { created_at: 1 }, name: "ttl_created_at", expireAfterSeconds: OCR_SCAN_RETENTION_SECONDS },
-      { key: { tenant_id: 1, created_at: -1 }, name: "idx_tenant_created" },
-      { key: { tenant_id: 1, provider: 1, ok: 1, created_at: -1 }, name: "idx_tenant_provider_ok_created" },
-      { key: { tenant_id: 1, "correlation.batch_id": 1, created_at: -1 }, name: "idx_tenant_batch_created" },
-    ]);
-    indexesEnsured = true;
-  } catch (err) {
-    console.error("[ocr-scan-log ensureIndexes]", err instanceof Error ? err.message : err);
-  }
-}
-
 function scrubMessage(value?: string | null) {
   if (!value) return null;
   return value
@@ -97,13 +77,12 @@ export function imageDataUrlMeta(dataUrl?: string | null): ImageMeta | null {
 }
 
 export function logOcrScan(entry: OcrScanLogEntry): void {
-  // Permanent daily rollup (Supabase) — independent of the raw Mongo write.
+  // Permanent daily rollup (Supabase) — independent of the raw row write.
   bumpDailyRollup(entry);
   void (async () => {
     try {
-      const db = await getDb();
-      await ensureOcrScanIndexes(db);
-      await db.collection("ocr_scan_logs").insertOne({
+      // M18: raw rows go to public.ocr_scan_logs (tenant_id + doc), the table the OCR monitor reads.
+      const doc = {
         provider: entry.provider,
         scan_preference: entry.scan_preference,
         ok: entry.ok,
@@ -122,8 +101,12 @@ export function logOcrScan(entry: OcrScanLogEntry): void {
         correlation: {
           batch_id: entry.batch_id ?? null,
         },
-        created_at: new Date(),
-      });
+        created_at: new Date().toISOString(),
+      };
+      const { error } = await getSupabaseAdmin()
+        .from("ocr_scan_logs")
+        .insert({ tenant_id: entry.tenant_id ?? null, doc, created_at: doc.created_at });
+      if (error) throw new Error(error.message);
     } catch (err) {
       console.error("[ocr-scan-log] write failed (non-fatal):", err instanceof Error ? err.message : err);
     }

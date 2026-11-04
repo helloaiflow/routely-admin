@@ -1,7 +1,10 @@
 import { MongoClient, type MongoClientOptions } from "mongodb";
 
-const uri = process.env.MONGODB_URI!;
-if (!uri) throw new Error("MONGODB_URI is not defined");
+/** M18: Routely runs on Supabase only. MONGO_ENABLED=true restores the pre-M18 Mongo paths (rollback only);
+ * anything else means no Mongo client is ever built and no connection is ever opened. */
+export function mongoEnabled(): boolean {
+  return process.env.MONGO_ENABLED?.trim() === "true";
+}
 
 const options: MongoClientOptions = {
   // Fail fast: Mongo is fallback/optional in portal routes — a dead Atlas
@@ -14,7 +17,10 @@ declare global {
 }
 
 function connect(): Promise<MongoClient> {
+  if (!mongoEnabled()) return Promise.reject(new Error("Mongo is disabled (MONGO_ENABLED is not true)"));
   if (!global._mongoClientPromise) {
+    const uri = process.env.MONGODB_URI?.trim();
+    if (!uri) return Promise.reject(new Error("MONGODB_URI is not defined"));
     const client = new MongoClient(uri, options);
     global._mongoClientPromise = client.connect().catch((err) => {
       // Self-heal: don't poison the cached promise for the lambda's lifetime —

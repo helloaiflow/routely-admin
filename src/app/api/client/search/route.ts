@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 
+import { mongoEnabled } from "@/lib/mongodb";
 import {
   DELIVERED_STATUSES,
   FAILED_STATUSES,
   IN_TRANSIT_STATUSES,
   PENDING_STATUSES,
-  resolveDriverNames,
+  reviveStopDoc,
   shapeDraftForSearch,
   shapeStopForSearch,
 } from "@/lib/spoke-fields";
+import { resolveDriverNames } from "@/lib/stops-store";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getDb, requirePagePermission } from "@/lib/tenant";
 
@@ -33,7 +35,6 @@ function buildCounts(r: SearchResult[]): SearchCounts {
 export async function GET(request: Request) {
   const ctx = await requirePagePermission("orders");
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await getDb();
   const tenantId = Number(ctx.tenantId);
   // Admin cross-tenant: "all" scope searches across every tenant.
   const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
@@ -75,18 +76,20 @@ export async function GET(request: Request) {
   const phoneLast4 = phoneNorm.length >= 4 ? phoneNorm.slice(-4) : null;
   const recentCutoff = Date.now() - 7 * 86_400_000;
 
-  const stopDocs = await db
-    .collection("stops")
-    .find({
-      ...(scopeAll ? {} : { tenant_id: tenantId }),
-      stop_type: { $ne: "pickup" }, // hide internal courier-leg pickups from client UI
-      status: { $ne: "deleted" }, // never surface soft-deleted stops in search
-      $or: stopOr,
-    })
-    .sort({ created_at: -1 })
-    .limit(limit)
-    .toArray();
-  const driverMap = await resolveDriverNames(db, stopDocs);
+  const stopDocs = mongoEnabled()
+    ? await (await getDb())
+        .collection("stops")
+        .find({
+          ...(scopeAll ? {} : { tenant_id: tenantId }),
+          stop_type: { $ne: "pickup" }, // hide internal courier-leg pickups from client UI
+          status: { $ne: "deleted" }, // never surface soft-deleted stops in search
+          $or: stopOr,
+        })
+        .sort({ created_at: -1 })
+        .limit(limit)
+        .toArray()
+    : await searchStops(scopeAll ? null : tenantId, rawQ, phoneNorm, limit);
+  const driverMap = await resolveDriverNames(stopDocs);
   const stopsResults = stopDocs.map((d) => shapeStopForSearch(d, driverMap)) as SearchResult[];
 
   // Drafts moved to Supabase public.draft_stops on 2026-06-22 (commit
@@ -183,6 +186,40 @@ export async function GET(request: Request) {
     from_stops: stopsResults.length,
     from_drafts: filteredDrafts.length,
   });
+}
+
+/** M18: the same fields the Mongo `$or` matched, against public.stops (PostgREST ilike on the doc paths).
+ * Characters PostgREST reads as filter syntax are dropped from the term. */
+async function searchStops(tenantId: number | null, q: string, phoneDigits: string, limit: number) {
+  const term = q.replace(/[,()*%\\:"]/g, " ").trim();
+  if (!term) return [];
+  const like = `*${term}*`;
+  const fields = [
+    "stop_id",
+    "status",
+    "doc->recipient->>name",
+    "doc->address->>name",
+    "doc->address->>street",
+    "doc->address->>city",
+    "doc->address->>zip",
+    "doc->assignment->>route_title",
+    "doc->delivery_leg->metrics->>route_title",
+    "doc->>order_ids",
+    "doc->package->>rx_number",
+  ].map((f) => `${f}.ilike.${like}`);
+  if (phoneDigits.length >= 4) {
+    fields.push(`doc->recipient->>phone.ilike.*${phoneDigits}*`, `doc->address->>phone.ilike.*${phoneDigits}*`);
+  }
+  let query = getSupabaseAdmin().from("stops").select("doc");
+  if (tenantId !== null) query = query.eq("tenant_id", tenantId);
+  const { data, error } = await query
+    .neq("status", "deleted")
+    .or("stop_type.is.null,stop_type.neq.pickup")
+    .or(fields.join(","))
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stop search failed: ${error.message}`);
+  return (data ?? []).map((row) => reviveStopDoc(row.doc as Record<string, unknown>));
 }
 
 export interface SearchResult {

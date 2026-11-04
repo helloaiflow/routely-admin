@@ -14,8 +14,8 @@ import { getSupabaseAdmin } from "@/lib/supabase";
  *  - NON-BLOCKING: logExternalCall() is fire-and-forget. It never throws and
  *    never awaits in the caller's critical path — a failed log write must NEVER
  *    break or slow the real API call.
- *  - RETENTION: rows live in public.api_logs, which has no purge yet (the Mongo
- *    TTL of 10 days went with Mongo in M18; pending, see ROS M18).
+ *  - RETENTION: rows live in public.api_logs; pg_cron job `api_logs_retention_10d`
+ *    deletes them after 10 days (M18b, same as the old Mongo TTL).
  *  - LEAN: this is an audit log + a read path. Not a metrics platform.
  * ─────────────────────────────────────────────────────────────────────────── */
 

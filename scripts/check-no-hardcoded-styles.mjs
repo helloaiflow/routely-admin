@@ -37,6 +37,7 @@ const BRAND = /0167FF|1,\s*103,\s*255/i;
 const BRAND_ALLOW = new Set([
   "src/lib/brand.ts", // THE single source of truth
   "src/lib/email/templates.ts", // Mail clients cannot read CSS vars; colors must be literal
+  "src/lib/email/layout.ts", // the shared email layout (M18): same reason
 ]);
 
 /* Rule 3 — off-palette status colors */

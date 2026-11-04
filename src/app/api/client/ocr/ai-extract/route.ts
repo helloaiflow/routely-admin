@@ -86,7 +86,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 const QWEN_OCR_BASE_URL = (process.env.QWEN_OCR_BASE_URL ?? "").replace(/\/$/, "");
 const QWEN_OCR_MODEL = process.env.QWEN_OCR_MODEL ?? "Qwen/Qwen2.5-VL-3B-Instruct";
 const QWEN_OCR_API_KEY = process.env.QWEN_OCR_API_KEY ?? "local";
-const QWEN_OCR_ALLOW_OPENAI_FALLBACK = process.env.QWEN_OCR_ALLOW_OPENAI_FALLBACK === "true";
+// M22: OpenAI is off unless OCR_OPENAI_ENABLED=true (it receives PHI and has no BAA). The fallback flag only
+// matters when it is on.
+const OCR_OPENAI_ENABLED = process.env.OCR_OPENAI_ENABLED === "true";
+const QWEN_OCR_ALLOW_OPENAI_FALLBACK = OCR_OPENAI_ENABLED && process.env.QWEN_OCR_ALLOW_OPENAI_FALLBACK === "true";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // ~8MB dataUrl cap
 
 // Response contract — unchanged so every downstream consumer keeps working.
@@ -430,43 +433,42 @@ function logExtractionResult({
 // normalizePhone, so an 11-digit/malformed answer is rejected (→ FAILED).
 const PHONE_PASS_PROMPT = `Look at this US pharmacy shipping label. Find the patient's phone number — a 10-digit number, usually on the line directly ABOVE the street address. Return STRICT JSON only, no prose: {"phone":"<the 10 digits exactly as printed>"} or {"phone":null} if there is genuinely no phone. Digits only, no formatting.`;
 
+/** M22: the phone pass runs on Qwen only (same OpenAI-compatible endpoint as the primary read). */
 async function phoneSecondPass(imageDataUrl: string, meta: LogMeta): Promise<string | null> {
   const started = Date.now();
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch(`${QWEN_OCR_BASE_URL}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${QWEN_OCR_API_KEY}` },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: QWEN_OCR_MODEL,
       temperature: 0,
       max_tokens: 30,
-      response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: PHONE_PASS_PROMPT },
         {
           role: "user",
           content: [
-            { type: "text", text: "What is the patient phone number?" },
-            { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
+            { type: "text", text: PHONE_PASS_PROMPT },
+            { type: "image_url", image_url: { url: imageDataUrl } },
           ],
         },
       ],
     }),
   });
-  if (!res.ok) {
-    logExternalCall({
-      provider: "openai",
-      operation: "ocr.ai-extract.phone-pass",
-      method: "POST",
-      status_code: res.status,
-      ok: false,
-      latency_ms: Date.now() - started,
-      tenant_id: meta.tenantId,
-      batch_id: meta.batchId,
-    });
-    throw new Error(`openai ${res.status}`);
-  }
+  logExternalCall({
+    provider: "qwen",
+    operation: "ocr.ai-extract.phone-pass",
+    method: "POST",
+    status_code: res.status,
+    ok: res.ok,
+    latency_ms: Date.now() - started,
+    tenant_id: meta.tenantId,
+    batch_id: meta.batchId,
+  });
+  if (!res.ok) throw new Error(`qwen ${res.status}`);
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const obj = JSON.parse(data.choices?.[0]?.message?.content ?? "{}") as Record<string, unknown>;
+  const text = data.choices?.[0]?.message?.content ?? "";
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const obj = (json ? JSON.parse(json) : {}) as Record<string, unknown>;
   return obj.phone != null ? String(obj.phone) : null;
 }
 
@@ -492,7 +494,7 @@ export async function POST(request: Request) {
   const scanId = randomUUID();
   const image = body.image ?? "";
   const retryImage = body.retry_image ?? "";
-  const scanPreference: ScanPreference = body.scan_preference === "openai" ? "openai" : "qwen";
+  const scanPreference: ScanPreference = OCR_OPENAI_ENABLED && body.scan_preference === "openai" ? "openai" : "qwen";
   const primaryImageMeta = imageDataUrlMeta(image);
   const retryImageMeta = imageDataUrlMeta(retryImage);
   if (!image.startsWith("data:image/")) {
@@ -525,7 +527,7 @@ export async function POST(request: Request) {
       // showed no malformed-phone signal (an 11-digit misread → FAILED, per CEO
       // rule; we must not let the 2nd pass guess 10 of the printed 11 digits).
       let secondPass = false;
-      if (!fields.phone && p.id === "openai" && !hasMalformedPhoneSignal(raw)) {
+      if (!fields.phone && p.id === "openai" && QWEN_OCR_BASE_URL && !hasMalformedPhoneSignal(raw)) {
         try {
           const e164 = normalizePhone(await phoneSecondPass(image, meta));
           if (e164) {

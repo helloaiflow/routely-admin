@@ -78,6 +78,8 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({
         from: "Routely <dispatch@routelypro.com>",
+        // M22: dispatch@ and noreply@ are not mailboxes; replies go to support.
+        reply_to: "support@routelypro.com",
         to: [to],
         subject: `Label purchase confirmed — ${orders.length} label${orders.length > 1 ? "s" : ""} · $${total.toFixed(2)}`,
         html,

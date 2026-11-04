@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
+import QRCode from "qrcode";
 
 export type LabelData = {
   stop_id: string;
@@ -40,14 +41,28 @@ export function buildTrackingId(date: string, stopId: string): string {
   return `RTL-${yy}${mm}${dd}-${num}`;
 }
 
-function QR({ value, size }: { value: string; size: number }) {
+/* M22: the QR is drawn here as an SVG (qrcode, ECC M, no quiet zone like before); the tracking URL no longer
+ * goes to api.qrserver.com. Synchronous, so it is in the DOM when the label is printed. */
+export function QR({ value, size }: { value: string; size: number }) {
+  const { modules } = QRCode.create(value || " ", { errorCorrectionLevel: "M" });
+  const n = modules.size;
+  let d = "";
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) if (modules.get(x, y)) d += `M${x} ${y}h1v1h-1z`;
+  }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&color=000000&bgcolor=ffffff&qzone=0`}
-      alt="QR" width={size} height={size}
+    <svg
+      role="img"
+      aria-label="QR"
+      width={size}
+      height={size}
+      viewBox={`0 0 ${n} ${n}`}
+      shapeRendering="crispEdges"
       style={{ display: "block", flexShrink: 0 }}
-    />
+    >
+      <rect width={n} height={n} fill="#ffffff" />
+      <path d={d} fill="#000000" />
+    </svg>
   );
 }
 

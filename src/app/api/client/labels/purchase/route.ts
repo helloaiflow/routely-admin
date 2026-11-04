@@ -238,6 +238,8 @@ export async function POST(request: Request) {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
           body: JSON.stringify({
             from: "Routely <dispatch@routelypro.com>",
+            // M22: dispatch@ and noreply@ are not mailboxes; replies go to support.
+            reply_to: "support@routelypro.com",
             to: [recipientEmail],
             subject: `📦 Your ${provider} package from ${senderName} is on its way`,
             html,

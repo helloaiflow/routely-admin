@@ -22,7 +22,7 @@ import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
 import { persistPreference } from "@/lib/preferences/preferences-storage";
 import { THEME_PRESET_OPTIONS, type ThemeMode, type ThemePreset } from "@/lib/preferences/theme";
 import { applyThemePreset } from "@/lib/preferences/theme-utils";
-import { readScanPreference, type ScanPreference, writeScanPreference } from "@/lib/ocr/scan-preference";
+import { OCR_OPENAI_ENABLED, readScanPreference, type ScanPreference, writeScanPreference } from "@/lib/ocr/scan-preference";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 export function LayoutControls() {
@@ -264,9 +264,11 @@ export function LayoutControls() {
                     <SelectItem className="text-xs" value="qwen">
                       Qwen Local
                     </SelectItem>
-                    <SelectItem className="text-xs" value="openai">
-                      OpenAI
-                    </SelectItem>
+                    {OCR_OPENAI_ENABLED && (
+                      <SelectItem className="text-xs" value="openai">
+                        OpenAI
+                      </SelectItem>
+                    )}
                   </SelectGroup>
                 </SelectContent>
               </Select>

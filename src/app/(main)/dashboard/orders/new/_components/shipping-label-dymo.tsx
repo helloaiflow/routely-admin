@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
-import { buildTrackingId, type LabelData } from "./shipping-label";
+import { buildTrackingId, type LabelData, QR } from "./shipping-label";
 
 // DYMO LabelWriter 450 — 2-1/8" × 4"
 // Design inspired by clean B&W label standard — NO COLOR
@@ -21,14 +21,7 @@ function BC450({ value, height = 30 }: { value: string; height?: number }) {
 }
 
 function QR450({ value }: { value: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`https://api.qrserver.com/v1/create-qr-code/?size=64x64&data=${encodeURIComponent(value)}&color=000000&bgcolor=ffffff&qzone=0`}
-      alt="QR" width={64} height={64}
-      style={{ display: "block", flexShrink: 0 }}
-    />
-  );
+  return <QR value={value} size={64} />;
 }
 
 export function ShippingLabelDymo({ data }: { data: LabelData }) {

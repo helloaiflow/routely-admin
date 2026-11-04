@@ -477,9 +477,7 @@ export async function PATCH(request: Request) {
     }
 
     if (draftNotes.length > 0) {
-      // Best-effort: the real stop may still be created in Mongo by FastAPI, so
-      // it may not exist in Supabase yet — then this is a no-op (same as Mongo's
-      // updateOne matching nothing). Resolves fully once FastAPI moves over.
+      // Best-effort: if the stop row is not there yet this is a no-op.
       try {
         const { data: stopRow } = await supabase
           .from("stops")

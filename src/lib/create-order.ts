@@ -1,5 +1,3 @@
-import type { Db } from "mongodb";
-
 import { logExternalCall } from "@/lib/api-log";
 import { spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { patchStopDoc } from "@/lib/stops-store";
@@ -84,10 +82,10 @@ function normalizePhoneE164(raw: string): string | null {
 // Repost an EXISTING stop to Spoke (ghost recovery / retry fallback)
 // ─────────────────────────────────────────────────────────
 //
-// Used to heal a "ghost" — a stop that exists in Mongo with an in-Spoke status
+// Used to heal a "ghost" — a stop in public.stops with an in-Spoke status
 // (unassigned/…) but NO assignment.spoke_stop_id, because the original Spoke
 // POST failed/timed-out after the doc was already written. This is the exact
-// failure the "verify Spoke accepted before trusting Mongo" rule guards against.
+// failure the "verify Spoke accepted before trusting the stop record" rule guards against.
 //
 // SELF-CONTAINED + keyed by stop_id + tenant_id (NOT rtscan_id): FastAPI-created
 // docs may not carry an rtscan_id, and an `{ rtscan_id: undefined }` filter would
@@ -95,7 +93,6 @@ function normalizePhoneE164(raw: string): string | null {
 // spoke id if already present) and only flips status→unassigned on a VERIFIED
 // Spoke acceptance.
 export async function repostStopToSpoke(
-  db: Db | null,
   stop: Record<string, unknown>,
 ): Promise<{ status: "dispatched" | "spoke_error" | "already"; spoke_stop_id?: string }> {
   const assignment = (stop.assignment as Record<string, unknown> | undefined) ?? {};
@@ -105,11 +102,7 @@ export async function repostStopToSpoke(
   const stopId = String(stop.stop_id ?? "");
   const tenantId = Number(stop.tenant_id);
   if (!stopId || !Number.isFinite(tenantId)) return { status: "spoke_error" };
-  // M18: writes go to public.stops; a Mongo handle is passed only with MONGO_ENABLED=true (rollback).
-  const saveFields = async (set: Record<string, unknown>) => {
-    if (db) await db.collection("stops").updateOne({ stop_id: stopId, tenant_id: tenantId }, { $set: set });
-    else await patchStopDoc(stopId, tenantId, set);
-  };
+  const saveFields = (set: Record<string, unknown>) => patchStopDoc(stopId, tenantId, set);
   // Misión 8 (D56): Spoke dispatch off — never post (callers already refuse first).
   if (!spokeDispatchEnabled()) {
     console.warn("[repost] SPOKE_DISPATCH_ENABLED=false — not posting", stopId);

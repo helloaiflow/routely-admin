@@ -4,7 +4,6 @@ import { getSessionProfile } from "@/lib/auth/supabase-server";
 import type { User } from "@/lib/auth/server";
 import { cookies } from "next/headers";
 
-import clientPromise from "./mongodb";
 import { getSupabaseAdmin } from "./supabase";
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -230,9 +229,4 @@ export async function requireActiveTenantContext(): Promise<TenantContext | null
   const perms = await getPagePermissions(ctx);
   if (!perms) return null;
   return ctx;
-}
-
-export async function getDb() {
-  const client = await clientPromise;
-  return client.db("routely_prod");
 }

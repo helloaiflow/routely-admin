@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { mongoEnabled } from "@/lib/mongodb";
 import {
   DELIVERED_STATUSES,
   FAILED_STATUSES,
@@ -12,7 +11,7 @@ import {
 } from "@/lib/spoke-fields";
 import { resolveDriverNames } from "@/lib/stops-store";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
 
 function esc(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -48,47 +47,13 @@ export async function GET(request: Request) {
   const phoneNorm = rawQ.replace(/\D/g, "");
   const phoneRx = phoneNorm.length >= 4 ? new RegExp(esc(phoneNorm), "i") : null;
 
-  // Search across canonical (`assignment.route_title`) and legacy
-  // (`delivery_leg.metrics.route_title`) paths so IVY-era stops still match.
-  const stopOr: Record<string, unknown>[] = [
-    { stop_id: { $regex: regex } },
-    { "recipient.name": { $regex: regex } },
-    { "address.name": { $regex: regex } },
-    { "address.street": { $regex: regex } },
-    { "address.city": { $regex: regex } },
-    { "address.zip": { $regex: regex } },
-    { status: { $regex: regex } },
-    { "assignment.route_title": { $regex: regex } },
-    { "delivery_leg.metrics.route_title": { $regex: regex } },
-    // Hybrid-OCR (Phase 1): any single order id finds the stop regardless of
-    // its position in the array (regex matches array elements in Mongo).
-    { order_ids: { $regex: regex } },
-    { "package.rx_number": { $regex: regex } },
-  ];
-  if (phoneRx) {
-    stopOr.push({ "recipient.phone": { $regex: phoneRx } });
-    stopOr.push({ "address.phone": { $regex: phoneRx } });
-  }
-
   // Pre-compute normalized query variants for scoring
   const qLower = rawQ.toLowerCase();
   const qNoRtl = rawQ.replace(/^RTL-/i, "").toLowerCase();
   const phoneLast4 = phoneNorm.length >= 4 ? phoneNorm.slice(-4) : null;
   const recentCutoff = Date.now() - 7 * 86_400_000;
 
-  const stopDocs = mongoEnabled()
-    ? await (await getDb())
-        .collection("stops")
-        .find({
-          ...(scopeAll ? {} : { tenant_id: tenantId }),
-          stop_type: { $ne: "pickup" }, // hide internal courier-leg pickups from client UI
-          status: { $ne: "deleted" }, // never surface soft-deleted stops in search
-          $or: stopOr,
-        })
-        .sort({ created_at: -1 })
-        .limit(limit)
-        .toArray()
-    : await searchStops(scopeAll ? null : tenantId, rawQ, phoneNorm, limit);
+  const stopDocs = await searchStops(scopeAll ? null : tenantId, rawQ, phoneNorm, limit);
   const driverMap = await resolveDriverNames(stopDocs);
   const stopsResults = stopDocs.map((d) => shapeStopForSearch(d, driverMap)) as SearchResult[];
 
@@ -188,7 +153,8 @@ export async function GET(request: Request) {
   });
 }
 
-/** M18: the same fields the Mongo `$or` matched, against public.stops (PostgREST ilike on the doc paths).
+/** Stops matching the query on public.stops: canonical and legacy (`delivery_leg.metrics.route_title`) paths so
+ * IVY-era stops still match, any order id, rx number and phone digits (PostgREST ilike on the doc paths).
  * Characters PostgREST reads as filter syntax are dropped from the term. */
 async function searchStops(tenantId: number | null, q: string, phoneDigits: string, limit: number) {
   const term = q.replace(/[,()*%\\:"]/g, " ").trim();

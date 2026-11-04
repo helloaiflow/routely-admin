@@ -46,10 +46,10 @@ export function statusBucket(stop: ClassifiableStop): "delivered" | "failed" | "
 type Stop = any;
 
 /**
- * Revives Mongo date fields after a Supabase fetch. Postgres jsonb stores dates
+ * Revives date fields after a Supabase fetch. Postgres jsonb stores dates
  * as ISO strings, but the shapers below call `.toISOString?.()`, which only
  * works on Date objects. Converting the known date fields back to Date keeps
- * every shaper working unchanged whether the doc came from Mongo or Postgres.
+ * every shaper working on Date objects.
  * Mutates and returns the same object.
  */
 export function reviveStopDoc(d: Stop): Stop {

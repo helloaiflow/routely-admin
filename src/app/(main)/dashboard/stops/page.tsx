@@ -7215,7 +7215,7 @@ export default function StopsPage() {
   const [failedReviewQueue, setFailedReviewQueue] = useState<File[]>([]);
   const [reviewFile, setReviewFile] = useState<File | null>(null);
 
-  // Bulletproof same-day failed scans (persisted in Mongo, 24h TTL). The list +
+  // Bulletproof same-day failed scans (persisted in Supabase failed_scans). The list +
   // resolve flow now live INSIDE the OCR window's "Failed Scans" tab; the page
   // only tracks the badge count.
   const [failedCount, setFailedCount] = useState(0);

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
-import { mongoEnabled } from "@/lib/mongodb";
 import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { loadStopDoc } from "@/lib/stops-store";
-import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
+import { requirePagePermission, type TenantContext } from "@/lib/tenant";
 
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
@@ -63,21 +62,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ st
 
   // ── RECONCILE, don't rubber-stamp ──────────────────────────────────────────
   // FastAPI reports the retry as done, but the standing rule is "verify Spoke
-  // accepted before trusting Mongo." Read the canonical spoke id; if it's still
+  // accepted before trusting the stop record." Read the canonical spoke id; if it's still
   // missing (FastAPI's idempotency short-circuited, or its re-post failed), do a
   // real Spoke re-post ourselves via repostStopToSpoke. Only a verified
   // spoke_stop_id counts as submitted — otherwise the stop stays submit_failed.
   try {
-    const db = mongoEnabled() ? await getDb() : null;
     const tenantId = Number(ctx.tenantId);
-    const doc = db
-      ? await db.collection("stops").findOne({ stop_id, tenant_id: tenantId })
-      : await loadStopDoc(stop_id, tenantId);
+    const doc = await loadStopDoc(stop_id, tenantId);
     if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
 
     let spokeId = (doc.assignment as Record<string, unknown> | undefined)?.spoke_stop_id;
     if (!spokeId) {
-      const reposted = await repostStopToSpoke(db, doc);
+      const reposted = await repostStopToSpoke(doc);
       if (reposted.status === "dispatched" || reposted.status === "already") {
         spokeId = reposted.spoke_stop_id;
       }

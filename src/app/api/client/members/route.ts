@@ -13,8 +13,8 @@ import { getTenantContext } from "@/lib/tenant";
  * exists is a logged-in owner inviting them here. The Clerk invitation carries
  * publicMetadata {role:"tenant_user", tenant_id:<owner's>, tenant_role:"member"}
  * so the invitee is born anchored to the inviting owner's tenant — they can
- * never choose or change it. page_permissions live ONLY in Mongo
- * (tenant_members), the single source of truth the server-side guards read.
+ * never choose or change it. page_permissions live in public.tenant_members,
+ * the single source of truth the server-side guards read.
  *
  * The pending tenant_members row stores clerk_user_id = "invite:<invitationId>"
  * (placeholder) because the real id doesn't exist until acceptance and the

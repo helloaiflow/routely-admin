@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { repostStopToSpoke } from "@/lib/create-order";
-import { mongoEnabled } from "@/lib/mongodb";
 import { SPOKE_DISABLED_MESSAGE, spokeDispatchEnabled } from "@/lib/spoke-dispatch";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
 
 /* ── /api/client/stops/reconcile-ghosts ──────────────────────────────────────
  * A "ghost" stop is shown as Submitted/in-Spoke in the UI but was never actually
@@ -24,16 +23,7 @@ import { getDb, requirePagePermission } from "@/lib/tenant";
 // list `unassigned` filter). A doc in any of these WITHOUT a spoke id is a ghost.
 const IN_SPOKE_STATUSES = ["unassigned", "pending", "approved", "paid", "created"];
 
-function ghostQuery(tenantId: number): Record<string, unknown> {
-  return {
-    tenant_id: tenantId,
-    status: { $in: IN_SPOKE_STATUSES },
-    // No verified Spoke id under the canonical path (null OR missing).
-    "assignment.spoke_stop_id": { $in: [null, ""] },
-  };
-}
-
-/** M18: the same ghosts as ghostQuery(), read from public.stops. */
+/** Ghosts on public.stops: an in-Spoke status and no verified Spoke id under the canonical path (null or missing). */
 async function ghostDocs(tenantId: number, stopId: string | null): Promise<Record<string, unknown>[]> {
   let q = getSupabaseAdmin()
     .from("stops")
@@ -58,14 +48,7 @@ export async function GET() {
   }
 
   const tenantId = Number(ctx.tenantId);
-  const docs = mongoEnabled()
-    ? await (await getDb())
-        .collection("stops")
-        .find(ghostQuery(tenantId), { projection: { stop_id: 1, status: 1, created_at: 1, "recipient.name": 1 } })
-        .sort({ created_at: -1 })
-        .limit(200)
-        .toArray()
-    : await ghostDocs(tenantId, null);
+  const docs = await ghostDocs(tenantId, null);
 
   return NextResponse.json({
     count: docs.length,
@@ -88,7 +71,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const db = mongoEnabled() ? await getDb() : null;
   const tenantId = Number(ctx.tenantId);
 
   // Optional: target a single stop_id (e.g. the one stuck today); otherwise heal
@@ -101,12 +83,7 @@ export async function POST(request: Request) {
     /* no body — heal all */
   }
 
-  const query = ghostQuery(tenantId);
-  if (onlyStopId) query.stop_id = onlyStopId;
-
-  const docs = db
-    ? await db.collection("stops").find(query).limit(200).toArray()
-    : await ghostDocs(tenantId, onlyStopId);
+  const docs = await ghostDocs(tenantId, onlyStopId);
 
   let healed = 0;
   let failed = 0;
@@ -114,7 +91,7 @@ export async function POST(request: Request) {
 
   // Sequential — these are recovery posts to Spoke; keep it gentle on the API.
   for (const doc of docs) {
-    const r = await repostStopToSpoke(db, doc as Record<string, unknown>);
+    const r = await repostStopToSpoke(doc);
     if (r.status === "dispatched" || r.status === "already") {
       healed++;
       results.push({ stop_id: String(doc.stop_id), outcome: r.status, spoke_stop_id: r.spoke_stop_id });

@@ -16,7 +16,7 @@
  * over the physical labels, nudge until it lines up.
  *
  * PHASE 1 SCOPE: we only READ the next N `available` IDs and print them. We do
- * NOT write to Mongo here — printing and pool-consumption are decoupled so we
+ * NOT write the pool here — printing and pool-consumption are decoupled so we
  * can perfect alignment without burning IDs. The "mark as printed" write
  * (printed_by / printed_at / printed_tenant_id / printed) lands in Phase 2 and
  * will only ADD fields — never touch status/tenant_id/assigned_* (FastAPI owns

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { mongoEnabled } from "@/lib/mongodb";
 import { reviveStopDoc, shapeStopForDetail } from "@/lib/spoke-fields";
 import { loadStopDoc, patchStopDoc, resolveDriverNames } from "@/lib/stops-store";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { getDb, requirePagePermission, type TenantContext } from "@/lib/tenant";
+import { requirePagePermission, type TenantContext } from "@/lib/tenant";
 
 // FastAPI (VPS) owns all dispatch (Spoke) writes — basic-field edits and
-// deletes of UNASSIGNED stops route through it so Mongo and dispatch never
-// diverge. The secret stays server-side only.
+// deletes of UNASSIGNED stops route through it so public.stops and dispatch
+// never diverge. The secret stays server-side only.
 const FASTAPI_BASE = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
 const FASTAPI_SECRET = process.env.ROUTELY_API_SECRET ?? "";
 
@@ -43,12 +42,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
   // tenant filter (and skip the FastAPI-by-tenant call, which needs a tenant_id).
   const scopeAll = ctx.isAdmin && ctx.tenantScope === "all";
 
-  // Read from FastAPI/PG (authority under STOPS_AUTHORITY=supabase) instead of the
-  // lagging PG→Mongo mirror. reviveStopDoc converts jsonb ISO strings back to Dates
-  // so the shapers' .toISOString() calls keep working.
+  // Read public.stops (through FastAPI for one tenant). reviveStopDoc converts jsonb ISO
+  // strings back to Dates so the shapers' .toISOString() calls keep working.
   let doc: Record<string, unknown> | null = null;
   if (scopeAll) {
-    // Supabase is the stop authority; the Mongo mirror froze on 2026-07-17.
     const { data: row, error } = await getSupabaseAdmin()
       .from("stops")
       .select("doc")
@@ -65,30 +62,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sto
         signal: AbortSignal.timeout(10000),
       });
       if (upstream.ok) doc = reviveStopDoc((await upstream.json()) as Record<string, unknown>);
-      // 404/5xx → fall through to Mongo fallback (un-backfilled stops + transient errors)
+      // 404/5xx → fall through to the direct public.stops read below
     } catch {
-      /* FastAPI unreachable/timeout → Mongo fallback */
+      /* FastAPI unreachable/timeout → direct public.stops read below */
     }
   }
 
-  // Mongo is FALLBACK only. 2026-07-02: an unconditional getDb() here 500'd every
-  // detail read while Atlas was down (ReplicaSetNoPrimary) even though PG had
-  // already answered — the exact failure the PG repoint exists to survive.
-  // M18: public.stops answered above (or FastAPI did); Mongo is consulted only with MONGO_ENABLED=true (rollback).
-  if (!doc && !mongoEnabled()) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
-  let db: Awaited<ReturnType<typeof getDb>> | null = null;
-  if (!doc) {
-    try {
-      db = await getDb();
-      doc = (await db.collection("stops").findOne(scopeAll ? { stop_id } : { stop_id, tenant_id: tenantId })) as Record<
-        string,
-        unknown
-      > | null;
-    } catch {
-      return NextResponse.json({ error: "Stop temporarily unavailable" }, { status: 503 });
-    }
-    if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
+  // FastAPI missed (not configured, 404 or timeout): read public.stops directly.
+  if (!doc && !scopeAll) {
+    const row = await loadStopDoc(stop_id, tenantId);
+    if (row) doc = reviveStopDoc(row) as Record<string, unknown>;
   }
+  if (!doc) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
 
   // Tenant isolation guard (belt-and-suspenders). Admin "all" scope views any tenant.
   if (!scopeAll && Number(doc.tenant_id) !== tenantId) {
@@ -172,8 +157,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { stop_id } = await params;
-    // Supabase is the stop authority; the Mongo `stops` mirror froze on 2026-07-17,
-    // so a Mongo lookup 404s every newer stop. Admin operates as the stop's real tenant
+    // Admin operates as the stop's real tenant
     // so any tenant's stop can be edited and dispatch/charging stay correct.
     const { data: row, error } = await getSupabaseAdmin()
       .from("stops")
@@ -191,8 +175,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     const rec = (body.recipient ?? {}) as Record<string, unknown>;
 
     // ── UNASSIGNED: delegate the FULL editable set to FastAPI, which writes
-    // PG (what the panel reads), mirrors Mongo, and appends the timeline —
-    // commits cdd96bd/9eab211. No local Mongo writes on this path.
+    // public.stops (what the panel reads) and appends the timeline —
+    // commits cdd96bd/9eab211. No local writes on this path.
     if (isUnassignedDoc(probe)) {
       const addrBody = body.address as Record<string, unknown> | undefined;
       // D20: address identity is immutable once submitted — Circuit can't
@@ -285,9 +269,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       return NextResponse.json({ stop_id, ...out });
     }
 
-    // ── NON-unassigned: portal-direct path (ALLOWED whitelist, geocode, local timeline). Since M18 it writes
-    // public.stops.doc; MONGO_ENABLED=true restores the old Mongo write (rollback only).
-    const db = mongoEnabled() ? await getDb() : null;
+    // ── NON-unassigned: portal-direct path (ALLOWED whitelist, geocode, local timeline) on public.stops.doc.
 
     const updates: Record<string, unknown> = { updated_at: new Date() };
     for (const [section, field] of ALLOWED) {
@@ -338,7 +320,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       }
     }
 
-    // Timeline (create-flow hardening Fix 4): Mongo-direct edits must be as
+    // Timeline (create-flow hardening Fix 4): portal-direct edits must be as
     // auditable as the FastAPI-delegated ones. Diff against the current doc
     // and append a stop.field_changed entry in the same shape FastAPI's
     // make_event writes. Derived coords (address.lat/lng) are noise — excluded.
@@ -346,11 +328,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     const auditKeys = Object.keys(updates).filter((k) => !AUDIT_EXCLUDED.has(k));
     let fieldChanges: Array<{ field: string; old_value: unknown; new_value: unknown }> = [];
     if (auditKeys.length > 0) {
-      const current = db
-        ? await db
-            .collection("stops")
-            .findOne({ stop_id, tenant_id: tenantId }, { projection: Object.fromEntries(auditKeys.map((k) => [k, 1])) })
-        : await loadStopDoc(stop_id, tenantId);
+      const current = await loadStopDoc(stop_id, tenantId);
       if (current) {
         const oldVal = (k: string) =>
           k.split(".").reduce<unknown>((o, p) => (o as Record<string, unknown> | null | undefined)?.[p], current);
@@ -376,52 +354,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
       visibility: "customer",
     };
 
-    if (!db) {
-      const saved = await patchStopDoc(
-        stop_id,
-        tenantId,
-        updates,
-        fieldChanges.length > 0
-          ? { timeline: { ...timelineEntry, timestamp: timelineEntry.timestamp.toISOString() } }
-          : {},
-      );
-      if (!saved) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
-      return NextResponse.json({ ok: true, stop_id });
-    }
-
-    const result = await db.collection("stops").updateOne({ stop_id, tenant_id: tenantId }, { $set: updates });
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Only unassigned stops can be edited" }, { status: 409 });
-    }
-
-    if (fieldChanges.length > 0) {
-      try {
-        await db
-          .collection("stops")
-          .updateOne({ stop_id, tenant_id: tenantId }, { $push: { timeline: timelineEntry } } as never);
-      } catch (tlErr) {
-        console.error("[stops PATCH] timeline append failed (non-fatal):", tlErr);
-      }
-    }
-
+    const saved = await patchStopDoc(
+      stop_id,
+      tenantId,
+      updates,
+      fieldChanges.length > 0
+        ? { timeline: { ...timelineEntry, timestamp: timelineEntry.timestamp.toISOString() } }
+        : {},
+    );
+    if (!saved) return NextResponse.json({ error: "Stop not found" }, { status: 404 });
     return NextResponse.json({ ok: true, stop_id });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// Delete — UNASSIGNED stops route through FastAPI (Spoke delete first, Mongo
-// soft-delete second, paired pickup included). Anything else keeps the legacy
-// Mongo-only soft delete (reversible) used before this feature.
+// Delete — UNASSIGNED stops route through FastAPI (dispatch delete first, then
+// the public.stops soft delete, paired pickup included). Stops already on a route
+// are not deleted here (409).
 export async function DELETE(_request: Request, { params }: { params: Promise<{ stop_id: string }> }) {
   try {
     const ctx = await requirePagePermission("orders");
     if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { stop_id } = await params;
-    // Supabase is the stop authority; the Mongo `stops` mirror froze on 2026-07-17,
-    // so a Mongo lookup 404s every newer stop. Admin operates as the stop's real tenant.
+    // Admin operates as the stop's real tenant.
     const { data: row, error } = await getSupabaseAdmin()
       .from("stops")
       .select("tenant_id, doc")
@@ -456,23 +413,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       return NextResponse.json({ ok: true, stop_id, ...payload });
     }
 
-    // Non-unassigned stops are on a route: they are not deleted from here. Before M18 this soft-deleted only the
-    // Mongo copy, which nothing read since the July cutover. MONGO_ENABLED=true restores that (rollback only).
-    if (!mongoEnabled()) {
-      return NextResponse.json(
-        { error: "This stop is already on a route and can't be deleted here." },
-        { status: 409 },
-      );
-    }
-    const db = await getDb();
-    const result = await db
-      .collection("stops")
-      .updateOne({ stop_id, tenant_id: tenantId }, { $set: { status: "deleted", updated_at: new Date() } });
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: "Only unassigned stops can be deleted" }, { status: 409 });
-    }
-    return NextResponse.json({ ok: true, stop_id });
+    // Non-unassigned stops are on a route: they are not deleted from here.
+    return NextResponse.json({ error: "This stop is already on a route and can't be deleted here." }, { status: 409 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { mongoEnabled } from "@/lib/mongodb";
 import { patchStopDoc } from "@/lib/stops-store";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
 
 // ── POST /api/client/submit-stop ─────────────────────────────────────────────
 // Proxy to FastAPI POST /v1/stops/
 // usage_events are written by FastAPI directly — do NOT write them here.
 //
-// FastAPI creates the canonical stop in Mongo and mirrors it into Supabase
-// itself (app/services/supabase_mirror.py). This route is a thin proxy that
-// also stamps the Clerk actor (created_by) onto the Mongo doc.
+// FastAPI creates the stop in public.stops. This route is a thin proxy that
+// also stamps the Clerk actor (created_by) onto that doc.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ROUTELY_API_URL = process.env.ROUTELY_API_URL ?? "https://api.routelypro.com";
@@ -123,11 +121,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: data.detail ?? "Stop creation failed" }, { status: res.status });
     }
 
-    // Member-system Phase 5: stamp the Clerk actor on the canonical Mongo stop
-    // doc (only the portal knows who submitted). Additive AFTER FastAPI created
-    // the stop — tenant-scoped, never fatal. FastAPI mirrors the stop into
-    // Supabase on its own (app/services/supabase_mirror.py), so the portal no
-    // longer writes Supabase here.
+    // Member-system Phase 5: stamp the Clerk actor on the stop doc in
+    // public.stops (only the portal knows who submitted). Additive AFTER FastAPI
+    // created the stop — tenant-scoped, never fatal.
     if (data.stop_id) {
       const stopId = String(data.stop_id);
       const createdBy = {
@@ -143,17 +139,10 @@ export async function POST(request: Request) {
       };
 
       try {
-        if (mongoEnabled()) {
-          const db = await getDb();
-          await db
-            .collection("stops")
-            .updateMany({ stop_id: stopId, tenant_id: ctx.tenantId }, { $set: { created_by: createdBy } });
-        } else {
-          // M18: the stamp lands on public.stops.doc, the copy every reader uses.
-          await patchStopDoc(stopId, Number(ctx.tenantId), {
-            created_by: { ...createdBy, stamped_at: createdBy.stamped_at.toISOString() },
-          });
-        }
+        // M18: the stamp lands on public.stops.doc, the copy every reader uses.
+        await patchStopDoc(stopId, Number(ctx.tenantId), {
+          created_by: { ...createdBy, stamped_at: createdBy.stamped_at.toISOString() },
+        });
       } catch (stampErr) {
         console.error("[submit-stop] created_by stamp failed (non-fatal):", stampErr);
       }

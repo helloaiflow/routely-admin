@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 
 import { logExternalCall } from "@/lib/api-log";
 import { genTracking, type OrderBody } from "@/lib/create-order";
-import { mongoEnabled } from "@/lib/mongodb";
 import { releaseUnusedReservation } from "@/lib/reservation-release";
 import { patchStopDoc } from "@/lib/stops-store";
-import { getDb, requirePagePermission } from "@/lib/tenant";
+import { requirePagePermission } from "@/lib/tenant";
 
 // Member-system Phase 5: the actor reference stamped on created stops.
 // The TENANT owns the order (tenant_id); the actor is WHO created it — the
@@ -268,19 +267,9 @@ export async function POST(request: Request) {
     if (actor) {
       const stopIds = [deliveryStopId, String(pickupStopId ?? "")].filter(Boolean);
       try {
-        if (mongoEnabled()) {
-          const db = await getDb();
-          await db
-            .collection("stops")
-            .updateMany(
-              { stop_id: { $in: stopIds }, tenant_id: tenantId },
-              { $set: { created_by: { ...actor, source: "client_portal", stamped_at: new Date() } } },
-            );
-        } else {
-          // M18: the stamp lands on public.stops.doc, the copy every reader uses.
-          const createdBy = { ...actor, source: "client_portal", stamped_at: new Date().toISOString() };
-          for (const sid of stopIds) await patchStopDoc(sid, tenantId, { created_by: createdBy });
-        }
+        // M18: the stamp lands on public.stops.doc, the copy every reader uses.
+        const createdBy = { ...actor, source: "client_portal", stamped_at: new Date().toISOString() };
+        for (const sid of stopIds) await patchStopDoc(sid, tenantId, { created_by: createdBy });
       } catch (stampErr) {
         console.error("[orders/create] created_by stamp failed (non-fatal):", stampErr);
       }
@@ -291,7 +280,7 @@ export async function POST(request: Request) {
     // UI) BEFORE posting to Spoke; if that POST fails/times out the doc is left
     // unassigned with NO assignment.spoke_stop_id → a ghost (Submitted in the UI,
     // absent from Spoke = a package no driver picks up). This is exactly what the
-    // "verify Spoke accepted before trusting Mongo" rule exists to prevent.
+    // "verify Spoke accepted before trusting the stop record" rule exists to prevent.
     // Authoritative check: read the freshly-created doc's canonical spoke id
     // (FastAPI dispatch is synchronous, so it's committed before this response).
     // `data.spoke.posted` is a corroborating hint only.
@@ -300,9 +289,8 @@ export async function POST(request: Request) {
       // no race. FastAPI sets top-level status:"draft" iff the delivery leg genuinely
       // failed (not posted AND not skipped); the real Spoke id is at
       // data.delivery.spoke.stop_id. The old code read data.spoke.stop_id (a key that
-      // does NOT exist → always undefined) and fell back to a findOne on the async
-      // PG→Mongo mirror, which lags under STOPS_AUTHORITY=supabase and produced FALSE
-      // "not accepted by Spoke" verdicts on stops Spoke actually accepted.
+      // does NOT exist → always undefined) and fell back to a findOne on an async
+      // mirror that lagged and produced FALSE "not accepted by Spoke" verdicts.
       const deliverySpoke =
         (((data.delivery as Record<string, unknown> | null) ?? null)?.spoke as Record<string, unknown> | null) ?? null;
       const spokeStopId = (deliverySpoke?.stop_id as string | undefined) ?? null;
@@ -325,35 +313,8 @@ export async function POST(request: Request) {
         draft_id: String((body as Record<string, unknown>).created_from_draft_id ?? "") || null,
       });
       if (!spokeAccepted) {
-        // Genuine ghost (FastAPI already persisted status:"draft" + submit_error in
-        // Postgres, the authority). Mirror to the Mongo doc so the current Mongo-reading
-        // UI shows it in Drafts to retry — the reverse PG→Mongo mirror is not wired, so
-        // this write keeps the UI honest for real ghosts. (Remove once client reads PG.)
+        // Genuine ghost: FastAPI already persisted status:"draft" + submit_error in public.stops.
         console.error("[orders/create] GHOST PREVENTED — Spoke unconfirmed for", deliveryStopId);
-        // M18: Postgres already holds the draft + submit_error; the Mongo copy is written only on rollback.
-        if (mongoEnabled())
-          try {
-            const db = await getDb();
-            await db.collection("stops").updateOne(
-              { stop_id: deliveryStopId, tenant_id: tenantId },
-              {
-                $set: {
-                  status: "draft",
-                  submit_error: {
-                    at: new Date(),
-                    reason: "Dispatch (Spoke) did not confirm this stop",
-                    spoke_status: null,
-                    attempt_count: 1,
-                  },
-                  dispatch_status: "spoke_error",
-                  spoke_unconfirmed: true,
-                  updated_at: new Date(),
-                },
-              },
-            );
-          } catch (markErr) {
-            console.error("[orders/create] ghost-guard mark failed:", markErr);
-          }
         return NextResponse.json(
           {
             ok: false,

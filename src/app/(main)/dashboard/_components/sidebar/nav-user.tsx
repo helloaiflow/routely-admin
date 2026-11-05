@@ -62,10 +62,13 @@ export function NavUser({ person, avatar }: { readonly person: Person; readonly 
                 <span className="truncate font-semibold text-xs" title={name}>
                   {name}
                 </span>
-                {/* Email must ALWAYS be fully visible — no truncate; wraps if needed. */}
-                <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
-                  {email}
-                </span>
+                {/* Email must ALWAYS be fully visible — no truncate; wraps if needed. Without a name it is already the
+                    line above (M24). */}
+                {name !== email && (
+                  <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
+                    {email}
+                  </span>
+                )}
               </div>
               <EllipsisVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -81,9 +84,11 @@ export function NavUser({ person, avatar }: { readonly person: Person; readonly 
                 <UserAvatar person={person} imageUrl={avatar} />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate font-semibold text-xs">{name}</span>
-                  <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
-                    {email}
-                  </span>
+                  {name !== email && (
+                    <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
+                      {email}
+                    </span>
+                  )}
                 </div>
               </div>
             </DropdownMenuLabel>

@@ -1,24 +1,44 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useUser } from "@/lib/auth/client";
 import { Camera, Loader2, Lock, ShieldCheck } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { UserAvatar } from "@/components/user-avatar";
+import { getDisplayName, getFullName, personOf } from "@/lib/user-display";
+import { toast } from "sonner";
 
 export function AccountTab() {
   const { user } = useUser();
   const companyName = (user?.publicMetadata?.companyName as string) || "";
-  const fullName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "User";
-  const email = user?.emailAddresses?.[0]?.emailAddress || "";
-  const initials =
-    ((user?.firstName?.[0] || "") + (user?.lastName?.[0] || "")).toUpperCase() || email[0]?.toUpperCase() || "R";
+  // M24: name and initials from lib/user-display, the same as the sidebar and the header.
+  const person = personOf(user);
+  const fullName = getFullName(person);
+  const email = person.email ?? "";
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setName(fullName), [fullName]);
+
+  async function saveName() {
+    if (saving || !name.trim() || name.trim() === fullName) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/auth/me", { method: "PATCH", body: JSON.stringify({ full_name: name }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not save your name");
+      await user?.reload();
+      toast.success("Name updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save your name");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -65,12 +85,12 @@ export function AccountTab() {
             className="group/av relative rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Change profile photo"
           >
-            <Avatar className="size-20 ring-2 ring-primary/20">
-              <AvatarImage src={user?.imageUrl} />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70 font-bold text-white text-xl">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              person={person}
+              imageUrl={user?.imageUrl}
+              className="size-20 rounded-full ring-2 ring-primary/20"
+              textClassName="text-xl"
+            />
             <span className="absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover/av:opacity-100">
               {uploading ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : <Camera className="size-5" aria-hidden="true" />}
             </span>
@@ -79,7 +99,7 @@ export function AccountTab() {
             </span>
           </button>
           <div>
-            <p className="font-semibold text-13 leading-tight">{fullName}</p>
+            <p className="font-semibold text-13 leading-tight">{getDisplayName(person)}</p>
             <p className="text-muted-foreground text-sm">{email}</p>
             {companyName && <p className="mt-1 text-muted-foreground text-xs">{companyName}</p>}
           </div>
@@ -107,8 +127,19 @@ export function AccountTab() {
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="font-medium text-sm">Full Name</Label>
-                <Input defaultValue={fullName} className="h-9" readOnly />
+                <Label htmlFor="account-name" className="font-medium text-sm">
+                  Full Name
+                </Label>
+                <Input
+                  id="account-name"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your full name"
+                  className="h-9"
+                />
+                {/* M24: a quiet nudge while the profile has no name; avatars fall back to the email's initials. */}
+                {!fullName && !name.trim() && <p className="text-muted-foreground text-xs">Add your name</p>}
               </div>
               <div className="space-y-2">
                 <Label className="font-medium text-sm">Email</Label>
@@ -123,10 +154,14 @@ export function AccountTab() {
                 <Input placeholder="(305) 555-0100" className="h-9" />
               </div>
             </div>
-            <p className="text-muted-foreground text-xs">
-              Name and email are managed by your authentication provider.
-            </p>
-            <Button className="h-9" size="sm">
+            <p className="text-muted-foreground text-xs">Your email is your sign-in and can't be changed here.</p>
+            <Button
+              className="h-9"
+              size="sm"
+              onClick={saveName}
+              disabled={saving || !name.trim() || name.trim() === fullName}
+            >
+              {saving ? <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" /> : null}
               Update account
             </Button>
           </CardContent>

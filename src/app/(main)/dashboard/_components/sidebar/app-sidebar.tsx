@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { useUser } from "@/lib/auth/client";
+import { personOf } from "@/lib/user-display";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -79,25 +80,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
 
-  const companyName = (user?.publicMetadata?.companyName as string) || "";
-  const fullName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "";
-  const displayName = companyName || fullName || "User";
-  const email = user?.emailAddresses?.[0]?.emailAddress || "";
-  const initials = companyName
-    ? companyName
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : ((user?.firstName?.[0] || "") + (user?.lastName?.[0] || "")).toUpperCase() || email[0]?.toUpperCase() || "R";
-
-  const clerkUser = {
-    name: displayName,
-    email,
-    avatar: user?.imageUrl || "",
-    initials,
-  };
+  // M24: the avatar is the person (never the company); name and initials come from lib/user-display.
+  const person = personOf(user);
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -131,7 +115,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={visibleItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={clerkUser} />
+        <NavUser person={person} avatar={user?.imageUrl || ""} />
       </SidebarFooter>
     </Sidebar>
   );

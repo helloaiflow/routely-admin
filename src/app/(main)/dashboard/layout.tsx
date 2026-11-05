@@ -12,6 +12,7 @@ import { getPreference } from "@/server/server-actions";
 import { GlobalDialogs } from "./_components/global-dialogs";
 import { InactivityGuard } from "./_components/inactivity-guard";
 import { LiveChatButton } from "./_components/live-chat-button";
+import { NamePrompt } from "./_components/name-prompt";
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { OcrScanButton } from "./_components/ocr-scan-button";
@@ -72,6 +73,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         <LiveChatButton />
         <InactivityGuard />
         <GlobalDialogs />
+        <NamePrompt />
       </SidebarInset>
     </SidebarProvider>
   );

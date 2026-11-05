@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { UserAvatar } from "@/components/user-avatar";
 
 /* ── Settings → Team: RoutelyPro staff only ───────────────────────────────────
  * Lists and manages the people with a platform_role. Each tenant's users are
@@ -149,7 +150,13 @@ export function TeamSection() {
                 const locked = !canManage || (m.platform_role === "super_admin" && me?.platform_role !== "super_admin");
                 return (
                   <TableRow key={m.user_id}>
-                    <TableCell>{m.full_name ?? "—"}</TableCell>
+                    <TableCell>
+                      {/* M24: the same avatar and initials as the sidebar and header. */}
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <UserAvatar person={{ fullName: m.full_name, email: m.email }} className="size-7" />
+                        <span className="truncate">{m.full_name ?? "—"}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{m.email}</TableCell>
                     <TableCell>
                       {locked ? (

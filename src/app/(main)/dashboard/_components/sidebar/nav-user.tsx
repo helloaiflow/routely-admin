@@ -17,7 +17,6 @@ import {
   Webhook,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,20 +30,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { UserAvatar } from "@/components/user-avatar";
+import { getDisplayName, type Person } from "@/lib/user-display";
 import { cn } from "@/lib/utils";
 
-export function NavUser({
-  user,
-}: {
-  readonly user: {
-    readonly name: string;
-    readonly email: string;
-    readonly avatar: string;
-    readonly initials: string;
-  };
-}) {
+export function NavUser({ person, avatar }: { readonly person: Person; readonly avatar: string }) {
   const { isMobile } = useSidebar();
   const { signOut } = useClerk();
+  // M24: same name and initials as the header and Settings (lib/user-display).
+  const name = getDisplayName(person);
+  const email = person.email ?? "";
 
   return (
     <SidebarMenu>
@@ -62,17 +57,14 @@ export function NavUser({
                 "group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:shadow-none",
               )}
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar || undefined} alt={user.name} className="rounded-lg" />
-                <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground text-xs">
-                  {user.initials}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar person={person} imageUrl={avatar} />
               <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate font-semibold text-xs">{user.name}</span>
+                <span className="truncate font-semibold text-xs" title={name}>
+                  {name}
+                </span>
                 {/* Email must ALWAYS be fully visible — no truncate; wraps if needed. */}
                 <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
-                  {user.email}
+                  {email}
                 </span>
               </div>
               <EllipsisVertical className="ml-auto size-4" />
@@ -86,16 +78,11 @@ export function NavUser({
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar || undefined} alt={user.name} className="rounded-lg" />
-                  <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground text-xs">
-                    {user.initials}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar person={person} imageUrl={avatar} />
                 <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-semibold text-xs">{user.name}</span>
+                  <span className="truncate font-semibold text-xs">{name}</span>
                   <span className="whitespace-nowrap text-10 tracking-tight text-muted-foreground leading-tight">
-                    {user.email}
+                    {email}
                   </span>
                 </div>
               </div>

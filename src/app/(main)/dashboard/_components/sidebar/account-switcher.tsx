@@ -3,7 +3,6 @@
 import { useClerk, useUser } from "@/lib/auth/client";
 import { BadgeCheck, Bell, CreditCard, LogOut } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,36 +12,35 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getInitials } from "@/lib/utils";
+import { UserAvatar } from "@/components/user-avatar";
+import { getDisplayName, personOf } from "@/lib/user-display";
 
 export function AccountSwitcher() {
   const { user } = useUser();
   const { signOut } = useClerk();
-  const name = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "User";
-  const email = user?.emailAddresses[0]?.emailAddress || "";
+  // M24: name and initials from lib/user-display, the same as the sidebar card.
+  const person = personOf(user);
+  const name = getDisplayName(person);
+  const email = person.email ?? "";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Avatar className="size-9 cursor-pointer rounded-lg">
-          <AvatarImage src={user?.imageUrl || undefined} alt={name} className="rounded-lg object-cover" />
-          <AvatarFallback className="rounded-lg bg-primary font-medium text-primary-foreground text-xs">
-            {getInitials(name)}
-          </AvatarFallback>
-        </Avatar>
+        <button
+          type="button"
+          aria-label="Account menu"
+          className="cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <UserAvatar person={person} imageUrl={user?.imageUrl} className="size-9" />
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="min-w-56 rounded-lg" side="bottom" align="end" sideOffset={4}>
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-            <Avatar className="h-8 w-8 rounded-lg">
-              <AvatarImage src={user?.imageUrl || undefined} alt={name} className="rounded-lg object-cover" />
-              <AvatarFallback className="rounded-lg bg-primary font-medium text-primary-foreground text-xs">
-                {getInitials(name)}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar person={person} imageUrl={user?.imageUrl} />
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-muted-foreground text-xs">{email}</span>
+              {name !== email && <span className="truncate text-muted-foreground text-xs">{email}</span>}
             </div>
           </div>
         </DropdownMenuLabel>

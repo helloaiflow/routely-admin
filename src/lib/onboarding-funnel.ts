@@ -38,7 +38,13 @@ export type FunnelRow = {
   last_step: string | null;
   /** Signup → done in minutes; null while setup is unfinished. */
   total_minutes: number | null;
+  /** M26: a QA/e2e tenant (doc.qa, or a helloaiflow+…@gmail.com owner). Left out of the funnel unless asked for. */
+  qa: boolean;
 };
+
+/** M26: same rule as the SQL function public.is_qa_tenant. */
+export const isQaTenant = (doc: Record<string, unknown> | null | undefined, email: string | null | undefined) =>
+  Boolean(doc && "qa" in doc) || /^helloaiflow\+.*@gmail\.com$/i.test(email ?? "");
 
 export type OnboardingEvent = { event: string; step: string | null; at: string; source: string };
 

@@ -8,6 +8,7 @@ import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -41,6 +42,7 @@ const CSV_COLUMNS: [string, (row: FunnelRow) => string | number | null][] = [
   ["first_stop_at", (r) => r.first_stop_at],
   ["last_step", (r) => r.last_step],
   ["total_minutes", (r) => (r.total_minutes == null ? null : Math.round(r.total_minutes))],
+  ["qa", (r) => (r.qa ? "yes" : "no")],
 ];
 
 function downloadCsv(rows: FunnelRow[]) {
@@ -73,6 +75,7 @@ export default function TenantsPage() {
   const [signupTo, setSignupTo] = useState("");
   const [doneFrom, setDoneFrom] = useState("");
   const [doneTo, setDoneTo] = useState("");
+  const [showQa, setShowQa] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/tenants/funnel")
@@ -91,6 +94,7 @@ export default function TenantsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
+      if (r.qa && !showQa) return false;
       if (q && !`${r.tenant_id} ${r.name}`.toLowerCase().includes(q)) return false;
       if (source !== ALL && r.source !== source) return false;
       if (campaign !== ALL && r.campaign !== campaign) return false;
@@ -109,10 +113,12 @@ export default function TenantsPage() {
       if (doneTo && (!r.done_at || day(r.done_at) > doneTo)) return false;
       return true;
     });
-  }, [rows, query, source, campaign, step, duration, signupFrom, signupTo, doneFrom, doneTo]);
+  }, [rows, query, source, campaign, step, duration, signupFrom, signupTo, doneFrom, doneTo, showQa]);
+  const qaCount = useMemo(() => rows.filter((r) => r.qa).length, [rows]);
+  const realCount = rows.length - qaCount;
 
   const filtering =
-    [query, signupFrom, signupTo, doneFrom, doneTo].some(Boolean) ||
+    [query, signupFrom, signupTo, doneFrom, doneTo, showQa].some(Boolean) ||
     [source, campaign, step, duration].some((v) => v !== ALL);
   function clear() {
     setQuery("");
@@ -124,6 +130,7 @@ export default function TenantsPage() {
     setSignupTo("");
     setDoneFrom("");
     setDoneTo("");
+    setShowQa(false);
   }
 
   return (
@@ -245,6 +252,12 @@ export default function TenantsPage() {
             />
           </div>
         </fieldset>
+        <div className="flex h-9 items-center gap-2">
+          <Checkbox id="f-qa" checked={showQa} onCheckedChange={(v) => setShowQa(v === true)} />
+          <Label htmlFor="f-qa" className="text-xs">
+            Show QA tenants ({qaCount})
+          </Label>
+        </div>
         {filtering && (
           <Button variant="ghost" size="sm" onClick={clear}>
             Clear filters
@@ -258,7 +271,7 @@ export default function TenantsPage() {
         </p>
       )}
       <p className="text-muted-foreground text-xs" aria-live="polite">
-        {loading ? "Loading…" : `${filtered.length} of ${rows.length} tenants`}
+        {loading ? "Loading…" : `${filtered.length} of ${showQa ? rows.length : realCount} tenants`}
       </p>
       <Table>
         <TableHeader>
@@ -281,6 +294,11 @@ export default function TenantsPage() {
                 <Link href={`/dashboard/tenants/${r.tenant_id}`} className="hover:underline">
                   {r.name}
                 </Link>
+                {r.qa && (
+                  <Badge variant="outline" className="ml-2">
+                    QA
+                  </Badge>
+                )}
               </TableCell>
               <TableCell>{r.source ?? "—"}</TableCell>
               <TableCell>{r.campaign ?? "—"}</TableCell>

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import type { FunnelRow } from "@/lib/onboarding-funnel";
+import { type FunnelRow, isQaTenant } from "@/lib/onboarding-funnel";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { getTenantContext } from "@/lib/tenant";
 
 /**
  * M25: every tenant with its signup funnel (source, campaign, signup/done dates, last step, total time). Company
  * signups have onboarding_step; legacy tenants come back with empty funnel fields. Filtering and the CSV happen in
- * the page, on these rows.
+ * the page, on these rows. M26: QA/e2e tenants come back marked `qa`; the page leaves them out unless asked.
  */
 export async function GET() {
   const ctx = await getTenantContext();
@@ -16,7 +16,7 @@ export async function GET() {
 
   const supabase = getSupabaseAdmin();
   const [{ data: tenants }, { data: attribution }, { data: events }] = await Promise.all([
-    supabase.from("tenants").select("tenant_id, company_name, status, onboarding_step, created_at, doc"),
+    supabase.from("tenants").select("tenant_id, company_name, email, status, onboarding_step, created_at, doc"),
     supabase
       .from("signup_attribution")
       .select("tenant_id, utm_source, utm_medium, utm_campaign, referrer, device, ip_country, ip_region"),
@@ -56,6 +56,7 @@ export async function GET() {
       first_stop_at: once.get(`${t.tenant_id}:first_stop`) ?? null,
       last_step: t.onboarding_step,
       total_minutes: signup && done ? (Date.parse(done) - Date.parse(signup)) / 60_000 : null,
+      qa: isQaTenant(t.doc, t.email),
     };
   });
   rows.sort((a, b) => (b.signup_at ?? "").localeCompare(a.signup_at ?? "") || b.tenant_id - a.tenant_id);

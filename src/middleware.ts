@@ -38,6 +38,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/client/distance(.*)",
   "/api/client/places(.*)",
   "/api/client/place-details(.*)",
+  // M28-B: GlitchTip self-test; the route itself answers 404 without OBSERVABILITY_SELFTEST_TOKEN.
+  "/api/observability/selftest(.*)",
 ]);
 
 // A deep link's destination is only ever trusted if it's a same-origin
